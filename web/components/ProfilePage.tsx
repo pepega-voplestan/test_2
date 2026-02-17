@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, Shout } from '../types';
 import { useAuth } from '../context/AuthContext';
 import ShoutCard from './ShoutCard';
+import AvatarUpload from './AvatarUpload';
 
 interface ProfilePageProps {
   userId: string;
@@ -288,16 +289,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               />
             </label>
 
-            <label className="block">
-              <div className="text-xs text-zinc-400 mb-1">URL аватара</div>
-              <input
-                value={editForm.avatar}
-                onChange={(e) => setEditForm(f => ({ ...f, avatar: e.target.value }))}
-                placeholder="https://..."
-                className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-2 focus:ring-white/20"
-                disabled={isSaving}
-              />
-            </label>
+            <AvatarUpload
+              currentAvatar={editForm.avatar}
+              disabled={isSaving}
+              onUploaded={(url) => {
+                setEditForm(f => ({ ...f, avatar: url }));
+                setProfile(prev => prev ? { ...prev, avatar: url } : prev);
+                refresh();
+              }}
+            />
 
             <div className="border-t border-zinc-800 pt-4">
               <div className="text-xs text-zinc-400 mb-3">Смена пароля (оставьте пустым, чтобы не менять)</div>
