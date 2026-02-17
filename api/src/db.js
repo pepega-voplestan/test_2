@@ -89,7 +89,26 @@ try {
   }
 }
 
-// Unique index on email (NULLs are allowed and don't conflict)
+// Drop any stale email index from previous migrations, then create clean partial unique index
+db.exec(`DROP INDEX IF EXISTS idx_users_email`);
+
+// Deduplicate emails: if multiple users share the same non-NULL email, keep the newest, NULL the rest
+const dupes = db.prepare(`
+  SELECT email FROM users
+  WHERE email IS NOT NULL AND email != ''
+  GROUP BY email HAVING COUNT(*) > 1
+`).all();
+for (const { email } of dupes) {
+  const rows = db.prepare(
+    `SELECT id FROM users WHERE email = ? ORDER BY created_at DESC`
+  ).all(email);
+  // Keep the first (newest), NULL out the rest
+  for (let i = 1; i < rows.length; i++) {
+    db.prepare(`UPDATE users SET email = NULL WHERE id = ?`).run(rows[i].id);
+  }
+}
+if (dupes.length) console.log(`[DB] Deduplicated ${dupes.length} email(s)`);
+
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
 
 console.log("[DB] Schema initialized");
