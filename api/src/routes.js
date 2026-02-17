@@ -109,6 +109,13 @@ function buildMedia(row) {
 
 /* ---------- helpers ---------- */
 
+/** Convert SQLite datetime string (UTC, no suffix) to ISO 8601 with Z marker */
+function utcTimestamp(sqliteDatetime) {
+  if (!sqliteDatetime) return sqliteDatetime;
+  const s = sqliteDatetime.replace(" ", "T");
+  return s.endsWith("Z") ? s : s + "Z";
+}
+
 function avatarFor(username) {
   return `https://api.dicebear.com/7.x/thumbs/svg?seed=${encodeURIComponent(
     username
@@ -345,7 +352,7 @@ export function mountRoutes(app) {
           isBanned: !!row.is_banned,
         },
         content: row.content,
-        timestamp: row.created_at,
+        timestamp: utcTimestamp(row.created_at),
         likes: likesCount.get(row.id) || 0,
         likedBy: currentUserId && likedSet.has(row.id) ? [currentUserId] : [],
         ...(media ? { media } : {}),
@@ -555,7 +562,7 @@ export function mountRoutes(app) {
       name: row.username,
       avatar: row.avatar,
       isBanned: !!row.is_banned,
-      createdAt: row.created_at,
+      createdAt: utcTimestamp(row.created_at),
       shoutCount,
       ...(isOwner ? { email: row.email || "" } : {}),
       isOwner,
@@ -644,7 +651,7 @@ export function mountRoutes(app) {
           isBanned: !!row.is_banned,
         },
         content: row.content,
-        timestamp: row.created_at,
+        timestamp: utcTimestamp(row.created_at),
         likes: likesCount.get(row.id) || 0,
         likedBy: currentUserId && likedSet.has(row.id) ? [currentUserId] : [],
         ...(media ? { media } : {}),
@@ -738,7 +745,7 @@ export function mountRoutes(app) {
         name: updated.username,
         avatar: updated.avatar,
         email: updated.email || "",
-        createdAt: updated.created_at,
+        createdAt: utcTimestamp(updated.created_at),
         isOwner: true,
       },
     });
