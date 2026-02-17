@@ -51,4 +51,12 @@ CREATE INDEX IF NOT EXISTS idx_likes_shout ON shout_likes(shout_id);
 CREATE INDEX IF NOT EXISTS idx_likes_user ON shout_likes(user_id);
 `);
 
+// Add email column if it doesn't exist (migration-safe)
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`);
+  console.log("[DB] Added email column to users");
+} catch (_e) {
+  // Column already exists — ignore
+}
+
 console.log("[DB] Schema initialized");
