@@ -32,7 +32,7 @@ const ShoutFeed: React.FC = () => {
 
     try {
       const res = await fetch(
-        `/api/shouts?limit=${PAGE_SIZE}&offset=${currentOffset}`,
+        `/api/v1/shouts?limit=${PAGE_SIZE}&offset=${currentOffset}`,
         { credentials: 'include' }
       );
 

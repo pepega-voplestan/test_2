@@ -53,10 +53,16 @@ CREATE INDEX IF NOT EXISTS idx_likes_user ON shout_likes(user_id);
 
 // Add email column if it doesn't exist (migration-safe)
 try {
-  db.exec(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`);
+  db.exec(`ALTER TABLE users ADD COLUMN email TEXT DEFAULT NULL`);
   console.log("[DB] Added email column to users");
 } catch (_e) {
   // Column already exists — ignore
 }
+
+// Migrate: convert empty-string emails to NULL so unique index works
+db.prepare(`UPDATE users SET email = NULL WHERE email = ''`).run();
+
+// Unique index on email (NULLs are allowed and don't conflict)
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
 
 console.log("[DB] Schema initialized");
