@@ -11,18 +11,81 @@ const AVATAR_DIR = path.join(path.dirname(process.env.DATABASE_PATH || "/data/ap
 const AVATAR_SIZES = [64, 128, 256];
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const AVATAR_MIN_DIM = 256;
-const AVATAR_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const IMAGE_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: AVATAR_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (!AVATAR_ALLOWED_MIME.has(file.mimetype)) {
+    if (!IMAGE_ALLOWED_MIME.has(file.mimetype)) {
       return cb(new Error("Допустимые форматы: JPG, PNG, WebP"));
     }
     cb(null, true);
   },
 });
+
+/* ---------- Media upload constants ---------- */
+
+const MEDIA_DIR = process.env.MEDIA_PATH || "/media";
+const MEDIA_TMP_DIR = path.join(MEDIA_DIR, ".tmp");
+const MEDIA_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const MEDIA_MAX_DIM = 4096;
+const MEDIA_MAX_PIXELS = 16_000_000; // 16 MP
+const MEDIA_VARIANTS = [320, 960, 1600];
+
+const mediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MEDIA_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!IMAGE_ALLOWED_MIME.has(file.mimetype)) {
+      return cb(new Error("Допустимые форматы: JPG, PNG, WebP"));
+    }
+    cb(null, true);
+  },
+});
+
+fs.mkdirSync(MEDIA_DIR, { recursive: true });
+fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true });
+
+/* ---------- YouTube helpers ---------- */
+
+const YOUTUBE_PATTERNS = [
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
+];
+
+function extractYouTubeId(text) {
+  for (const pattern of YOUTUBE_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/* ---------- Media DTO helper ---------- */
+
+function buildMedia(row) {
+  if (row.media_type === "image") {
+    const meta = JSON.parse(row.media_meta || "{}");
+    return {
+      type: "image",
+      url: `/media/${row.media_url}/960.webp`,
+      thumb: `/media/${row.media_url}/320.webp`,
+      full: `/media/${row.media_url}/1600.webp`,
+      width: meta.w || 0,
+      height: meta.h || 0,
+    };
+  }
+  if (row.media_type === "youtube") {
+    return {
+      type: "youtube",
+      videoId: row.media_url,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${row.media_url}`,
+    };
+  }
+  return undefined;
+}
 
 /* ---------- helpers ---------- */
 
@@ -46,7 +109,9 @@ const loginSchema = z.object({
 });
 
 const shoutSchema = z.object({
-  content: z.string().min(1).max(SHOUT_MAX_LENGTH),
+  content: z.string().max(SHOUT_MAX_LENGTH).default(""),
+  mediaId: z.string().uuid().optional(),
+  youtubeUrl: z.string().max(500).optional(),
 });
 
 const profileUpdateSchema = z.object({
@@ -223,6 +288,7 @@ export function mountRoutes(app) {
     }
 
     function mapRow(row, children) {
+      const media = buildMedia(row);
       return {
         id: row.id,
         user: {
@@ -235,6 +301,7 @@ export function mountRoutes(app) {
         timestamp: row.created_at,
         likes: likesCount.get(row.id) || 0,
         likedBy: currentUserId && likedSet.has(row.id) ? [currentUserId] : [],
+        ...(media ? { media } : {}),
         replies: children,
       };
     }
@@ -254,15 +321,62 @@ export function mountRoutes(app) {
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       if (issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
-      return res.status(400).json({ error: "Сообщение не может быть пустым" });
+      return res.status(400).json({ error: "Некорректные данные" });
+    }
+
+    const { content, mediaId, youtubeUrl } = parsed.data;
+
+    // Must have content or media
+    if (!content.trim() && !mediaId && !youtubeUrl) {
+      return res.status(400).json({ error: "Нужен текст или медиа" });
+    }
+
+    // Cannot have both image and YouTube
+    if (mediaId && youtubeUrl) {
+      return res.status(400).json({ error: "Можно прикрепить или изображение, или видео" });
+    }
+
+    let media_type = null;
+    let media_url = null;
+    let media_meta = null;
+
+    if (mediaId) {
+      // Validate uploaded media exists on disk
+      const mediaDir = path.join(MEDIA_DIR, mediaId);
+      if (!fs.existsSync(mediaDir)) {
+        return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
+      }
+      // Read the meta file written during upload
+      const metaPath = path.join(mediaDir, "meta.json");
+      if (fs.existsSync(metaPath)) {
+        media_meta = fs.readFileSync(metaPath, "utf-8");
+      }
+      media_type = "image";
+      media_url = mediaId;
+    } else if (youtubeUrl) {
+      const videoId = extractYouTubeId(youtubeUrl);
+      if (!videoId) {
+        return res.status(400).json({ error: "Некорректная YouTube ссылка" });
+      }
+      media_type = "youtube";
+      media_url = videoId;
+      media_meta = JSON.stringify({ videoId });
+    } else if (content) {
+      // Auto-detect YouTube URL in content
+      const videoId = extractYouTubeId(content);
+      if (videoId) {
+        media_type = "youtube";
+        media_url = videoId;
+        media_meta = JSON.stringify({ videoId });
+      }
     }
 
     const id = crypto.randomUUID();
     db.prepare(
-      "INSERT INTO shouts (id, user_id, parent_id, content) VALUES (?, ?, NULL, ?)"
-    ).run(id, req.session.user.id, parsed.data.content);
+      "INSERT INTO shouts (id, user_id, parent_id, content, media_type, media_url, media_meta) VALUES (?, ?, NULL, ?, ?, ?, ?)"
+    ).run(id, req.session.user.id, content, media_type, media_url, media_meta);
 
-    console.log(`[Shouts] New shout ${id} by ${req.session.user.name}`);
+    console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${media_type || "none"}`);
     res.json({ ok: true, id });
   });
 
@@ -412,6 +526,7 @@ export function mountRoutes(app) {
     }
 
     function mapRow(row, children) {
+      const media = buildMedia(row);
       return {
         id: row.id,
         user: {
@@ -424,6 +539,7 @@ export function mountRoutes(app) {
         timestamp: row.created_at,
         likes: likesCount.get(row.id) || 0,
         likedBy: currentUserId && likedSet.has(row.id) ? [currentUserId] : [],
+        ...(media ? { media } : {}),
         replies: children,
       };
     }
@@ -532,6 +648,92 @@ export function mountRoutes(app) {
     res.setHeader("Cache-Control", "public, max-age=86400, immutable");
     fs.createReadStream(filePath).pipe(res);
   });
+
+  /* ---- Media upload ---- */
+
+  app.post("/api/v1/upload/media", requireAuth, (req, res) => {
+    mediaUpload.single("file")(req, res, async (multerErr) => {
+      if (multerErr) {
+        const msg = multerErr.code === "LIMIT_FILE_SIZE"
+          ? "Файл слишком большой (макс. 5 МБ)"
+          : multerErr.message || "Ошибка загрузки";
+        console.log(`[Media] Upload rejected: ${msg}`);
+        return res.status(400).json({ error: msg });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "Файл не выбран" });
+      }
+
+      const userId = req.session.user.id;
+      console.log(`[Media] Processing upload for ${userId}, ${req.file.size} bytes, ${req.file.mimetype}`);
+
+      try {
+        const image = sharp(req.file.buffer);
+        const meta = await image.metadata();
+
+        // Validate via sharp metadata (magic bytes check — sharp rejects invalid images)
+        if (!IMAGE_ALLOWED_MIME.has(`image/${meta.format === "jpeg" ? "jpeg" : meta.format}`)) {
+          return res.status(400).json({ error: "Недопустимый формат изображения" });
+        }
+
+        if (meta.pages && meta.pages > 1) {
+          return res.status(400).json({ error: "Анимированные изображения не поддерживаются" });
+        }
+
+        if (!meta.width || !meta.height) {
+          return res.status(400).json({ error: "Не удалось определить размер изображения" });
+        }
+
+        if (meta.width > MEDIA_MAX_DIM || meta.height > MEDIA_MAX_DIM) {
+          return res.status(400).json({ error: `Максимальный размер: ${MEDIA_MAX_DIM}×${MEDIA_MAX_DIM} пикселей` });
+        }
+
+        if (meta.width * meta.height > MEDIA_MAX_PIXELS) {
+          return res.status(400).json({ error: "Изображение слишком большое (макс. 16 МП)" });
+        }
+
+        const mediaId = crypto.randomUUID();
+        const tmpDir = path.join(MEDIA_TMP_DIR, mediaId);
+        fs.mkdirSync(tmpDir, { recursive: true });
+
+        // Strip EXIF by re-encoding, generate width-capped variants
+        const rotated = image.rotate(); // auto-rotate by EXIF, then EXIF is stripped
+        const urls = {};
+
+        for (const w of MEDIA_VARIANTS) {
+          const resized = rotated.clone().resize(w, null, { withoutEnlargement: true });
+          const outPath = path.join(tmpDir, `${w}.webp`);
+          await resized.webp({ quality: 82 }).toFile(outPath);
+          urls[w] = `/media/${mediaId}/${w}.webp`;
+        }
+
+        // Write meta.json for later use when creating shout
+        const metaJson = JSON.stringify({ w: meta.width, h: meta.height, size: req.file.size, mime: req.file.mimetype });
+        fs.writeFileSync(path.join(tmpDir, "meta.json"), metaJson);
+
+        // Atomic move: tmp → permanent
+        const permanentDir = path.join(MEDIA_DIR, mediaId);
+        fs.renameSync(tmpDir, permanentDir);
+
+        console.log(`[Media] Upload complete: ${mediaId}, ${MEDIA_VARIANTS.join("/")}w`);
+        res.json({
+          ok: true,
+          mediaId,
+          urls: {
+            thumb: urls[320],
+            medium: urls[960],
+            full: urls[1600],
+          },
+        });
+      } catch (err) {
+        console.error("[Media] Processing error:", err);
+        res.status(500).json({ error: "Ошибка обработки изображения" });
+      }
+    });
+  });
+
+  /* ---- Avatar upload ---- */
 
   app.post("/api/v1/upload/avatar", requireAuth, (req, res) => {
     upload.single("avatar")(req, res, async (multerErr) => {
