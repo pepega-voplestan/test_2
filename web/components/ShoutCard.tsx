@@ -164,8 +164,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
     <div className={`flex flex-col mb-4 ${isReply ? 'mt-4 border-l-2 border-zinc-800 pl-4' : ''}`}>
       <div className="flex gap-4">
         {/* Avatar */}
-        <div className="shrink-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-800">
+        <a href={`#/profile/${shout.user.id}`} className="shrink-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-800 hover:ring-2 hover:ring-zinc-600 transition-all">
             {shout.user.avatar ? (
               <img
                   src={shout.user.avatar}
@@ -178,15 +178,15 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
               </div>
             )}
           </div>
-        </div>
+        </a>
 
         {/* Content */}
         <div className="grow min-w-0">
           {/* Header */}
           <div className="flex items-baseline gap-2 mb-1">
-            <span className={`font-bold text-sm ${shout.user.isBanned ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+            <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
               {shout.user.name}
-            </span>
+            </a>
             <span className="text-xs text-zinc-500">{formatTimestamp(shout.timestamp)}</span>
           </div>
 
