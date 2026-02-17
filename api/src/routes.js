@@ -67,6 +67,19 @@ function extractYouTubeId(text) {
   return null;
 }
 
+async function fetchYouTubeMeta(videoId) {
+  try {
+    const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return { videoId };
+    const data = await res.json();
+    return { videoId, title: data.title || null, channel: data.author_name || null };
+  } catch (e) {
+    console.error("[YouTube] oEmbed fetch failed:", e.message);
+    return { videoId };
+  }
+}
+
 /* ---------- Media DTO helper ---------- */
 
 function buildMedia(row) {
@@ -82,10 +95,13 @@ function buildMedia(row) {
     };
   }
   if (row.m_type === "youtube") {
+    const meta = JSON.parse(row.m_meta || "{}");
     return {
       type: "youtube",
       videoId: row.m_url,
       embedUrl: `https://www.youtube-nocookie.com/embed/${row.m_url}`,
+      title: meta.title || null,
+      channel: meta.channel || null,
     };
   }
   return undefined;
@@ -324,7 +340,7 @@ export function mountRoutes(app) {
   });
 
   /* new shout */
-  app.post("/api/v1/shouts", requireAuth, (req, res) => {
+  app.post("/api/v1/shouts", requireAuth, async (req, res) => {
     const parsed = shoutSchema.safeParse(req.body);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -358,18 +374,20 @@ export function mountRoutes(app) {
       if (!videoId) {
         return res.status(400).json({ error: "Некорректная YouTube ссылка" });
       }
+      const ytMeta = await fetchYouTubeMeta(videoId);
       finalMediaId = crypto.randomUUID();
       db.prepare(
         "INSERT INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)"
-      ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify({ videoId }));
+      ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify(ytMeta));
     } else if (content) {
       // Auto-detect YouTube URL in content
       const videoId = extractYouTubeId(content);
       if (videoId) {
+        const ytMeta = await fetchYouTubeMeta(videoId);
         finalMediaId = crypto.randomUUID();
         db.prepare(
           "INSERT INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)"
-        ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify({ videoId }));
+        ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify(ytMeta));
       }
     }
 

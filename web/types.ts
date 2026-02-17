@@ -18,7 +18,7 @@ export interface UserProfile {
 
 export type ShoutMedia =
   | { type: 'image'; url: string; thumb: string; full: string; width: number; height: number }
-  | { type: 'youtube'; videoId: string; embedUrl: string };
+  | { type: 'youtube'; videoId: string; embedUrl: string; title?: string | null; channel?: string | null };
 
 export interface Shout {
   id: string;

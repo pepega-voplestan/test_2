@@ -39,9 +39,10 @@ const authLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 app.use("/api/v1/auth/login", authLimiter);
 app.use("/api/v1/auth/register", authLimiter);
 
-// 10 uploads per 10 min, 10 posts per 10 min
-const uploadLimiter = rateLimit({ windowMs: 10 * 60_000, max: 10, message: { error: "Слишком много загрузок. Подождите немного" } });
-const postLimiter = rateLimit({ windowMs: 10 * 60_000, max: 10, message: { error: "Слишком много воплей. Подождите немного" } });
+// Per-user rate limiting: 100 requests per 10 min (keyed by user id, falls back to IP for anonymous)
+const perUserKey = (req) => req.session?.user?.id || req.ip;
+const uploadLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator: perUserKey, message: { error: "Слишком много загрузок. Подождите немного" } });
+const postLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator: perUserKey, message: { error: "Слишком много воплей. Подождите немного" } });
 app.use("/api/v1/upload/media", uploadLimiter);
 app.use("/api/v1/shouts", postLimiter);
 
