@@ -170,4 +170,72 @@ try {
   // Column already exists
 }
 
+// Separate comments table — comments are not shouts, they belong to a shout as a thread
+db.exec(`
+CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY,
+  shout_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  media_id TEXT DEFAULT NULL,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (shout_id) REFERENCES shouts(id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (media_id) REFERENCES media(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_shout_created ON comments(shout_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_comments_user ON comments(user_id);
+`);
+
+// Create comment_likes table
+db.exec(`
+CREATE TABLE IF NOT EXISTS comment_likes (
+  comment_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (comment_id, user_id),
+  FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_comment_likes_comment ON comment_likes(comment_id);
+CREATE INDEX IF NOT EXISTS idx_comment_likes_user ON comment_likes(user_id);
+`);
+
+// Migrate existing replies (shouts with parent_id) → comments table (one-time)
+const replyRows = db.prepare(
+  `SELECT id, parent_id, user_id, content, media_id, is_deleted, created_at
+   FROM shouts WHERE parent_id IS NOT NULL`
+).all();
+
+if (replyRows.length) {
+  // Check if any have already been migrated
+  const alreadyMigrated = db.prepare(
+    `SELECT COUNT(*) AS c FROM comments WHERE id IN (${replyRows.map(() => "?").join(",")})`
+  ).get(...replyRows.map(r => r.id));
+
+  const toMigrate = alreadyMigrated.c === 0 ? replyRows : [];
+  if (toMigrate.length) {
+    const insertComment = db.prepare(
+      `INSERT OR IGNORE INTO comments (id, shout_id, user_id, content, media_id, is_deleted, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    // Migrate likes for replies → comment_likes
+    const migrateReplyLikes = db.prepare(
+      `INSERT OR IGNORE INTO comment_likes (comment_id, user_id, created_at)
+       SELECT shout_id, user_id, created_at FROM shout_likes WHERE shout_id = ?`
+    );
+    const migrate = db.transaction((rows) => {
+      for (const row of rows) {
+        insertComment.run(row.id, row.parent_id, row.user_id, row.content, row.media_id, row.is_deleted, row.created_at);
+        migrateReplyLikes.run(row.id);
+      }
+    });
+    migrate(toMigrate);
+    console.log(`[DB] Migrated ${toMigrate.length} reply row(s) from shouts to comments table`);
+  }
+}
+
 console.log("[DB] Schema initialized");

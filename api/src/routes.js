@@ -141,6 +141,12 @@ const shoutSchema = z.object({
   youtubeUrl: z.string().max(500).optional(),
 });
 
+const commentSchema = z.object({
+  content: z.string().max(SHOUT_MAX_LENGTH).default(""),
+  mediaId: z.string().uuid().optional(),
+  youtubeUrl: z.string().max(500).optional(),
+});
+
 const profileUpdateSchema = z.object({
   username: z.string().min(3).max(32).optional(),
   email: z.string().email().max(200).optional().or(z.literal("")),
@@ -293,55 +299,102 @@ export function mountRoutes(app) {
     const top = hasMore ? topRaw.slice(0, limit) : topRaw;
     const topIds = top.map((s) => s.id);
 
-    const replies = topIds.length
+    // Fetch comments from the separate comments table
+    const comments = topIds.length
       ? db
           .prepare(`
-            SELECT s.*, u.username, u.avatar, u.is_banned,
+            SELECT c.*, u.username, u.avatar, u.is_banned,
                    m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
-            FROM shouts s
-            JOIN users u ON u.id = s.user_id
-            LEFT JOIN media m ON m.id = s.media_id
-            WHERE s.parent_id IN (${topIds.map(() => "?").join(",")})
-              AND s.is_deleted = 0
-            ORDER BY datetime(s.created_at) ASC
+            FROM comments c
+            JOIN users u ON u.id = c.user_id
+            LEFT JOIN media m ON m.id = c.media_id
+            WHERE c.shout_id IN (${topIds.map(() => "?").join(",")})
+              AND c.is_deleted = 0
+            ORDER BY datetime(c.created_at) ASC
           `)
           .all(...topIds)
       : [];
 
-    const allIds = [...topIds, ...replies.map((r) => r.id)];
+    const commentIds = comments.map((c) => c.id);
 
-    const likesCount = new Map();
-    if (allIds.length) {
+    // Shout likes
+    const shoutLikesCount = new Map();
+    if (topIds.length) {
       const rows = db
         .prepare(`
           SELECT shout_id, COUNT(*) c
           FROM shout_likes
-          WHERE shout_id IN (${allIds.map(() => "?").join(",")})
+          WHERE shout_id IN (${topIds.map(() => "?").join(",")})
           GROUP BY shout_id
         `)
-        .all(...allIds);
-      for (const r of rows) likesCount.set(r.shout_id, r.c);
+        .all(...topIds);
+      for (const r of rows) shoutLikesCount.set(r.shout_id, r.c);
     }
 
-    const likedSet = new Set();
-    if (currentUserId && allIds.length) {
+    const shoutLikedSet = new Set();
+    if (currentUserId && topIds.length) {
       const rows = db
         .prepare(`
           SELECT shout_id
           FROM shout_likes
-          WHERE user_id=? AND shout_id IN (${allIds.map(() => "?").join(",")})
+          WHERE user_id=? AND shout_id IN (${topIds.map(() => "?").join(",")})
         `)
-        .all(currentUserId, ...allIds);
-      for (const r of rows) likedSet.add(r.shout_id);
+        .all(currentUserId, ...topIds);
+      for (const r of rows) shoutLikedSet.add(r.shout_id);
     }
 
-    const repliesByParent = new Map();
-    for (const r of replies) {
-      if (!repliesByParent.has(r.parent_id)) repliesByParent.set(r.parent_id, []);
-      repliesByParent.get(r.parent_id).push(r);
+    // Comment likes
+    const commentLikesCount = new Map();
+    if (commentIds.length) {
+      const rows = db
+        .prepare(`
+          SELECT comment_id, COUNT(*) c
+          FROM comment_likes
+          WHERE comment_id IN (${commentIds.map(() => "?").join(",")})
+          GROUP BY comment_id
+        `)
+        .all(...commentIds);
+      for (const r of rows) commentLikesCount.set(r.comment_id, r.c);
     }
 
-    function mapRow(row, children) {
+    const commentLikedSet = new Set();
+    if (currentUserId && commentIds.length) {
+      const rows = db
+        .prepare(`
+          SELECT comment_id
+          FROM comment_likes
+          WHERE user_id=? AND comment_id IN (${commentIds.map(() => "?").join(",")})
+        `)
+        .all(currentUserId, ...commentIds);
+      for (const r of rows) commentLikedSet.add(r.comment_id);
+    }
+
+    const commentsByShout = new Map();
+    for (const c of comments) {
+      if (!commentsByShout.has(c.shout_id)) commentsByShout.set(c.shout_id, []);
+      commentsByShout.get(c.shout_id).push(c);
+    }
+
+    function mapComment(row) {
+      const media = buildMedia(row);
+      return {
+        id: row.id,
+        shoutId: row.shout_id,
+        user: {
+          id: row.user_id,
+          name: row.username,
+          avatar: row.avatar,
+          isBanned: !!row.is_banned,
+        },
+        content: row.content,
+        timestamp: utcTimestamp(row.created_at),
+        likes: commentLikesCount.get(row.id) || 0,
+        likedBy: currentUserId && commentLikedSet.has(row.id) ? [currentUserId] : [],
+        ...(media ? { media } : {}),
+      };
+    }
+
+    function mapShout(row, children) {
       const media = buildMedia(row);
       return {
         id: row.id,
@@ -353,16 +406,16 @@ export function mountRoutes(app) {
         },
         content: row.content,
         timestamp: utcTimestamp(row.created_at),
-        likes: likesCount.get(row.id) || 0,
-        likedBy: currentUserId && likedSet.has(row.id) ? [currentUserId] : [],
+        likes: shoutLikesCount.get(row.id) || 0,
+        likedBy: currentUserId && shoutLikedSet.has(row.id) ? [currentUserId] : [],
         ...(media ? { media } : {}),
-        replies: children,
+        comments: children,
       };
     }
 
     const dto = top.map((t) => {
-      const children = (repliesByParent.get(t.id) || []).map((r) => mapRow(r, []));
-      return mapRow(t, children);
+      const children = (commentsByShout.get(t.id) || []).map((c) => mapComment(c));
+      return mapShout(t, children);
     });
 
     console.log(`[Shouts] Returning ${dto.length} shouts, hasMore=${hasMore}`);
@@ -378,10 +431,11 @@ export function mountRoutes(app) {
     if (!shout) return res.status(404).json({ error: "Запись не найдена" });
     if (shout.user_id !== userId) return res.status(403).json({ error: "Можно удалять только свои записи" });
 
-    // Soft-delete the shout and all its replies
-    db.prepare("UPDATE shouts SET is_deleted=1 WHERE id=? OR parent_id=?").run(shoutId, shoutId);
+    // Soft-delete the shout and all its comments
+    db.prepare("UPDATE shouts SET is_deleted=1 WHERE id=?").run(shoutId);
+    db.prepare("UPDATE comments SET is_deleted=1 WHERE shout_id=?").run(shoutId);
 
-    console.log(`[Shouts] Soft-deleted shout ${shoutId} (and replies) by ${userId}`);
+    console.log(`[Shouts] Soft-deleted shout ${shoutId} (and comments) by ${userId}`);
     res.json({ ok: true });
   });
 
@@ -446,19 +500,19 @@ export function mountRoutes(app) {
     res.json({ ok: true, id });
   });
 
-  /* reply */
+  /* reply (create comment) */
   app.post("/api/v1/shouts/:id/replies", requireAuth, async (req, res) => {
-    const parsed = shoutSchema.safeParse(req.body);
+    const parsed = commentSchema.safeParse(req.body);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       if (issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
       return res.status(400).json({ error: "Ответ не может быть пустым" });
     }
 
-    const parentId = req.params.id;
+    const shoutId = req.params.id;
     const parent = db
       .prepare("SELECT id FROM shouts WHERE id=? AND is_deleted=0")
-      .get(parentId);
+      .get(shoutId);
     if (!parent)
       return res.status(404).json({ error: "Запись не найдена" });
 
@@ -508,14 +562,29 @@ export function mountRoutes(app) {
 
     const id = crypto.randomUUID();
     db.prepare(
-      "INSERT INTO shouts (id, user_id, parent_id, content, media_id) VALUES (?, ?, ?, ?, ?)"
-    ).run(id, req.session.user.id, parentId, content, finalMediaId);
+      "INSERT INTO comments (id, shout_id, user_id, content, media_id) VALUES (?, ?, ?, ?, ?)"
+    ).run(id, shoutId, req.session.user.id, content, finalMediaId);
 
-    console.log(`[Shouts] Reply ${id} to ${parentId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
+    console.log(`[Comments] Comment ${id} on shout ${shoutId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
     res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
   });
 
-  /* like toggle */
+  /* delete comment (soft-delete, author only) */
+  app.delete("/api/v1/comments/:id", requireAuth, (req, res) => {
+    const commentId = req.params.id;
+    const userId = req.session.user.id;
+
+    const comment = db.prepare("SELECT id, user_id, shout_id FROM comments WHERE id=? AND is_deleted=0").get(commentId);
+    if (!comment) return res.status(404).json({ error: "Комментарий не найден" });
+    if (comment.user_id !== userId) return res.status(403).json({ error: "Можно удалять только свои комментарии" });
+
+    db.prepare("UPDATE comments SET is_deleted=1 WHERE id=?").run(commentId);
+
+    console.log(`[Comments] Soft-deleted comment ${commentId} by ${userId}`);
+    res.json({ ok: true });
+  });
+
+  /* like toggle (shout) */
   app.post("/api/v1/shouts/:id/like", requireAuth, (req, res) => {
     const shoutId = req.params.id;
     const userId = req.session.user.id;
@@ -535,6 +604,29 @@ export function mountRoutes(app) {
       .get(shoutId).c;
 
     console.log(`[Shouts] Like toggle on ${shoutId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
+    res.json({ likes, isLiked: !exists });
+  });
+
+  /* like toggle (comment) */
+  app.post("/api/v1/comments/:id/like", requireAuth, (req, res) => {
+    const commentId = req.params.id;
+    const userId = req.session.user.id;
+
+    const exists = db
+      .prepare("SELECT 1 FROM comment_likes WHERE comment_id=? AND user_id=?")
+      .get(commentId, userId);
+
+    if (exists) {
+      db.prepare("DELETE FROM comment_likes WHERE comment_id=? AND user_id=?").run(commentId, userId);
+    } else {
+      db.prepare("INSERT OR IGNORE INTO comment_likes (comment_id, user_id) VALUES (?, ?)").run(commentId, userId);
+    }
+
+    const likes = db
+      .prepare("SELECT COUNT(*) c FROM comment_likes WHERE comment_id=?")
+      .get(commentId).c;
+
+    console.log(`[Comments] Like toggle on ${commentId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
     res.json({ likes, isLiked: !exists });
   });
 
@@ -594,53 +686,98 @@ export function mountRoutes(app) {
     const top = hasMore ? topRaw.slice(0, limit) : topRaw;
     const topIds = top.map((s) => s.id);
 
-    const replies = topIds.length
+    // Fetch comments from the separate comments table
+    const comments = topIds.length
       ? db
           .prepare(`
-            SELECT s.*, u.username, u.avatar, u.is_banned,
+            SELECT c.*, u.username, u.avatar, u.is_banned,
                    m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
-            FROM shouts s
-            JOIN users u ON u.id = s.user_id
-            LEFT JOIN media m ON m.id = s.media_id
-            WHERE s.parent_id IN (${topIds.map(() => "?").join(",")})
-              AND s.is_deleted = 0
-            ORDER BY datetime(s.created_at) ASC
+            FROM comments c
+            JOIN users u ON u.id = c.user_id
+            LEFT JOIN media m ON m.id = c.media_id
+            WHERE c.shout_id IN (${topIds.map(() => "?").join(",")})
+              AND c.is_deleted = 0
+            ORDER BY datetime(c.created_at) ASC
           `)
           .all(...topIds)
       : [];
 
-    const allIds = [...topIds, ...replies.map((r) => r.id)];
+    const commentIds = comments.map((c) => c.id);
 
-    const likesCount = new Map();
-    if (allIds.length) {
+    // Shout likes
+    const shoutLikesCount = new Map();
+    if (topIds.length) {
       const rows = db
         .prepare(`
           SELECT shout_id, COUNT(*) c FROM shout_likes
-          WHERE shout_id IN (${allIds.map(() => "?").join(",")})
+          WHERE shout_id IN (${topIds.map(() => "?").join(",")})
           GROUP BY shout_id
         `)
-        .all(...allIds);
-      for (const r of rows) likesCount.set(r.shout_id, r.c);
+        .all(...topIds);
+      for (const r of rows) shoutLikesCount.set(r.shout_id, r.c);
     }
 
-    const likedSet = new Set();
-    if (currentUserId && allIds.length) {
+    const shoutLikedSet = new Set();
+    if (currentUserId && topIds.length) {
       const rows = db
         .prepare(`
           SELECT shout_id FROM shout_likes
-          WHERE user_id=? AND shout_id IN (${allIds.map(() => "?").join(",")})
+          WHERE user_id=? AND shout_id IN (${topIds.map(() => "?").join(",")})
         `)
-        .all(currentUserId, ...allIds);
-      for (const r of rows) likedSet.add(r.shout_id);
+        .all(currentUserId, ...topIds);
+      for (const r of rows) shoutLikedSet.add(r.shout_id);
     }
 
-    const repliesByParent = new Map();
-    for (const r of replies) {
-      if (!repliesByParent.has(r.parent_id)) repliesByParent.set(r.parent_id, []);
-      repliesByParent.get(r.parent_id).push(r);
+    // Comment likes
+    const commentLikesCount = new Map();
+    if (commentIds.length) {
+      const rows = db
+        .prepare(`
+          SELECT comment_id, COUNT(*) c FROM comment_likes
+          WHERE comment_id IN (${commentIds.map(() => "?").join(",")})
+          GROUP BY comment_id
+        `)
+        .all(...commentIds);
+      for (const r of rows) commentLikesCount.set(r.comment_id, r.c);
     }
 
-    function mapRow(row, children) {
+    const commentLikedSet = new Set();
+    if (currentUserId && commentIds.length) {
+      const rows = db
+        .prepare(`
+          SELECT comment_id FROM comment_likes
+          WHERE user_id=? AND comment_id IN (${commentIds.map(() => "?").join(",")})
+        `)
+        .all(currentUserId, ...commentIds);
+      for (const r of rows) commentLikedSet.add(r.comment_id);
+    }
+
+    const commentsByShout = new Map();
+    for (const c of comments) {
+      if (!commentsByShout.has(c.shout_id)) commentsByShout.set(c.shout_id, []);
+      commentsByShout.get(c.shout_id).push(c);
+    }
+
+    function mapComment(row) {
+      const media = buildMedia(row);
+      return {
+        id: row.id,
+        shoutId: row.shout_id,
+        user: {
+          id: row.user_id,
+          name: row.username,
+          avatar: row.avatar,
+          isBanned: !!row.is_banned,
+        },
+        content: row.content,
+        timestamp: utcTimestamp(row.created_at),
+        likes: commentLikesCount.get(row.id) || 0,
+        likedBy: currentUserId && commentLikedSet.has(row.id) ? [currentUserId] : [],
+        ...(media ? { media } : {}),
+      };
+    }
+
+    function mapShout(row, children) {
       const media = buildMedia(row);
       return {
         id: row.id,
@@ -652,16 +789,16 @@ export function mountRoutes(app) {
         },
         content: row.content,
         timestamp: utcTimestamp(row.created_at),
-        likes: likesCount.get(row.id) || 0,
-        likedBy: currentUserId && likedSet.has(row.id) ? [currentUserId] : [],
+        likes: shoutLikesCount.get(row.id) || 0,
+        likedBy: currentUserId && shoutLikedSet.has(row.id) ? [currentUserId] : [],
         ...(media ? { media } : {}),
-        replies: children,
+        comments: children,
       };
     }
 
     const dto = top.map((t) => {
-      const children = (repliesByParent.get(t.id) || []).map((r) => mapRow(r, []));
-      return mapRow(t, children);
+      const children = (commentsByShout.get(t.id) || []).map((c) => mapComment(c));
+      return mapShout(t, children);
     });
 
     console.log(`[Profile] Returning ${dto.length} shouts for user ${profileId}, hasMore=${hasMore}`);
