@@ -5,6 +5,17 @@ export interface User {
   isBanned?: boolean;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  avatar: string;
+  isBanned?: boolean;
+  email?: string;
+  createdAt: string;
+  shoutCount?: number;
+  isOwner: boolean;
+}
+
 export interface Shout {
   id: string;
   user: User;
