@@ -34,10 +34,27 @@ app.use(
   })
 );
 
-// Rate limiting on auth endpoints
+// Rate limiting
 const authLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 app.use("/api/v1/auth/login", authLimiter);
 app.use("/api/v1/auth/register", authLimiter);
+
+// 10 uploads per 10 min, 10 posts per 10 min
+const uploadLimiter = rateLimit({ windowMs: 10 * 60_000, max: 10, message: { error: "Слишком много загрузок. Подождите немного" } });
+const postLimiter = rateLimit({ windowMs: 10 * 60_000, max: 10, message: { error: "Слишком много воплей. Подождите немного" } });
+app.use("/api/v1/upload/media", uploadLimiter);
+app.use("/api/v1/shouts", postLimiter);
+
+// In dev, serve media files directly (in prod, the media container does this)
+if (!isProd) {
+  const mediaPath = process.env.MEDIA_PATH || "/media";
+  app.use("/media", express.static(mediaPath, {
+    maxAge: "1d",
+    setHeaders: (res) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+    },
+  }));
+}
 
 mountRoutes(app);
 

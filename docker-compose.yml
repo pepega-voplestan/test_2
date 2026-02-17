@@ -7,15 +7,27 @@ services:
     environment:
       DATABASE_PATH: /data/app.db
       SESSION_SECRET: "CHANGE_ME_LONG_RANDOM_SECRET"
+      MEDIA_PATH: /media
+      NODE_ENV: production
     volumes:
       - appdata:/data
+      - media:/media
     expose:
       - "3000"
+
+  media:
+    image: nginx:alpine
+    volumes:
+      - media:/media:ro
+      - ./media-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    expose:
+      - "80"
 
   nginx:
     image: nginx:alpine
     depends_on:
       - api
+      - media
     ports:
       - "3005:80"
     volumes:
@@ -32,3 +44,4 @@ services:
 volumes:
   appdata:
   webdist:
+  media:
