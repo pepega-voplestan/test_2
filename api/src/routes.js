@@ -37,11 +37,15 @@ export function mountRoutes(app) {
     if (!parsed.success) return res.status(400).json({ error: "Bad input" });
 
     const { username, password } = parsed.data;
+    console.log(`[Auth] Register attempt: ${username}`);
 
     const exists = db
       .prepare("SELECT id FROM users WHERE username=?")
       .get(username);
-    if (exists) return res.status(409).json({ error: "Username taken" });
+    if (exists) {
+      console.log(`[Auth] Register failed: username "${username}" taken`);
+      return res.status(409).json({ error: "Username taken" });
+    }
 
     const id = crypto.randomUUID();
     const password_hash = await hashPassword(password);
@@ -52,6 +56,7 @@ export function mountRoutes(app) {
     ).run(id, username, password_hash, avatar);
 
     req.session.user = { id, name: username, avatar };
+    console.log(`[Auth] Registered new user: ${username} (${id})`);
     res.json({ ok: true, user: req.session.user });
   });
 
@@ -68,11 +73,20 @@ export function mountRoutes(app) {
       )
       .get(username);
 
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
-    if (user.is_banned) return res.status(403).json({ error: "Banned" });
+    if (!user) {
+      console.log(`[Auth] Login failed: user "${username}" not found`);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    if (user.is_banned) {
+      console.log(`[Auth] Login blocked: user "${username}" is banned`);
+      return res.status(403).json({ error: "Banned" });
+    }
 
     const ok = await verifyPassword(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+    if (!ok) {
+      console.log(`[Auth] Login failed: wrong password for "${username}"`);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     req.session.user = {
       id: user.id,
@@ -80,20 +94,23 @@ export function mountRoutes(app) {
       avatar: user.avatar,
     };
 
+    console.log(`[Auth] Login success: ${username} (${user.id})`);
     res.json({ ok: true, user: req.session.user });
   });
 
   /* logout */
   app.post("/api/auth/logout", (req, res) => {
+    const userName = req.session?.user?.name || "unknown";
+    console.log(`[Auth] Logout: ${userName}`);
     req.session.destroy(() => res.json({ ok: true }));
   });
 
   /* get shouts */
-    /* get shouts */
   app.get("/api/shouts", (req, res) => {
     const currentUserId = req.session?.user?.id ?? null;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
     const offset = parseInt(req.query.offset, 10) || 0;
+    console.log(`[Shouts] Fetching shouts: limit=${limit}, offset=${offset}, user=${currentUserId || "anon"}`);
 
     // берём на 1 больше, чтобы понять есть ли следующая страница
     const topRaw = db.prepare(`
@@ -182,6 +199,7 @@ export function mountRoutes(app) {
       return mapRow(t, children);
     });
 
+    console.log(`[Shouts] Returning ${dto.length} shouts, hasMore=${hasMore}`);
     res.json({ shouts: dto, hasMore });
   });
 
@@ -195,6 +213,7 @@ export function mountRoutes(app) {
       "INSERT INTO shouts (id, user_id, parent_id, content) VALUES (?, ?, NULL, ?)"
     ).run(id, req.session.user.id, parsed.data.content);
 
+    console.log(`[Shouts] New shout ${id} by ${req.session.user.name}`);
     res.json({ ok: true, id });
   });
 
@@ -215,6 +234,7 @@ export function mountRoutes(app) {
       "INSERT INTO shouts (id, user_id, parent_id, content) VALUES (?, ?, ?, ?)"
     ).run(id, req.session.user.id, parentId, parsed.data.content);
 
+    console.log(`[Shouts] Reply ${id} to ${parentId} by ${req.session.user.name}`);
     res.json({ ok: true, id });
   });
 
@@ -243,6 +263,7 @@ export function mountRoutes(app) {
       .prepare("SELECT COUNT(*) c FROM shout_likes WHERE shout_id=?")
       .get(shoutId).c;
 
+    console.log(`[Shouts] Like toggle on ${shoutId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
     res.json({ likes, isLiked: !exists });
   });
 }
