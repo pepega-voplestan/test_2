@@ -5,9 +5,17 @@ import SQLiteStoreFactory from "connect-sqlite3";
 import { mountRoutes } from "./routes.js";
 import "./db.js";
 
+const isProd = process.env.NODE_ENV === "production";
+
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "50kb" }));
+
+// Request logging middleware
+app.use((req, _res, next) => {
+  console.log(`[API] ${req.method} ${req.url}`);
+  next();
+});
 
 const SQLiteStore = SQLiteStoreFactory(session);
 
@@ -17,38 +25,20 @@ app.use(
     secret: process.env.SESSION_SECRET || "dev-secret",
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: true, // т.к. снаружи https через Cloudflare
+      secure: isProd,
     },
   })
 );
 
-// анти-брутфорс на auth
+// Rate limiting on auth endpoints
 const authLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 
 mountRoutes(app);
 
-app.listen(3000, () => console.log("API listening on :3000"));
-
-app.set("trust proxy", 1);
-
-const isProd = process.env.NODE_ENV === "production";
-
-app.use(
-  session({
-    store: new SQLiteStore({ db: "sessions.sqlite", dir: "/data" }),
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    proxy: true, // <-- ВАЖНО для secure cookies за прокси
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true, // true в проде (через Cloudflare), false локально
-    },
-  })
-);
+app.listen(3000, () => console.log(`[API] Server listening on :3000 (env=${process.env.NODE_ENV || "development"})`));

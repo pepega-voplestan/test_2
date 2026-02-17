@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"node server.js\" \"vite\"",
+    "dev": "concurrently \"node ../api/src/server.js\" \"vite\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "node server.js"

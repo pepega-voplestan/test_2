@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shout } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -6,22 +6,28 @@ interface ShoutCardProps {
   shout: Shout;
   isReply?: boolean;
   showMedia?: boolean;
-  onShoutUpdated?: () => void;
+  onReplyAdded?: (shoutId: string, reply: Shout) => void;
   parentShoutId?: string;
 }
 
-const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia = true, onShoutUpdated, parentShoutId }) => {
+const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia = true, onReplyAdded, parentShoutId }) => {
   const { user, openModal } = useAuth();
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
 
-  // Like state — init from likedBy if user is logged in
+  // Like state — synced from props when they change
   const [likes, setLikes] = useState(shout.likes);
   const [isLiked, setIsLiked] = useState(
     user && shout.likedBy ? shout.likedBy.includes(user.id) : false
   );
+
+  // Sync like state when props change (e.g. after feed re-fetch)
+  useEffect(() => {
+    setLikes(shout.likes);
+    setIsLiked(user && shout.likedBy ? shout.likedBy.includes(user.id) : false);
+  }, [shout.likes, shout.likedBy, user]);
 
   const hasReplies = shout.replies && shout.replies.length > 0;
   const replyCount = shout.replies ? shout.replies.length : 0;
@@ -69,10 +75,26 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
         return;
       }
 
-      console.log('[ShoutCard] Reply posted successfully');
+      const data = await res.json();
+      console.log(`[ShoutCard] Reply posted: ${data.id}`);
+
+      // Build reply object and add to local state instead of re-fetching entire feed
+      const newReply: Shout = {
+        id: data.id,
+        user: { id: user.id, name: user.name, avatar: user.avatar },
+        content: replyContent.trim(),
+        timestamp: new Date().toISOString(),
+        likes: 0,
+        likedBy: [],
+        replies: [],
+      };
+
       setReplyContent('');
       setIsReplying(false);
-      if (onShoutUpdated) onShoutUpdated();
+
+      if (onReplyAdded) {
+        onReplyAdded(targetId, newReply);
+      }
     } catch (err) {
       console.error('[ShoutCard] Reply network error:', err);
     } finally {
@@ -91,7 +113,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
     setIsLiked(newIsLiked);
     setLikes(prev => newIsLiked ? prev + 1 : Math.max(0, prev - 1));
 
-    console.log(`[ShoutCard] Toggling like on ${shout.id}`);
+    console.log(`[ShoutCard] Toggling like on ${shout.id}, optimistic: isLiked=${newIsLiked}`);
 
     try {
       const res = await fetch(`/api/shouts/${shout.id}/like`, {
@@ -103,27 +125,27 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
         // Revert on failure
         setIsLiked(!newIsLiked);
         setLikes(prev => newIsLiked ? prev - 1 : prev + 1);
-        console.error('[ShoutCard] Like failed');
+        console.error('[ShoutCard] Like failed, reverted');
         return;
       }
 
       const data = await res.json();
       setLikes(data.likes);
       setIsLiked(data.isLiked);
-      console.log(`[ShoutCard] Like result: ${data.likes} likes, isLiked=${data.isLiked}`);
+      console.log(`[ShoutCard] Like confirmed: ${data.likes} likes, isLiked=${data.isLiked}`);
     } catch (err) {
       // Revert on network error
       setIsLiked(!newIsLiked);
       setLikes(prev => newIsLiked ? prev - 1 : prev + 1);
-      console.error('[ShoutCard] Like network error:', err);
+      console.error('[ShoutCard] Like network error, reverted:', err);
     }
   };
 
-  // Format timestamp — show relative time for ISO strings, pass through for mock relative strings
+  // Format timestamp — show relative time for ISO strings
   const formatTimestamp = (ts: string): string => {
     try {
       const date = new Date(ts);
-      if (isNaN(date.getTime())) return ts; // not a valid date, return as-is (mock data)
+      if (isNaN(date.getTime())) return ts;
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
       const diffMin = Math.floor(diffMs / 60000);
@@ -247,7 +269,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                  shout={reply}
                  isReply={true}
                  showMedia={showMedia}
-                 onShoutUpdated={onShoutUpdated}
+                 onReplyAdded={onReplyAdded}
                  parentShoutId={shout.id}
                />
            ))}

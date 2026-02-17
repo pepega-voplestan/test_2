@@ -20,6 +20,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     try {
       const res = await fetch('/api/shouts', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: content.trim() })
       });
