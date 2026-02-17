@@ -32,18 +32,26 @@ function avatarFor(username) {
   )}`;
 }
 
-const authSchema = z.object({
+const SHOUT_MAX_LENGTH = 280;
+
+const registerSchema = z.object({
   username: z.string().min(3).max(32),
   password: z.string().min(6).max(200),
+  email: z.string().email().max(200),
+});
+
+const loginSchema = z.object({
+  login: z.string().min(1).max(200),
+  password: z.string().min(1).max(200),
 });
 
 const shoutSchema = z.object({
-  content: z.string().min(1).max(280),
+  content: z.string().min(1).max(SHOUT_MAX_LENGTH),
 });
 
 const profileUpdateSchema = z.object({
   username: z.string().min(3).max(32).optional(),
-  email: z.string().max(200).optional(),
+  email: z.string().email().max(200).optional().or(z.literal("")),
   avatar: z.string().max(500).optional(),
   currentPassword: z.string().min(1).optional(),
   newPassword: z.string().min(6).max(200).optional(),
@@ -53,27 +61,42 @@ const profileUpdateSchema = z.object({
 
 export function mountRoutes(app) {
   /* health */
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  app.get("/api/v1/health", (_req, res) => res.json({ ok: true }));
 
   /* me */
-  app.get("/api/me", (req, res) => {
+  app.get("/api/v1/me", (req, res) => {
     res.json({ user: req.session?.user ?? null });
   });
 
   /* register */
-  app.post("/api/auth/register", async (req, res) => {
-    const parsed = authSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Bad input" });
+  app.post("/api/v1/auth/register", async (req, res) => {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      const field = firstIssue?.path[0];
+      if (field === "email") return res.status(400).json({ error: "Введите корректный email" });
+      if (field === "username") return res.status(400).json({ error: "Имя пользователя: от 3 до 32 символов" });
+      if (field === "password") return res.status(400).json({ error: "Пароль: минимум 6 символов" });
+      return res.status(400).json({ error: "Некорректные данные" });
+    }
 
-    const { username, password } = parsed.data;
-    console.log(`[Auth] Register attempt: ${username}`);
+    const { username, password, email } = parsed.data;
+    console.log(`[Auth] Register attempt: ${username} (${email})`);
 
-    const exists = db
+    const existsUser = db
       .prepare("SELECT id FROM users WHERE username=?")
       .get(username);
-    if (exists) {
+    if (existsUser) {
       console.log(`[Auth] Register failed: username "${username}" taken`);
       return res.status(409).json({ error: "Это имя пользователя уже занято" });
+    }
+
+    const existsEmail = db
+      .prepare("SELECT id FROM users WHERE email=?")
+      .get(email);
+    if (existsEmail) {
+      console.log(`[Auth] Register failed: email "${email}" taken`);
+      return res.status(409).json({ error: "Этот email уже используется" });
     }
 
     const id = crypto.randomUUID();
@@ -81,39 +104,39 @@ export function mountRoutes(app) {
     const avatar = avatarFor(username);
 
     db.prepare(
-      "INSERT INTO users (id, username, password_hash, avatar) VALUES (?, ?, ?, ?)"
-    ).run(id, username, password_hash, avatar);
+      "INSERT INTO users (id, username, password_hash, avatar, email) VALUES (?, ?, ?, ?, ?)"
+    ).run(id, username, password_hash, avatar, email);
 
     req.session.user = { id, name: username, avatar };
     console.log(`[Auth] Registered new user: ${username} (${id})`);
     res.json({ ok: true, user: req.session.user });
   });
 
-  /* login */
-  app.post("/api/auth/login", async (req, res) => {
-    const parsed = authSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Bad input" });
+  /* login — accepts username or email in the "login" field */
+  app.post("/api/v1/auth/login", async (req, res) => {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Некорректные данные" });
 
-    const { username, password } = parsed.data;
+    const { login, password } = parsed.data;
 
     const user = db
       .prepare(
-        "SELECT id, username, password_hash, avatar, is_banned FROM users WHERE username=?"
+        "SELECT id, username, password_hash, avatar, is_banned FROM users WHERE username=? OR email=?"
       )
-      .get(username);
+      .get(login, login);
 
     if (!user) {
-      console.log(`[Auth] Login failed: user "${username}" not found`);
+      console.log(`[Auth] Login failed: "${login}" not found`);
       return res.status(401).json({ error: "Неверное имя пользователя или пароль" });
     }
     if (user.is_banned) {
-      console.log(`[Auth] Login blocked: user "${username}" is banned`);
-      return res.status(403).json({ error: "Banned" });
+      console.log(`[Auth] Login blocked: user "${user.username}" is banned`);
+      return res.status(403).json({ error: "Аккаунт заблокирован" });
     }
 
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) {
-      console.log(`[Auth] Login failed: wrong password for "${username}"`);
+      console.log(`[Auth] Login failed: wrong password for "${user.username}"`);
       return res.status(401).json({ error: "Неверное имя пользователя или пароль" });
     }
 
@@ -123,25 +146,24 @@ export function mountRoutes(app) {
       avatar: user.avatar,
     };
 
-    console.log(`[Auth] Login success: ${username} (${user.id})`);
+    console.log(`[Auth] Login success: ${user.username} (${user.id})`);
     res.json({ ok: true, user: req.session.user });
   });
 
   /* logout */
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/v1/auth/logout", (req, res) => {
     const userName = req.session?.user?.name || "unknown";
     console.log(`[Auth] Logout: ${userName}`);
     req.session.destroy(() => res.json({ ok: true }));
   });
 
   /* get shouts */
-  app.get("/api/shouts", (req, res) => {
+  app.get("/api/v1/shouts", (req, res) => {
     const currentUserId = req.session?.user?.id ?? null;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
     const offset = parseInt(req.query.offset, 10) || 0;
     console.log(`[Shouts] Fetching shouts: limit=${limit}, offset=${offset}, user=${currentUserId || "anon"}`);
 
-    // берём на 1 больше, чтобы понять есть ли следующая страница
     const topRaw = db.prepare(`
       SELECT s.*, u.username, u.avatar, u.is_banned
       FROM shouts s
@@ -153,7 +175,6 @@ export function mountRoutes(app) {
 
     const hasMore = topRaw.length > limit;
     const top = hasMore ? topRaw.slice(0, limit) : topRaw;
-
     const topIds = top.map((s) => s.id);
 
     const replies = topIds.length
@@ -170,7 +191,6 @@ export function mountRoutes(app) {
 
     const allIds = [...topIds, ...replies.map((r) => r.id)];
 
-    /* likes count */
     const likesCount = new Map();
     if (allIds.length) {
       const rows = db
@@ -181,11 +201,9 @@ export function mountRoutes(app) {
           GROUP BY shout_id
         `)
         .all(...allIds);
-
       for (const r of rows) likesCount.set(r.shout_id, r.c);
     }
 
-    /* liked by current user */
     const likedSet = new Set();
     if (currentUserId && allIds.length) {
       const rows = db
@@ -195,11 +213,9 @@ export function mountRoutes(app) {
           WHERE user_id=? AND shout_id IN (${allIds.map(() => "?").join(",")})
         `)
         .all(currentUserId, ...allIds);
-
       for (const r of rows) likedSet.add(r.shout_id);
     }
 
-    /* group replies */
     const repliesByParent = new Map();
     for (const r of replies) {
       if (!repliesByParent.has(r.parent_id)) repliesByParent.set(r.parent_id, []);
@@ -233,9 +249,13 @@ export function mountRoutes(app) {
   });
 
   /* new shout */
-  app.post("/api/shouts", requireAuth, (req, res) => {
+  app.post("/api/v1/shouts", requireAuth, (req, res) => {
     const parsed = shoutSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Bad input" });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      if (issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
+      return res.status(400).json({ error: "Сообщение не может быть пустым" });
+    }
 
     const id = crypto.randomUUID();
     db.prepare(
@@ -247,16 +267,20 @@ export function mountRoutes(app) {
   });
 
   /* reply */
-  app.post("/api/shouts/:id/replies", requireAuth, (req, res) => {
+  app.post("/api/v1/shouts/:id/replies", requireAuth, (req, res) => {
     const parsed = shoutSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Bad input" });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      if (issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
+      return res.status(400).json({ error: "Ответ не может быть пустым" });
+    }
 
     const parentId = req.params.id;
     const parent = db
       .prepare("SELECT id FROM shouts WHERE id=?")
       .get(parentId);
     if (!parent)
-      return res.status(404).json({ error: "Parent not found" });
+      return res.status(404).json({ error: "Запись не найдена" });
 
     const id = crypto.randomUUID();
     db.prepare(
@@ -268,24 +292,18 @@ export function mountRoutes(app) {
   });
 
   /* like toggle */
-  app.post("/api/shouts/:id/like", requireAuth, (req, res) => {
+  app.post("/api/v1/shouts/:id/like", requireAuth, (req, res) => {
     const shoutId = req.params.id;
     const userId = req.session.user.id;
 
     const exists = db
-      .prepare(
-        "SELECT 1 FROM shout_likes WHERE shout_id=? AND user_id=?"
-      )
+      .prepare("SELECT 1 FROM shout_likes WHERE shout_id=? AND user_id=?")
       .get(shoutId, userId);
 
     if (exists) {
-      db.prepare(
-        "DELETE FROM shout_likes WHERE shout_id=? AND user_id=?"
-      ).run(shoutId, userId);
+      db.prepare("DELETE FROM shout_likes WHERE shout_id=? AND user_id=?").run(shoutId, userId);
     } else {
-      db.prepare(
-        "INSERT OR IGNORE INTO shout_likes (shout_id, user_id) VALUES (?, ?)"
-      ).run(shoutId, userId);
+      db.prepare("INSERT OR IGNORE INTO shout_likes (shout_id, user_id) VALUES (?, ?)").run(shoutId, userId);
     }
 
     const likes = db
@@ -298,8 +316,7 @@ export function mountRoutes(app) {
 
   /* ---- Profile endpoints ---- */
 
-  /* get user profile */
-  app.get("/api/users/:id", (req, res) => {
+  app.get("/api/v1/users/:id", (req, res) => {
     const profileId = req.params.id;
     const currentUserId = req.session?.user?.id ?? null;
     const isOwner = currentUserId === profileId;
@@ -310,7 +327,7 @@ export function mountRoutes(app) {
       .prepare("SELECT id, username, avatar, email, is_banned, created_at FROM users WHERE id=?")
       .get(profileId);
 
-    if (!row) return res.status(404).json({ error: "User not found" });
+    if (!row) return res.status(404).json({ error: "Пользователь не найден" });
 
     const shoutCount = db
       .prepare("SELECT COUNT(*) c FROM shouts WHERE user_id=? AND parent_id IS NULL")
@@ -323,15 +340,14 @@ export function mountRoutes(app) {
       isBanned: !!row.is_banned,
       createdAt: row.created_at,
       shoutCount,
-      ...(isOwner ? { email: row.email } : {}),
+      ...(isOwner ? { email: row.email || "" } : {}),
       isOwner,
     };
 
     res.json({ profile });
   });
 
-  /* get user's shouts */
-  app.get("/api/users/:id/shouts", (req, res) => {
+  app.get("/api/v1/users/:id/shouts", (req, res) => {
     const profileId = req.params.id;
     const currentUserId = req.session?.user?.id ?? null;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
@@ -421,22 +437,25 @@ export function mountRoutes(app) {
     res.json({ shouts: dto, hasMore });
   });
 
-  /* update own profile */
-  app.put("/api/users/:id", requireAuth, async (req, res) => {
+  app.put("/api/v1/users/:id", requireAuth, async (req, res) => {
     const profileId = req.params.id;
     const currentUserId = req.session.user.id;
 
     if (profileId !== currentUserId) {
-      return res.status(403).json({ error: "Cannot edit another user's profile" });
+      return res.status(403).json({ error: "Нельзя редактировать чужой профиль" });
     }
 
     const parsed = profileUpdateSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Bad input" });
+    if (!parsed.success) {
+      const field = parsed.error.issues[0]?.path[0];
+      if (field === "email") return res.status(400).json({ error: "Введите корректный email" });
+      if (field === "username") return res.status(400).json({ error: "Имя пользователя: от 3 до 32 символов" });
+      return res.status(400).json({ error: "Некорректные данные" });
+    }
 
     const { username, email, avatar, currentPassword, newPassword } = parsed.data;
     console.log(`[Profile] Update attempt for user ${currentUserId}`);
 
-    // Handle password change
     if (newPassword) {
       if (!currentPassword) {
         return res.status(400).json({ error: "Введите текущий пароль" });
@@ -452,7 +471,6 @@ export function mountRoutes(app) {
       console.log(`[Profile] Password updated for ${currentUserId}`);
     }
 
-    // Handle username change
     if (username && username !== req.session.user.name) {
       const exists = db.prepare("SELECT id FROM users WHERE username=? AND id!=?").get(username, currentUserId);
       if (exists) {
@@ -463,7 +481,6 @@ export function mountRoutes(app) {
       console.log(`[Profile] Username updated to "${username}"`);
     }
 
-    // Handle avatar change
     if (avatar !== undefined) {
       const newAvatar = avatar.trim() || avatarFor(req.session.user.name);
       db.prepare("UPDATE users SET avatar=? WHERE id=?").run(newAvatar, currentUserId);
@@ -471,13 +488,20 @@ export function mountRoutes(app) {
       console.log(`[Profile] Avatar updated`);
     }
 
-    // Handle email change
     if (email !== undefined) {
-      db.prepare("UPDATE users SET email=? WHERE id=?").run(email.trim(), currentUserId);
+      const trimmed = email.trim();
+      if (trimmed) {
+        const existsEmail = db.prepare("SELECT id FROM users WHERE email=? AND id!=?").get(trimmed, currentUserId);
+        if (existsEmail) {
+          return res.status(409).json({ error: "Этот email уже используется" });
+        }
+        db.prepare("UPDATE users SET email=? WHERE id=?").run(trimmed, currentUserId);
+      } else {
+        db.prepare("UPDATE users SET email=NULL WHERE id=?").run(currentUserId);
+      }
       console.log(`[Profile] Email updated`);
     }
 
-    // Return updated profile
     const updated = db
       .prepare("SELECT id, username, avatar, email, created_at FROM users WHERE id=?")
       .get(currentUserId);
@@ -489,7 +513,7 @@ export function mountRoutes(app) {
         id: updated.id,
         name: updated.username,
         avatar: updated.avatar,
-        email: updated.email,
+        email: updated.email || "",
         createdAt: updated.created_at,
         isOwner: true,
       },
@@ -498,8 +522,7 @@ export function mountRoutes(app) {
 
   /* ---- Avatar upload ---- */
 
-  // Serve avatar files: /api/avatars/:userId/:size.webp
-  app.get("/api/avatars/:userId/:file", (req, res) => {
+  app.get("/api/v1/avatars/:userId/:file", (req, res) => {
     const { userId, file } = req.params;
     const filePath = path.join(AVATAR_DIR, userId, file);
     if (!fs.existsSync(filePath)) {
@@ -510,8 +533,7 @@ export function mountRoutes(app) {
     fs.createReadStream(filePath).pipe(res);
   });
 
-  /* upload avatar */
-  app.post("/api/upload/avatar", requireAuth, (req, res) => {
+  app.post("/api/v1/upload/avatar", requireAuth, (req, res) => {
     upload.single("avatar")(req, res, async (multerErr) => {
       if (multerErr) {
         const msg = multerErr.code === "LIMIT_FILE_SIZE"
@@ -532,17 +554,14 @@ export function mountRoutes(app) {
         const image = sharp(req.file.buffer);
         const meta = await image.metadata();
 
-        // Reject animated images (GIF frames, animated WebP)
         if (meta.pages && meta.pages > 1) {
           return res.status(400).json({ error: "Анимированные изображения не поддерживаются" });
         }
 
-        // Check minimum resolution
         if (!meta.width || !meta.height || meta.width < AVATAR_MIN_DIM || meta.height < AVATAR_MIN_DIM) {
           return res.status(400).json({ error: `Минимальное разрешение: ${AVATAR_MIN_DIM}×${AVATAR_MIN_DIM}` });
         }
 
-        // Crop to 1:1 (center crop to the smaller dimension)
         const size = Math.min(meta.width, meta.height);
         const cropped = image
           .extract({
@@ -551,13 +570,11 @@ export function mountRoutes(app) {
             width: size,
             height: size,
           })
-          .rotate(); // auto-rotate based on EXIF, then strip metadata
+          .rotate();
 
-        // Create output directory
         const userDir = path.join(AVATAR_DIR, userId);
         fs.mkdirSync(userDir, { recursive: true });
 
-        // Generate all sizes
         const version = Date.now();
         for (const s of AVATAR_SIZES) {
           await cropped
@@ -567,8 +584,7 @@ export function mountRoutes(app) {
             .toFile(path.join(userDir, `${s}.webp`));
         }
 
-        // Update user avatar in DB — use the 256 size as the canonical URL
-        const avatarUrl = `/api/avatars/${userId}/256.webp?v=${version}`;
+        const avatarUrl = `/api/v1/avatars/${userId}/256.webp?v=${version}`;
         db.prepare("UPDATE users SET avatar=? WHERE id=?").run(avatarUrl, userId);
         req.session.user.avatar = avatarUrl;
 
@@ -577,7 +593,7 @@ export function mountRoutes(app) {
           ok: true,
           avatar: avatarUrl,
           sizes: Object.fromEntries(
-            AVATAR_SIZES.map((s) => [s, `/api/avatars/${userId}/${s}.webp?v=${version}`])
+            AVATAR_SIZES.map((s) => [s, `/api/v1/avatars/${userId}/${s}.webp?v=${version}`])
           ),
         });
       } catch (err) {

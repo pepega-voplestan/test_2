@@ -10,13 +10,11 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
 
-  // auth actions
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  login: (login: string, password: string) => Promise<void>;
+  register: (username: string, password: string, email: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 
-  // modal controls (compat with your existing UI)
   isAuthModalOpen: boolean;
   openModal: () => void;
   closeModal: () => void;
@@ -35,7 +33,7 @@ async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!res.ok) {
-    let msg = "Request failed";
+    let msg = "Что-то пошло не так";
     try {
       const data = await res.json();
       msg = data?.error || msg;
@@ -58,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function refresh() {
     console.log("[Auth] Refreshing session...");
     try {
-      const data = await api<{ user: User | null }>("/api/me");
+      const data = await api<{ user: User | null }>("/api/v1/me");
       setUser(data.user);
       console.log(`[Auth] Session: ${data.user ? data.user.name : "not logged in"}`);
     } catch (err) {
@@ -69,22 +67,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(username: string, password: string) {
-    console.log(`[Auth] Logging in as "${username}"...`);
-    const data = await api<{ user: User }>("/api/auth/login", {
+  async function login(loginValue: string, password: string) {
+    console.log(`[Auth] Logging in as "${loginValue}"...`);
+    const data = await api<{ user: User }>("/api/v1/auth/login", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ login: loginValue, password }),
     });
     console.log(`[Auth] Login successful: ${data.user.name}`);
     setUser(data.user);
     closeModal();
   }
 
-  async function register(username: string, password: string) {
+  async function register(username: string, password: string, email: string) {
     console.log(`[Auth] Registering "${username}"...`);
-    const data = await api<{ user: User }>("/api/auth/register", {
+    const data = await api<{ user: User }>("/api/v1/auth/register", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, email }),
     });
     console.log(`[Auth] Registration successful: ${data.user.name}`);
     setUser(data.user);
@@ -93,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     console.log("[Auth] Logging out...");
-    await api("/api/auth/logout", { method: "POST" });
+    await api("/api/v1/auth/logout", { method: "POST" });
     console.log("[Auth] Logged out");
     setUser(null);
   }
