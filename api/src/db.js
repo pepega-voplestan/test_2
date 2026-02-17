@@ -111,4 +111,14 @@ if (dupes.length) console.log(`[DB] Deduplicated ${dupes.length} email(s)`);
 
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
 
+// Add media columns to shouts (migration-safe)
+try {
+  db.exec(`ALTER TABLE shouts ADD COLUMN media_type TEXT DEFAULT NULL`);
+  db.exec(`ALTER TABLE shouts ADD COLUMN media_url TEXT DEFAULT NULL`);
+  db.exec(`ALTER TABLE shouts ADD COLUMN media_meta TEXT DEFAULT NULL`);
+  console.log("[DB] Added media columns to shouts");
+} catch (_e) {
+  // Columns already exist
+}
+
 console.log("[DB] Schema initialized");

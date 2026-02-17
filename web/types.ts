@@ -16,6 +16,10 @@ export interface UserProfile {
   isOwner: boolean;
 }
 
+export type ShoutMedia =
+  | { type: 'image'; url: string; thumb: string; full: string; width: number; height: number }
+  | { type: 'youtube'; videoId: string; embedUrl: string };
+
 export interface Shout {
   id: string;
   user: User;
@@ -23,10 +27,6 @@ export interface Shout {
   timestamp: string;
   likes: number;
   likedBy?: string[];
-  image?: string;
-  embed?: {
-    type: 'youtube';
-    src: string;
-  };
+  media?: ShoutMedia;
   replies?: Shout[];
 }
