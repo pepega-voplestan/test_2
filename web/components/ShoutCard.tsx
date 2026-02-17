@@ -10,12 +10,15 @@ interface ShoutCardProps {
   parentShoutId?: string;
 }
 
+const SHOUT_MAX_LENGTH = 280;
+
 const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia = true, onReplyAdded, parentShoutId }) => {
   const { user, openModal } = useAuth();
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   // Like state — synced from props when they change
   const [likes, setLikes] = useState(shout.likes);
@@ -32,6 +35,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
   const hasReplies = shout.replies && shout.replies.length > 0;
   const replyCount = shout.replies ? shout.replies.length : 0;
 
+  const replyCharCount = replyContent.length;
+  const isReplyOverLimit = replyCharCount > SHOUT_MAX_LENGTH;
+
   const toggleReplies = () => {
     setRepliesOpen(!repliesOpen);
   };
@@ -44,9 +50,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
     if (!isReplying) {
         setIsReplying(true);
         setRepliesOpen(true);
+        setReplyError(null);
     } else {
         setIsReplying(false);
         setReplyContent('');
+        setReplyError(null);
         if (!hasReplies) {
             setRepliesOpen(false);
         }
@@ -55,14 +63,15 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
 
   const handleReplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyContent.trim() || !user || isSubmittingReply) return;
+    if (!replyContent.trim() || !user || isSubmittingReply || isReplyOverLimit) return;
 
     const targetId = parentShoutId || shout.id;
     setIsSubmittingReply(true);
+    setReplyError(null);
     console.log(`[ShoutCard] Submitting reply to shout ${targetId}`);
 
     try {
-      const res = await fetch(`/api/shouts/${targetId}/replies`, {
+      const res = await fetch(`/api/v1/shouts/${targetId}/replies`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -70,9 +79,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        console.error('[ShoutCard] Reply error:', data.error);
-        return;
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Ошибка ${res.status}`);
       }
 
       const data = await res.json();
@@ -91,12 +99,15 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
 
       setReplyContent('');
       setIsReplying(false);
+      setReplyError(null);
 
       if (onReplyAdded) {
         onReplyAdded(targetId, newReply);
       }
-    } catch (err) {
-      console.error('[ShoutCard] Reply network error:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Не удалось отправить ответ';
+      console.error('[ShoutCard] Reply error:', msg);
+      setReplyError(msg);
     } finally {
       setIsSubmittingReply(false);
     }
@@ -116,7 +127,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
     console.log(`[ShoutCard] Toggling like on ${shout.id}, optimistic: isLiked=${newIsLiked}`);
 
     try {
-      const res = await fetch(`/api/shouts/${shout.id}/like`, {
+      const res = await fetch(`/api/v1/shouts/${shout.id}/like`, {
         method: 'POST',
         credentials: 'include'
       });
@@ -276,7 +287,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
 
            {/* Reply Input Section */}
            {isReplying && (
-             <div className="mt-4 bg-[#1e1e1e] p-3 rounded flex gap-3">
+             <div className="mt-4">
+               <div className="bg-[#1e1e1e] p-3 rounded flex gap-3">
                  <div className="w-8 h-8 bg-zinc-700 rounded-full shrink-0 flex items-center justify-center overflow-hidden">
                       {user?.avatar ? (
                         <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
@@ -286,24 +298,38 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                         </svg>
                       )}
                  </div>
-                  <form className="w-full flex gap-2 items-center" onSubmit={handleReplySubmit}>
-                      <input
-                          type="text"
-                          placeholder="Напишите ответ..."
-                          className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-zinc-600"
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          disabled={isSubmittingReply}
-                          autoFocus
-                      />
-                      <button
-                        type="submit"
-                        disabled={!replyContent.trim() || isSubmittingReply}
-                        className="text-[#0087ff] hover:text-blue-400 text-sm font-medium disabled:opacity-30"
-                      >
-                          {isSubmittingReply ? '...' : 'Отправить'}
-                      </button>
+                  <form className="w-full flex flex-col gap-2" onSubmit={handleReplySubmit}>
+                      <div className="flex gap-2 items-center">
+                        <input
+                            type="text"
+                            placeholder="Напишите ответ..."
+                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-zinc-600"
+                            value={replyContent}
+                            onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
+                            disabled={isSubmittingReply}
+                            autoFocus
+                            maxLength={SHOUT_MAX_LENGTH + 50}
+                        />
+                        {replyContent.trim() && (
+                          <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-zinc-500'}`}>
+                            {replyCharCount}/{SHOUT_MAX_LENGTH}
+                          </span>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={!replyContent.trim() || isSubmittingReply || isReplyOverLimit}
+                          className="text-[#0087ff] hover:text-blue-400 text-sm font-medium disabled:opacity-30"
+                        >
+                            {isSubmittingReply ? '...' : 'Отправить'}
+                        </button>
+                      </div>
                   </form>
+               </div>
+               {replyError && (
+                 <div className="mt-1 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                   {replyError}
+                 </div>
+               )}
              </div>
            )}
         </div>

@@ -35,6 +35,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Pending avatar file for preview-only upload
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [pendingAvatarPreview, setPendingAvatarPreview] = useState<string | null>(null);
+
   // Fetch profile
   useEffect(() => {
     setIsLoadingProfile(true);
@@ -46,7 +50,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
     console.log(`[ProfilePage] Loading profile for user ${userId}`);
 
-    fetch(`/api/users/${userId}`, { credentials: 'include' })
+    fetch(`/api/v1/users/${userId}`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -86,7 +90,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
     try {
       const res = await fetch(
-        `/api/users/${userId}/shouts?limit=${PAGE_SIZE}&offset=${currentOffset}`,
+        `/api/v1/users/${userId}/shouts?limit=${PAGE_SIZE}&offset=${currentOffset}`,
         { credentials: 'include' }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -133,38 +137,71 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     console.log('[ProfilePage] Saving profile changes');
 
     try {
+      // Step 1: Upload pending avatar if any
+      let newAvatarUrl: string | undefined;
+      if (pendingAvatarFile) {
+        console.log('[ProfilePage] Uploading pending avatar...');
+        const form = new FormData();
+        form.append('avatar', pendingAvatarFile);
+
+        const uploadRes = await fetch('/api/v1/upload/avatar', {
+          method: 'POST',
+          credentials: 'include',
+          body: form,
+        });
+
+        if (!uploadRes.ok) {
+          const data = await uploadRes.json().catch(() => ({}));
+          throw new Error(data.error || 'Ошибка загрузки аватара');
+        }
+
+        const uploadData = await uploadRes.json();
+        newAvatarUrl = uploadData.avatar;
+        console.log('[ProfilePage] Avatar uploaded:', newAvatarUrl);
+      }
+
+      // Step 2: Build profile update body
       const body: Record<string, string> = {};
       if (editForm.username !== profile?.name) body.username = editForm.username;
       if (editForm.email !== (profile?.email || '')) body.email = editForm.email;
-      if (editForm.avatar !== profile?.avatar) body.avatar = editForm.avatar;
+      if (newAvatarUrl) body.avatar = newAvatarUrl;
       if (editForm.newPassword) {
         body.currentPassword = editForm.currentPassword;
         body.newPassword = editForm.newPassword;
       }
 
-      if (Object.keys(body).length === 0) {
+      // If only avatar was uploaded and nothing else changed, still update profile
+      if (Object.keys(body).length === 0 && !pendingAvatarFile) {
         setEditError('Нет изменений');
         setIsSaving(false);
         return;
       }
 
-      const res = await fetch(`/api/users/${userId}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      // If we only had avatar upload and no other changes, skip PUT
+      if (Object.keys(body).length > 0) {
+        const res = await fetch(`/api/v1/users/${userId}`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Update failed');
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Ошибка сохранения');
+        }
+
+        const data = await res.json();
+        console.log('[ProfilePage] Profile updated successfully');
+        setProfile(prev => prev ? { ...prev, ...data.profile } : prev);
+      } else if (newAvatarUrl) {
+        // Avatar was uploaded via /upload/avatar which already updates the DB
+        setProfile(prev => prev ? { ...prev, avatar: newAvatarUrl! } : prev);
       }
 
-      const data = await res.json();
-      console.log('[ProfilePage] Profile updated successfully');
-
-      setProfile(prev => prev ? { ...prev, ...data.profile } : prev);
       setEditForm(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
+      setPendingAvatarFile(null);
+      setPendingAvatarPreview(null);
       setEditSuccess('Профиль обновлён');
       setIsEditing(false);
 
@@ -242,7 +279,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             {/* Owner actions */}
             {profile.isOwner && !isEditing && (
               <button
-                onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); }}
+                onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); }}
                 className="text-sm text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 px-4 py-1.5 rounded-lg transition-colors"
               >
                 Редактировать профиль
@@ -292,10 +329,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             <AvatarUpload
               currentAvatar={editForm.avatar}
               disabled={isSaving}
-              onUploaded={(url) => {
-                setEditForm(f => ({ ...f, avatar: url }));
-                setProfile(prev => prev ? { ...prev, avatar: url } : prev);
-                refresh();
+              pendingPreview={pendingAvatarPreview}
+              onFileSelected={(file, previewUrl) => {
+                setPendingAvatarFile(file);
+                setPendingAvatarPreview(previewUrl);
+              }}
+              onFileCleared={() => {
+                setPendingAvatarFile(null);
+                setPendingAvatarPreview(null);
               }}
             />
 
@@ -340,6 +381,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                 onClick={() => {
                   setIsEditing(false);
                   setEditError(null);
+                  setPendingAvatarFile(null);
+                  setPendingAvatarPreview(null);
                   setEditForm({
                     username: profile.name,
                     email: profile.email || '',
