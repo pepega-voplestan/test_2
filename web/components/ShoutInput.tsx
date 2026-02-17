@@ -33,6 +33,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // YouTube auto-detection
   const [detectedYtId, setDetectedYtId] = useState<string | null>(null);
@@ -41,6 +42,17 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = !!mediaId || !!detectedYtId;
   const canSubmit = (content.trim() || hasMedia) && !isOverLimit && !isSubmitting && !isUploading;
+
+  // Auto-resize textarea
+  const resizeTextarea = () => {
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    }
+  };
+
+  useEffect(resizeTextarea, [content]);
 
   // Detect YouTube URLs in content (only when no image is attached)
   useEffect(() => {
@@ -177,49 +189,52 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
           </div>
           <div className="grow flex flex-col">
             {user ? (
-                <div className="flex w-full gap-2 items-center">
-                    <input
-                        type="text"
+                <div className="flex flex-col w-full gap-2">
+                    <textarea
+                        ref={textareaRef}
                         placeholder="Расскажите, что нового?"
-                        className="bg-transparent w-full border-none outline-none text-white placeholder-zinc-500"
+                        className="bg-transparent w-full border-none outline-none text-white placeholder-zinc-500 resize-none overflow-hidden"
+                        rows={1}
                         value={content}
                         onChange={(e) => { setContent(e.target.value); setError(null); }}
                         disabled={isSubmitting}
                         maxLength={SHOUT_MAX_LENGTH + 50}
                     />
-                    {/* Image upload button */}
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading || !!mediaId}
-                      className={`shrink-0 p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-zinc-500 hover:text-zinc-300'} disabled:opacity-40`}
-                      title={mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение'}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={handleFileSelect}
-                    />
-                    {(content.trim() || hasMedia) && (
-                        <>
-                          <span className={`text-xs whitespace-nowrap ${isOverLimit ? 'text-red-400 font-semibold' : charCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-zinc-500'}`}>
-                            {charCount}/{SHOUT_MAX_LENGTH}
-                          </span>
-                          <button
-                              type="submit"
-                              disabled={!canSubmit}
-                              className="text-[#0087ff] hover:text-blue-400 text-sm font-bold whitespace-nowrap disabled:opacity-50"
-                          >
-                              {isSubmitting ? '...' : 'Отправить'}
-                          </button>
-                        </>
-                    )}
+                    <div className="flex items-center gap-2 justify-end">
+                      {/* Image upload button */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading || !!mediaId}
+                        className={`shrink-0 p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-zinc-500 hover:text-zinc-300'} disabled:opacity-40`}
+                        title={mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                      {(content.trim() || hasMedia) && (
+                          <>
+                            <span className={`text-xs whitespace-nowrap ${isOverLimit ? 'text-red-400 font-semibold' : charCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-zinc-500'}`}>
+                              {charCount}/{SHOUT_MAX_LENGTH}
+                            </span>
+                            <button
+                                type="submit"
+                                disabled={!canSubmit}
+                                className="text-[#0087ff] hover:text-blue-400 text-sm font-bold whitespace-nowrap disabled:opacity-50"
+                            >
+                                {isSubmitting ? '...' : 'Отправить'}
+                            </button>
+                          </>
+                      )}
+                    </div>
                 </div>
             ) : (
                 <div className="text-zinc-400 text-sm">
