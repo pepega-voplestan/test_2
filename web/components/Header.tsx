@@ -8,7 +8,7 @@ const Header: React.FC = () => {
     <header className="bg-[#131314] h-[52px] border-b border-zinc-800 sticky top-0 z-50 flex items-center justify-center">
       <div className="w-full max-w-[1100px] px-4 flex items-center justify-between">
         {/* Logo */}
-        <a href="/" className="flex items-center">
+        <a href="#/" className="flex items-center">
           <div className="text-white font-bold text-2xl tracking-tighter">
             KANOBU
           </div>
@@ -33,8 +33,10 @@ const Header: React.FC = () => {
              {/* User Profile */}
              {user ? (
                  <div className="flex items-center gap-3 pl-2 border-l border-zinc-700 ml-2">
-                    <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full bg-zinc-700" />
-                    <button 
+                    <a href={`#/profile/${user.id}`} title="Мой профиль" className="hover:ring-2 hover:ring-zinc-600 rounded-full transition-all">
+                      <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full bg-zinc-700" />
+                    </a>
+                    <button
                         onClick={logout}
                         className="text-xs font-bold text-zinc-400 hover:text-white transition-colors"
                     >

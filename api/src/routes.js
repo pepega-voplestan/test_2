@@ -20,6 +20,14 @@ const shoutSchema = z.object({
   content: z.string().min(1).max(280),
 });
 
+const profileUpdateSchema = z.object({
+  username: z.string().min(3).max(32).optional(),
+  email: z.string().max(200).optional(),
+  avatar: z.string().max(500).optional(),
+  currentPassword: z.string().min(1).optional(),
+  newPassword: z.string().min(6).max(200).optional(),
+});
+
 /* ---------- routes ---------- */
 
 export function mountRoutes(app) {
@@ -265,5 +273,205 @@ export function mountRoutes(app) {
 
     console.log(`[Shouts] Like toggle on ${shoutId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
     res.json({ likes, isLiked: !exists });
+  });
+
+  /* ---- Profile endpoints ---- */
+
+  /* get user profile */
+  app.get("/api/users/:id", (req, res) => {
+    const profileId = req.params.id;
+    const currentUserId = req.session?.user?.id ?? null;
+    const isOwner = currentUserId === profileId;
+
+    console.log(`[Profile] Fetching profile ${profileId}, isOwner=${isOwner}`);
+
+    const row = db
+      .prepare("SELECT id, username, avatar, email, is_banned, created_at FROM users WHERE id=?")
+      .get(profileId);
+
+    if (!row) return res.status(404).json({ error: "User not found" });
+
+    const shoutCount = db
+      .prepare("SELECT COUNT(*) c FROM shouts WHERE user_id=? AND parent_id IS NULL")
+      .get(profileId).c;
+
+    const profile = {
+      id: row.id,
+      name: row.username,
+      avatar: row.avatar,
+      isBanned: !!row.is_banned,
+      createdAt: row.created_at,
+      shoutCount,
+      ...(isOwner ? { email: row.email } : {}),
+      isOwner,
+    };
+
+    res.json({ profile });
+  });
+
+  /* get user's shouts */
+  app.get("/api/users/:id/shouts", (req, res) => {
+    const profileId = req.params.id;
+    const currentUserId = req.session?.user?.id ?? null;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
+    const offset = parseInt(req.query.offset, 10) || 0;
+
+    console.log(`[Profile] Fetching shouts for user ${profileId}: limit=${limit}, offset=${offset}`);
+
+    const topRaw = db.prepare(`
+      SELECT s.*, u.username, u.avatar, u.is_banned
+      FROM shouts s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.user_id = ? AND s.parent_id IS NULL
+      ORDER BY datetime(s.created_at) DESC
+      LIMIT ? OFFSET ?
+    `).all(profileId, limit + 1, offset);
+
+    const hasMore = topRaw.length > limit;
+    const top = hasMore ? topRaw.slice(0, limit) : topRaw;
+    const topIds = top.map((s) => s.id);
+
+    const replies = topIds.length
+      ? db
+          .prepare(`
+            SELECT s.*, u.username, u.avatar, u.is_banned
+            FROM shouts s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.parent_id IN (${topIds.map(() => "?").join(",")})
+            ORDER BY datetime(s.created_at) ASC
+          `)
+          .all(...topIds)
+      : [];
+
+    const allIds = [...topIds, ...replies.map((r) => r.id)];
+
+    const likesCount = new Map();
+    if (allIds.length) {
+      const rows = db
+        .prepare(`
+          SELECT shout_id, COUNT(*) c FROM shout_likes
+          WHERE shout_id IN (${allIds.map(() => "?").join(",")})
+          GROUP BY shout_id
+        `)
+        .all(...allIds);
+      for (const r of rows) likesCount.set(r.shout_id, r.c);
+    }
+
+    const likedSet = new Set();
+    if (currentUserId && allIds.length) {
+      const rows = db
+        .prepare(`
+          SELECT shout_id FROM shout_likes
+          WHERE user_id=? AND shout_id IN (${allIds.map(() => "?").join(",")})
+        `)
+        .all(currentUserId, ...allIds);
+      for (const r of rows) likedSet.add(r.shout_id);
+    }
+
+    const repliesByParent = new Map();
+    for (const r of replies) {
+      if (!repliesByParent.has(r.parent_id)) repliesByParent.set(r.parent_id, []);
+      repliesByParent.get(r.parent_id).push(r);
+    }
+
+    function mapRow(row, children) {
+      return {
+        id: row.id,
+        user: {
+          id: row.user_id,
+          name: row.username,
+          avatar: row.avatar,
+          isBanned: !!row.is_banned,
+        },
+        content: row.content,
+        timestamp: row.created_at,
+        likes: likesCount.get(row.id) || 0,
+        likedBy: currentUserId && likedSet.has(row.id) ? [currentUserId] : [],
+        replies: children,
+      };
+    }
+
+    const dto = top.map((t) => {
+      const children = (repliesByParent.get(t.id) || []).map((r) => mapRow(r, []));
+      return mapRow(t, children);
+    });
+
+    console.log(`[Profile] Returning ${dto.length} shouts for user ${profileId}, hasMore=${hasMore}`);
+    res.json({ shouts: dto, hasMore });
+  });
+
+  /* update own profile */
+  app.put("/api/users/:id", requireAuth, async (req, res) => {
+    const profileId = req.params.id;
+    const currentUserId = req.session.user.id;
+
+    if (profileId !== currentUserId) {
+      return res.status(403).json({ error: "Cannot edit another user's profile" });
+    }
+
+    const parsed = profileUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Bad input" });
+
+    const { username, email, avatar, currentPassword, newPassword } = parsed.data;
+    console.log(`[Profile] Update attempt for user ${currentUserId}`);
+
+    // Handle password change
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: "Current password required" });
+      }
+      const user = db.prepare("SELECT password_hash FROM users WHERE id=?").get(currentUserId);
+      const ok = await verifyPassword(currentPassword, user.password_hash);
+      if (!ok) {
+        console.log(`[Profile] Password change failed: wrong current password`);
+        return res.status(400).json({ error: "Wrong current password" });
+      }
+      const newHash = await hashPassword(newPassword);
+      db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(newHash, currentUserId);
+      console.log(`[Profile] Password updated for ${currentUserId}`);
+    }
+
+    // Handle username change
+    if (username && username !== req.session.user.name) {
+      const exists = db.prepare("SELECT id FROM users WHERE username=? AND id!=?").get(username, currentUserId);
+      if (exists) {
+        return res.status(409).json({ error: "Username taken" });
+      }
+      db.prepare("UPDATE users SET username=? WHERE id=?").run(username, currentUserId);
+      req.session.user.name = username;
+      console.log(`[Profile] Username updated to "${username}"`);
+    }
+
+    // Handle avatar change
+    if (avatar !== undefined) {
+      const newAvatar = avatar.trim() || avatarFor(req.session.user.name);
+      db.prepare("UPDATE users SET avatar=? WHERE id=?").run(newAvatar, currentUserId);
+      req.session.user.avatar = newAvatar;
+      console.log(`[Profile] Avatar updated`);
+    }
+
+    // Handle email change
+    if (email !== undefined) {
+      db.prepare("UPDATE users SET email=? WHERE id=?").run(email.trim(), currentUserId);
+      console.log(`[Profile] Email updated`);
+    }
+
+    // Return updated profile
+    const updated = db
+      .prepare("SELECT id, username, avatar, email, created_at FROM users WHERE id=?")
+      .get(currentUserId);
+
+    res.json({
+      ok: true,
+      user: { id: updated.id, name: updated.username, avatar: updated.avatar },
+      profile: {
+        id: updated.id,
+        name: updated.username,
+        avatar: updated.avatar,
+        email: updated.email,
+        createdAt: updated.created_at,
+        isOwner: true,
+      },
+    });
   });
 }
