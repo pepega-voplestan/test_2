@@ -233,36 +233,48 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
 
           {/* YouTube embed — lazy: show thumbnail first, load iframe on click */}
           {showMedia && shout.media?.type === 'youtube' && (
-              <div
-                className="mb-3 rounded-lg overflow-hidden w-full aspect-video bg-black relative cursor-pointer"
-                onClick={() => !ytLoaded && setYtLoaded(true)}
-              >
-                  {ytLoaded ? (
-                    <iframe
-                      className="w-full h-full"
-                      src={`${shout.media.embedUrl}?autoplay=1`}
-                      title="YouTube"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      sandbox="allow-scripts allow-same-origin allow-presentation"
-                    />
-                  ) : (
-                    <>
-                      <img
-                        src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`}
-                        alt="YouTube video"
-                        loading="lazy"
-                        className="w-full h-full object-cover"
+              <div className="mb-3">
+                <div
+                  className="rounded-lg overflow-hidden w-full aspect-video bg-black relative cursor-pointer"
+                  onClick={() => !ytLoaded && setYtLoaded(true)}
+                >
+                    {ytLoaded ? (
+                      <iframe
+                        className="w-full h-full"
+                        src={`${shout.media.embedUrl}?autoplay=1`}
+                        title={shout.media.title || "YouTube"}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        sandbox="allow-scripts allow-same-origin allow-presentation"
                       />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
-                          <svg viewBox="0 0 24 24" className="w-8 h-8 text-white ml-1" fill="currentColor">
-                            <path d="M8 5v14l11-7z"/>
-                          </svg>
+                    ) : (
+                      <>
+                        <img
+                          src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`}
+                          alt={shout.media.title || "YouTube video"}
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
+                            <svg viewBox="0 0 24 24" className="w-8 h-8 text-white ml-1" fill="currentColor">
+                              <path d="M8 5v14l11-7z"/>
+                            </svg>
+                          </div>
                         </div>
-                      </div>
-                    </>
-                  )}
+                      </>
+                    )}
+                </div>
+                {(shout.media.title || shout.media.channel) && (
+                  <div className="mt-1.5 px-1">
+                    {shout.media.title && (
+                      <div className="text-sm text-zinc-200 font-medium leading-snug line-clamp-2">{shout.media.title}</div>
+                    )}
+                    {shout.media.channel && (
+                      <div className="text-xs text-zinc-500 mt-0.5">{shout.media.channel}</div>
+                    )}
+                  </div>
+                )}
               </div>
           )}
 
