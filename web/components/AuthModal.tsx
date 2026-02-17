@@ -1,47 +1,126 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "register-verify" | "forgot" | "forgot-verify" | "forgot-newpass";
 
 export default function AuthModal() {
-  const { isAuthModalOpen, closeModal, login, register } = useAuth();
+  const {
+    isAuthModalOpen,
+    closeModal,
+    login,
+    registerSendCode,
+    registerVerify,
+    forgotPasswordSendCode,
+    forgotPasswordReset,
+  } = useAuth();
 
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  const title = useMemo(
-    () => (mode === "login" ? "Вход" : "Регистрация"),
-    [mode]
-  );
+  const title = useMemo(() => {
+    switch (mode) {
+      case "login": return "Вход";
+      case "register":
+      case "register-verify": return "Регистрация";
+      case "forgot":
+      case "forgot-verify":
+      case "forgot-newpass": return "Восстановление пароля";
+    }
+  }, [mode]);
 
   if (!isAuthModalOpen) return null;
+
+  function resetState() {
+    setUsername("");
+    setEmail("");
+    setPassword("");
+    setCode("");
+    setNewPassword("");
+    setError(null);
+    setInfo(null);
+  }
+
+  function switchMode(newMode: Mode) {
+    resetState();
+    setMode(newMode);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     setSubmitting(true);
 
     try {
-      if (mode === "register") {
-        const u = username.trim();
-        if (u.length < 3) throw new Error("Имя пользователя: минимум 3 символа");
-        if (password.length < 6) throw new Error("Пароль: минимум 6 символов");
-        const em = email.trim();
-        if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) throw new Error("Введите корректный email");
-        await register(u, password, em);
-      } else {
-        const loginVal = username.trim();
-        if (!loginVal) throw new Error("Введите имя пользователя или email");
-        if (password.length < 1) throw new Error("Введите пароль");
-        await login(loginVal, password);
+      switch (mode) {
+        case "login": {
+          const loginVal = username.trim();
+          if (!loginVal) throw new Error("Введите имя пользователя или email");
+          if (password.length < 1) throw new Error("Введите пароль");
+          await login(loginVal, password);
+          resetState();
+          break;
+        }
+
+        case "register": {
+          const u = username.trim();
+          if (u.length < 3) throw new Error("Имя пользователя: минимум 3 символа");
+          if (password.length < 6) throw new Error("Пароль: минимум 6 символов");
+          const em = email.trim();
+          if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))
+            throw new Error("Введите корректный email");
+          await registerSendCode(u, password, em);
+          setEmail(em);
+          setMode("register-verify");
+          setInfo(`Код отправлен на ${em}`);
+          break;
+        }
+
+        case "register-verify": {
+          const c = code.trim();
+          if (c.length !== 6) throw new Error("Введите 6-значный код из письма");
+          await registerVerify(email, c);
+          resetState();
+          break;
+        }
+
+        case "forgot": {
+          const em = email.trim();
+          if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))
+            throw new Error("Введите корректный email");
+          await forgotPasswordSendCode(em);
+          setEmail(em);
+          setMode("forgot-verify");
+          setInfo(`Если аккаунт с этим email существует, код отправлен на ${em}`);
+          break;
+        }
+
+        case "forgot-verify": {
+          const c = code.trim();
+          if (c.length !== 6) throw new Error("Введите 6-значный код из письма");
+          // Store code for the next step — don't verify yet, we need the new password
+          setCode(c);
+          setMode("forgot-newpass");
+          setInfo(null);
+          break;
+        }
+
+        case "forgot-newpass": {
+          const np = newPassword;
+          if (np.length < 6) throw new Error("Пароль: минимум 6 символов");
+          await forgotPasswordReset(email, code, np);
+          resetState();
+          break;
+        }
       }
-      setPassword("");
-      setEmail("");
     } catch (err: any) {
       setError(err?.message || "Что-то пошло не так");
     } finally {
@@ -50,9 +129,12 @@ export default function AuthModal() {
   }
 
   function onClose() {
-    setError(null);
+    resetState();
+    setMode("login");
     closeModal();
   }
+
+  const isLoginOrRegisterTab = mode === "login" || mode === "register";
 
   return (
     <div className="fixed inset-0 z-50">
@@ -64,7 +146,18 @@ export default function AuthModal() {
 
       <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-zinc-900 text-zinc-100 shadow-2xl ring-1 ring-white/10">
         <div className="flex items-center justify-between px-5 py-4">
-          <div className="text-lg font-semibold">{title}</div>
+          <div className="flex items-center gap-2">
+            {!isLoginOrRegisterTab && (
+              <button
+                onClick={() => switchMode("login")}
+                className="rounded-lg px-2 py-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                title="Назад"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+              </button>
+            )}
+            <div className="text-lg font-semibold">{title}</div>
+          </div>
           <button
             onClick={onClose}
             className="rounded-lg px-2 py-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
@@ -73,34 +166,37 @@ export default function AuthModal() {
           </button>
         </div>
 
-        <div className="px-5">
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-1">
-            <button
-              type="button"
-              onClick={() => { setMode("login"); setError(null); }}
-              className={[
-                "rounded-lg px-3 py-2 text-sm transition",
-                mode === "login"
-                  ? "bg-white/10 text-white"
-                  : "text-zinc-400 hover:text-zinc-200",
-              ].join(" ")}
-            >
-              Вход
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMode("register"); setError(null); }}
-              className={[
-                "rounded-lg px-3 py-2 text-sm transition",
-                mode === "register"
-                  ? "bg-white/10 text-white"
-                  : "text-zinc-400 hover:text-zinc-200",
-              ].join(" ")}
-            >
-              Регистрация
-            </button>
+        {/* Tabs — only for login/register base modes */}
+        {isLoginOrRegisterTab && (
+          <div className="px-5">
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => switchMode("login")}
+                className={[
+                  "rounded-lg px-3 py-2 text-sm transition",
+                  mode === "login"
+                    ? "bg-white/10 text-white"
+                    : "text-zinc-400 hover:text-zinc-200",
+                ].join(" ")}
+              >
+                Вход
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode("register")}
+                className={[
+                  "rounded-lg px-3 py-2 text-sm transition",
+                  mode === "register"
+                    ? "bg-white/10 text-white"
+                    : "text-zinc-400 hover:text-zinc-200",
+                ].join(" ")}
+              >
+                Регистрация
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <form onSubmit={onSubmit} className="px-5 pb-5 pt-4">
           {error && (
@@ -109,52 +205,204 @@ export default function AuthModal() {
             </div>
           )}
 
-          <label className="block">
-            <div className="mb-1 text-xs font-medium text-zinc-400">
-              {mode === "login" ? "Имя пользователя или email" : "Имя пользователя"}
+          {info && (
+            <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+              {info}
             </div>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
-              placeholder={mode === "login" ? "username или email" : "например: maksim"}
-              disabled={submitting}
-            />
-          </label>
-
-          {mode === "register" && (
-            <label className="mt-3 block">
-              <div className="mb-1 text-xs font-medium text-zinc-400">
-                Email
-              </div>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                type="email"
-                autoComplete="email"
-                className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
-                placeholder="user@example.com"
-                disabled={submitting}
-              />
-            </label>
           )}
 
-          <label className="mt-3 block">
-            <div className="mb-1 text-xs font-medium text-zinc-400">
-              Пароль
-            </div>
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
-              placeholder="••••••••"
-              disabled={submitting}
-            />
-          </label>
+          {/* ---- LOGIN form ---- */}
+          {mode === "login" && (
+            <>
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Имя пользователя или email
+                </div>
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="username или email"
+                  disabled={submitting}
+                />
+              </label>
 
+              <label className="mt-3 block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Пароль
+                </div>
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type="password"
+                  autoComplete="current-password"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="••••••••"
+                  disabled={submitting}
+                />
+              </label>
+
+              <div className="mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => switchMode("forgot")}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 hover:underline"
+                >
+                  Забыли пароль?
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ---- REGISTER form (step 1: collect info) ---- */}
+          {mode === "register" && (
+            <>
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Имя пользователя
+                </div>
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="например: maksim"
+                  disabled={submitting}
+                />
+              </label>
+
+              <label className="mt-3 block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Email
+                </div>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  type="email"
+                  autoComplete="email"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="user@example.com"
+                  disabled={submitting}
+                />
+              </label>
+
+              <label className="mt-3 block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Пароль
+                </div>
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type="password"
+                  autoComplete="new-password"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="••••••••"
+                  disabled={submitting}
+                />
+              </label>
+            </>
+          )}
+
+          {/* ---- REGISTER verify (step 2: enter code) ---- */}
+          {mode === "register-verify" && (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                Введите 6-значный код, отправленный на <span className="text-zinc-200">{email}</span>
+              </p>
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Код подтверждения
+                </div>
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-center text-lg font-mono tracking-[0.3em] outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="000000"
+                  maxLength={6}
+                  disabled={submitting}
+                  autoFocus
+                />
+              </label>
+            </>
+          )}
+
+          {/* ---- FORGOT PASSWORD (step 1: enter email) ---- */}
+          {mode === "forgot" && (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                Введите email, указанный при регистрации. Мы отправим код для сброса пароля.
+              </p>
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Email
+                </div>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  type="email"
+                  autoComplete="email"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="user@example.com"
+                  disabled={submitting}
+                  autoFocus
+                />
+              </label>
+            </>
+          )}
+
+          {/* ---- FORGOT PASSWORD (step 2: enter code) ---- */}
+          {mode === "forgot-verify" && (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                Введите 6-значный код, отправленный на <span className="text-zinc-200">{email}</span>
+              </p>
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Код подтверждения
+                </div>
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-center text-lg font-mono tracking-[0.3em] outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="000000"
+                  maxLength={6}
+                  disabled={submitting}
+                  autoFocus
+                />
+              </label>
+            </>
+          )}
+
+          {/* ---- FORGOT PASSWORD (step 3: new password) ---- */}
+          {mode === "forgot-newpass" && (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                Введите новый пароль для вашего аккаунта.
+              </p>
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-zinc-400">
+                  Новый пароль
+                </div>
+                <input
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  type="password"
+                  autoComplete="new-password"
+                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  placeholder="••••••••"
+                  disabled={submitting}
+                  autoFocus
+                />
+              </label>
+            </>
+          )}
+
+          {/* Submit button */}
           <button
             type="submit"
             disabled={submitting}
@@ -164,32 +412,60 @@ export default function AuthModal() {
               ? "Подожди..."
               : mode === "login"
               ? "Войти"
-              : "Создать аккаунт"}
+              : mode === "register"
+              ? "Отправить код"
+              : mode === "register-verify"
+              ? "Подтвердить"
+              : mode === "forgot"
+              ? "Отправить код"
+              : mode === "forgot-verify"
+              ? "Далее"
+              : "Сохранить пароль"}
           </button>
 
+          {/* Footer links */}
           <div className="mt-3 text-center text-xs text-zinc-500">
-            {mode === "login" ? (
+            {mode === "login" && (
               <>
                 Нет аккаунта?{" "}
                 <button
                   type="button"
-                  onClick={() => setMode("register")}
+                  onClick={() => switchMode("register")}
                   className="text-zinc-200 hover:underline"
                 >
                   Зарегистрироваться
                 </button>
               </>
-            ) : (
+            )}
+            {mode === "register" && (
               <>
                 Уже есть аккаунт?{" "}
                 <button
                   type="button"
-                  onClick={() => setMode("login")}
+                  onClick={() => switchMode("login")}
                   className="text-zinc-200 hover:underline"
                 >
                   Войти
                 </button>
               </>
+            )}
+            {mode === "register-verify" && (
+              <button
+                type="button"
+                onClick={() => switchMode("register")}
+                className="text-zinc-200 hover:underline"
+              >
+                Изменить данные
+              </button>
+            )}
+            {(mode === "forgot" || mode === "forgot-verify" || mode === "forgot-newpass") && (
+              <button
+                type="button"
+                onClick={() => switchMode("login")}
+                className="text-zinc-200 hover:underline"
+              >
+                Вернуться ко входу
+              </button>
             )}
           </div>
         </form>

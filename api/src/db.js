@@ -238,4 +238,22 @@ if (replyRows.length) {
   }
 }
 
+// Verification codes table for email verification (registration & password reset)
+db.exec(`
+CREATE TABLE IF NOT EXISTS verification_codes (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  code TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  payload TEXT,
+  expires_at TEXT NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_codes_email_purpose
+  ON verification_codes(email, purpose, used);
+`);
+
 console.log("[DB] Schema initialized");
