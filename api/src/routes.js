@@ -401,7 +401,7 @@ export function mountRoutes(app) {
   });
 
   /* reply */
-  app.post("/api/v1/shouts/:id/replies", requireAuth, (req, res) => {
+  app.post("/api/v1/shouts/:id/replies", requireAuth, async (req, res) => {
     const parsed = shoutSchema.safeParse(req.body);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -416,13 +416,57 @@ export function mountRoutes(app) {
     if (!parent)
       return res.status(404).json({ error: "Запись не найдена" });
 
+    const { content, mediaId, youtubeUrl } = parsed.data;
+
+    // Must have content or media
+    if (!content.trim() && !mediaId && !youtubeUrl) {
+      return res.status(400).json({ error: "Нужен текст или медиа" });
+    }
+
+    if (mediaId && youtubeUrl) {
+      return res.status(400).json({ error: "Можно прикрепить или изображение, или видео" });
+    }
+
+    let finalMediaId = null;
+    let mediaDto = undefined;
+
+    if (mediaId) {
+      const mediaRow = db.prepare("SELECT id, media_type AS m_type, media_url AS m_url, media_meta AS m_meta FROM media WHERE id = ?").get(mediaId);
+      if (!mediaRow) {
+        return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
+      }
+      finalMediaId = mediaId;
+      mediaDto = buildMedia(mediaRow);
+    } else if (youtubeUrl) {
+      const videoId = extractYouTubeId(youtubeUrl);
+      if (!videoId) {
+        return res.status(400).json({ error: "Некорректная YouTube ссылка" });
+      }
+      const ytMeta = await fetchYouTubeMeta(videoId);
+      finalMediaId = crypto.randomUUID();
+      db.prepare(
+        "INSERT INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)"
+      ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify(ytMeta));
+      mediaDto = buildMedia({ m_type: "youtube", m_url: videoId, m_meta: JSON.stringify(ytMeta) });
+    } else if (content) {
+      const videoId = extractYouTubeId(content);
+      if (videoId) {
+        const ytMeta = await fetchYouTubeMeta(videoId);
+        finalMediaId = crypto.randomUUID();
+        db.prepare(
+          "INSERT INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)"
+        ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify(ytMeta));
+        mediaDto = buildMedia({ m_type: "youtube", m_url: videoId, m_meta: JSON.stringify(ytMeta) });
+      }
+    }
+
     const id = crypto.randomUUID();
     db.prepare(
-      "INSERT INTO shouts (id, user_id, parent_id, content) VALUES (?, ?, ?, ?)"
-    ).run(id, req.session.user.id, parentId, parsed.data.content);
+      "INSERT INTO shouts (id, user_id, parent_id, content, media_id) VALUES (?, ?, ?, ?, ?)"
+    ).run(id, req.session.user.id, parentId, content, finalMediaId);
 
-    console.log(`[Shouts] Reply ${id} to ${parentId} by ${req.session.user.name}`);
-    res.json({ ok: true, id });
+    console.log(`[Shouts] Reply ${id} to ${parentId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
+    res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
   });
 
   /* like toggle */
