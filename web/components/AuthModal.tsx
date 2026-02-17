@@ -8,6 +8,7 @@ export default function AuthModal() {
 
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -26,14 +27,21 @@ export default function AuthModal() {
     setSubmitting(true);
 
     try {
-      const u = username.trim();
-      if (u.length < 3) throw new Error("Username минимум 3 символа");
-      if (password.length < 6) throw new Error("Пароль минимум 6 символов");
-
-      if (mode === "login") await login(u, password);
-      else await register(u, password);
-
+      if (mode === "register") {
+        const u = username.trim();
+        if (u.length < 3) throw new Error("Имя пользователя: минимум 3 символа");
+        if (password.length < 6) throw new Error("Пароль: минимум 6 символов");
+        const em = email.trim();
+        if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) throw new Error("Введите корректный email");
+        await register(u, password, em);
+      } else {
+        const loginVal = username.trim();
+        if (!loginVal) throw new Error("Введите имя пользователя или email");
+        if (password.length < 1) throw new Error("Введите пароль");
+        await login(loginVal, password);
+      }
       setPassword("");
+      setEmail("");
     } catch (err: any) {
       setError(err?.message || "Что-то пошло не так");
     } finally {
@@ -103,17 +111,34 @@ export default function AuthModal() {
 
           <label className="block">
             <div className="mb-1 text-xs font-medium text-zinc-400">
-              Username
+              {mode === "login" ? "Имя пользователя или email" : "Имя пользователя"}
             </div>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
-              placeholder="например: maksim"
+              placeholder={mode === "login" ? "username или email" : "например: maksim"}
               disabled={submitting}
             />
           </label>
+
+          {mode === "register" && (
+            <label className="mt-3 block">
+              <div className="mb-1 text-xs font-medium text-zinc-400">
+                Email
+              </div>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                autoComplete="email"
+                className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                placeholder="user@example.com"
+                disabled={submitting}
+              />
+            </label>
+          )}
 
           <label className="mt-3 block">
             <div className="mb-1 text-xs font-medium text-zinc-400">
