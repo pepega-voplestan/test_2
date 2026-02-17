@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import EmojiPicker from './EmojiPicker';
 
 interface ShoutInputProps {
   onShoutCreated: () => void;
@@ -262,6 +263,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             maxLength={SHOUT_MAX_LENGTH + 50}
                         />
                         <div className="flex items-center gap-2 justify-end">
+                          <EmojiPicker onSelect={(emoji) => setContent(prev => prev + emoji)} />
                           {/* Image upload button */}
                           <button
                             type="button"
