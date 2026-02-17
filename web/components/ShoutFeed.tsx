@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ShoutInput from './ShoutInput';
 import ShoutCard from './ShoutCard';
-import { Shout } from '../types';
+import { Shout, Comment } from '../types';
 
 const PAGE_SIZE = 10;
 
@@ -75,11 +75,21 @@ const ShoutFeed: React.FC = () => {
     fetchShouts(true);
   };
 
-  const addReplyToShout = useCallback((shoutId: string, reply: Shout) => {
+  const addCommentToShout = useCallback((shoutId: string, comment: Comment) => {
     setShouts(prev =>
       prev.map(s =>
         s.id === shoutId
-          ? { ...s, replies: [...(s.replies || []), reply] }
+          ? { ...s, comments: [...(s.comments || []), comment] }
+          : s
+      )
+    );
+  }, []);
+
+  const removeComment = useCallback((shoutId: string, commentId: string) => {
+    setShouts(prev =>
+      prev.map(s =>
+        s.id === shoutId
+          ? { ...s, comments: (s.comments || []).filter(c => c.id !== commentId) }
           : s
       )
     );
@@ -156,8 +166,9 @@ const ShoutFeed: React.FC = () => {
             key={shout.id}
             shout={shout}
             showMedia={showMedia}
-            onReplyAdded={addReplyToShout}
+            onCommentAdded={addCommentToShout}
             onDelete={removeShout}
+            onCommentDeleted={removeComment}
             isThreadOpen={openThreadId === shout.id}
             onThreadToggle={handleThreadToggle}
           />

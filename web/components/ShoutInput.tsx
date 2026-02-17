@@ -263,19 +263,20 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             maxLength={SHOUT_MAX_LENGTH + 50}
                         />
                         <div className="flex items-center gap-2 justify-end">
-                          <EmojiPicker onSelect={(emoji) => setContent(prev => prev + emoji)} />
-                          {/* Image upload button */}
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading || !!mediaId}
-                            className={`shrink-0 p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-zinc-500 hover:text-zinc-300'} disabled:opacity-40`}
-                            title={mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение (или перетащите)'}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <EmojiPicker onSelect={(emoji) => setContent(prev => prev + emoji)} />
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={isUploading || !!mediaId}
+                              className={`p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-zinc-500 hover:text-zinc-300'} disabled:opacity-40`}
+                              title={mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение (или перетащите)'}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
                           <input
                             ref={fileInputRef}
                             type="file"
