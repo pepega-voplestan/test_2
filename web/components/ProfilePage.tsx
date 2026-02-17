@@ -143,6 +143,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     );
   }, []);
 
+  // Accordion: only one thread open at a time
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+
+  const handleThreadToggle = useCallback((shoutId: string) => {
+    setOpenThreadId(prev => prev === shoutId ? null : shoutId);
+  }, []);
+
   // Handle profile save
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -446,6 +453,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             onCommentAdded={addCommentToShout}
             onDelete={removeShout}
             onCommentDeleted={removeComment}
+            isThreadOpen={openThreadId === shout.id}
+            onThreadToggle={handleThreadToggle}
           />
         ))}
       </div>
