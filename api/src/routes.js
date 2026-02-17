@@ -1,7 +1,28 @@
 import { z } from "zod";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import multer from "multer";
+import sharp from "sharp";
 import { db } from "./db.js";
 import { hashPassword, verifyPassword, requireAuth } from "./auth.js";
+
+const AVATAR_DIR = path.join(path.dirname(process.env.DATABASE_PATH || "/data/app.db"), "avatars");
+const AVATAR_SIZES = [64, 128, 256];
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const AVATAR_MIN_DIM = 256;
+const AVATAR_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: AVATAR_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!AVATAR_ALLOWED_MIME.has(file.mimetype)) {
+      return cb(new Error("Допустимые форматы: JPG, PNG, WebP"));
+    }
+    cb(null, true);
+  },
+});
 
 /* ---------- helpers ---------- */
 
@@ -52,7 +73,7 @@ export function mountRoutes(app) {
       .get(username);
     if (exists) {
       console.log(`[Auth] Register failed: username "${username}" taken`);
-      return res.status(409).json({ error: "Username taken" });
+      return res.status(409).json({ error: "Это имя пользователя уже занято" });
     }
 
     const id = crypto.randomUUID();
@@ -83,7 +104,7 @@ export function mountRoutes(app) {
 
     if (!user) {
       console.log(`[Auth] Login failed: user "${username}" not found`);
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res.status(401).json({ error: "Неверное имя пользователя или пароль" });
     }
     if (user.is_banned) {
       console.log(`[Auth] Login blocked: user "${username}" is banned`);
@@ -93,7 +114,7 @@ export function mountRoutes(app) {
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) {
       console.log(`[Auth] Login failed: wrong password for "${username}"`);
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res.status(401).json({ error: "Неверное имя пользователя или пароль" });
     }
 
     req.session.user = {
@@ -418,13 +439,13 @@ export function mountRoutes(app) {
     // Handle password change
     if (newPassword) {
       if (!currentPassword) {
-        return res.status(400).json({ error: "Current password required" });
+        return res.status(400).json({ error: "Введите текущий пароль" });
       }
       const user = db.prepare("SELECT password_hash FROM users WHERE id=?").get(currentUserId);
       const ok = await verifyPassword(currentPassword, user.password_hash);
       if (!ok) {
         console.log(`[Profile] Password change failed: wrong current password`);
-        return res.status(400).json({ error: "Wrong current password" });
+        return res.status(400).json({ error: "Неверный текущий пароль" });
       }
       const newHash = await hashPassword(newPassword);
       db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(newHash, currentUserId);
@@ -435,7 +456,7 @@ export function mountRoutes(app) {
     if (username && username !== req.session.user.name) {
       const exists = db.prepare("SELECT id FROM users WHERE username=? AND id!=?").get(username, currentUserId);
       if (exists) {
-        return res.status(409).json({ error: "Username taken" });
+        return res.status(409).json({ error: "Это имя пользователя уже занято" });
       }
       db.prepare("UPDATE users SET username=? WHERE id=?").run(username, currentUserId);
       req.session.user.name = username;
@@ -472,6 +493,97 @@ export function mountRoutes(app) {
         createdAt: updated.created_at,
         isOwner: true,
       },
+    });
+  });
+
+  /* ---- Avatar upload ---- */
+
+  // Serve avatar files: /api/avatars/:userId/:size.webp
+  app.get("/api/avatars/:userId/:file", (req, res) => {
+    const { userId, file } = req.params;
+    const filePath = path.join(AVATAR_DIR, userId, file);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Avatar not found" });
+    }
+    res.setHeader("Content-Type", "image/webp");
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+    fs.createReadStream(filePath).pipe(res);
+  });
+
+  /* upload avatar */
+  app.post("/api/upload/avatar", requireAuth, (req, res) => {
+    upload.single("avatar")(req, res, async (multerErr) => {
+      if (multerErr) {
+        const msg = multerErr.code === "LIMIT_FILE_SIZE"
+          ? "Файл слишком большой (макс. 2 МБ)"
+          : multerErr.message || "Ошибка загрузки";
+        console.log(`[Avatar] Upload rejected: ${msg}`);
+        return res.status(400).json({ error: msg });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "Файл не выбран" });
+      }
+
+      const userId = req.session.user.id;
+      console.log(`[Avatar] Processing upload for ${userId}, ${req.file.size} bytes, ${req.file.mimetype}`);
+
+      try {
+        const image = sharp(req.file.buffer);
+        const meta = await image.metadata();
+
+        // Reject animated images (GIF frames, animated WebP)
+        if (meta.pages && meta.pages > 1) {
+          return res.status(400).json({ error: "Анимированные изображения не поддерживаются" });
+        }
+
+        // Check minimum resolution
+        if (!meta.width || !meta.height || meta.width < AVATAR_MIN_DIM || meta.height < AVATAR_MIN_DIM) {
+          return res.status(400).json({ error: `Минимальное разрешение: ${AVATAR_MIN_DIM}×${AVATAR_MIN_DIM}` });
+        }
+
+        // Crop to 1:1 (center crop to the smaller dimension)
+        const size = Math.min(meta.width, meta.height);
+        const cropped = image
+          .extract({
+            left: Math.floor((meta.width - size) / 2),
+            top: Math.floor((meta.height - size) / 2),
+            width: size,
+            height: size,
+          })
+          .rotate(); // auto-rotate based on EXIF, then strip metadata
+
+        // Create output directory
+        const userDir = path.join(AVATAR_DIR, userId);
+        fs.mkdirSync(userDir, { recursive: true });
+
+        // Generate all sizes
+        const version = Date.now();
+        for (const s of AVATAR_SIZES) {
+          await cropped
+            .clone()
+            .resize(s, s)
+            .webp({ quality: 85 })
+            .toFile(path.join(userDir, `${s}.webp`));
+        }
+
+        // Update user avatar in DB — use the 256 size as the canonical URL
+        const avatarUrl = `/api/avatars/${userId}/256.webp?v=${version}`;
+        db.prepare("UPDATE users SET avatar=? WHERE id=?").run(avatarUrl, userId);
+        req.session.user.avatar = avatarUrl;
+
+        console.log(`[Avatar] Upload complete for ${userId}: ${AVATAR_SIZES.join(", ")}px`);
+        res.json({
+          ok: true,
+          avatar: avatarUrl,
+          sizes: Object.fromEntries(
+            AVATAR_SIZES.map((s) => [s, `/api/avatars/${userId}/${s}.webp?v=${version}`])
+          ),
+        });
+      } catch (err) {
+        console.error("[Avatar] Processing error:", err);
+        res.status(500).json({ error: "Ошибка обработки изображения" });
+      }
     });
   });
 }
