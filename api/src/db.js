@@ -1,8 +1,12 @@
 import Database from "better-sqlite3";
 import fs from "fs";
+import path from "path";
 
-fs.mkdirSync("/data", { recursive: true });
 const dbPath = process.env.DATABASE_PATH || "/data/app.db";
+const dbDir = path.dirname(dbPath);
+
+fs.mkdirSync(dbDir, { recursive: true });
+console.log(`[DB] Opening database at ${dbPath}`);
 
 export const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
@@ -46,3 +50,5 @@ CREATE TABLE IF NOT EXISTS shout_likes (
 CREATE INDEX IF NOT EXISTS idx_likes_shout ON shout_likes(shout_id);
 CREATE INDEX IF NOT EXISTS idx_likes_user ON shout_likes(user_id);
 `);
+
+console.log("[DB] Schema initialized");

@@ -56,10 +56,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const closeModal = () => setIsAuthModalOpen(false);
 
   async function refresh() {
+    console.log("[Auth] Refreshing session...");
     try {
       const data = await api<{ user: User | null }>("/api/me");
       setUser(data.user);
-    } catch {
+      console.log(`[Auth] Session: ${data.user ? data.user.name : "not logged in"}`);
+    } catch (err) {
+      console.error("[Auth] Session refresh failed:", err);
       setUser(null);
     } finally {
       setLoading(false);
@@ -67,25 +70,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(username: string, password: string) {
+    console.log(`[Auth] Logging in as "${username}"...`);
     const data = await api<{ user: User }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    console.log(`[Auth] Login successful: ${data.user.name}`);
     setUser(data.user);
     closeModal();
   }
 
   async function register(username: string, password: string) {
+    console.log(`[Auth] Registering "${username}"...`);
     const data = await api<{ user: User }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    console.log(`[Auth] Registration successful: ${data.user.name}`);
     setUser(data.user);
     closeModal();
   }
 
   async function logout() {
+    console.log("[Auth] Logging out...");
     await api("/api/auth/logout", { method: "POST" });
+    console.log("[Auth] Logged out");
     setUser(null);
   }
 

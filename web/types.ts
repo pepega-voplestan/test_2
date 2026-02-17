@@ -2,7 +2,6 @@ export interface User {
   id: string;
   name: string;
   avatar: string;
-  email?: string;
   isBanned?: boolean;
 }
 
@@ -19,12 +18,4 @@ export interface Shout {
     src: string;
   };
   replies?: Shout[];
-}
-
-export interface NewsItem {
-  id: string;
-  title: string;
-  date?: string;
-  ageLimit?: string;
-  link: string;
 }

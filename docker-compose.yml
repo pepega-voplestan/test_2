@@ -10,7 +10,7 @@ services:
     volumes:
       - appdata:/data
     expose:
-      - "3005"
+      - "3000"
 
   nginx:
     image: nginx:alpine
