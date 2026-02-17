@@ -37,7 +37,13 @@ app.use(
 // Rate limiting
 const authLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 app.use("/api/v1/auth/login", authLimiter);
-app.use("/api/v1/auth/register", authLimiter);
+app.use("/api/v1/auth/register/send-code", authLimiter);
+app.use("/api/v1/auth/register/verify", authLimiter);
+
+// Stricter rate limit for password reset code sending (5 per minute)
+const resetCodeLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { error: "Слишком много запросов. Подождите минуту" } });
+app.use("/api/v1/auth/forgot-password/send-code", resetCodeLimiter);
+app.use("/api/v1/auth/forgot-password/reset", authLimiter);
 
 // Per-user rate limiting: 100 requests per 10 min (keyed by user id, falls back to IP for anonymous)
 const perUserKey = (req) => req.session?.user?.id || req.ip;

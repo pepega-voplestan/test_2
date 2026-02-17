@@ -11,7 +11,10 @@ type AuthContextType = {
   loading: boolean;
 
   login: (login: string, password: string) => Promise<void>;
-  register: (username: string, password: string, email: string) => Promise<void>;
+  registerSendCode: (username: string, password: string, email: string) => Promise<void>;
+  registerVerify: (email: string, code: string) => Promise<void>;
+  forgotPasswordSendCode: (email: string) => Promise<void>;
+  forgotPasswordReset: (email: string, code: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 
@@ -78,13 +81,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     closeModal();
   }
 
-  async function register(username: string, password: string, email: string) {
-    console.log(`[Auth] Registering "${username}"...`);
-    const data = await api<{ user: User }>("/api/v1/auth/register", {
+  async function registerSendCode(username: string, password: string, email: string) {
+    console.log(`[Auth] Sending registration code for "${username}" to ${email}...`);
+    await api<{ ok: boolean }>("/api/v1/auth/register/send-code", {
       method: "POST",
       body: JSON.stringify({ username, password, email }),
     });
+    console.log(`[Auth] Registration code sent to ${email}`);
+  }
+
+  async function registerVerify(email: string, code: string) {
+    console.log(`[Auth] Verifying registration code for ${email}...`);
+    const data = await api<{ user: User }>("/api/v1/auth/register/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    });
     console.log(`[Auth] Registration successful: ${data.user.name}`);
+    setUser(data.user);
+    closeModal();
+  }
+
+  async function forgotPasswordSendCode(email: string) {
+    console.log(`[Auth] Sending password reset code to ${email}...`);
+    await api<{ ok: boolean }>("/api/v1/auth/forgot-password/send-code", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    console.log(`[Auth] Password reset code sent to ${email}`);
+  }
+
+  async function forgotPasswordReset(email: string, code: string, newPassword: string) {
+    console.log(`[Auth] Resetting password for ${email}...`);
+    const data = await api<{ user: User }>("/api/v1/auth/forgot-password/reset", {
+      method: "POST",
+      body: JSON.stringify({ email, code, newPassword }),
+    });
+    console.log(`[Auth] Password reset successful, logged in as ${data.user.name}`);
     setUser(data.user);
     closeModal();
   }
@@ -105,7 +137,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       login,
-      register,
+      registerSendCode,
+      registerVerify,
+      forgotPasswordSendCode,
+      forgotPasswordReset,
       logout,
       refresh,
       isAuthModalOpen,
