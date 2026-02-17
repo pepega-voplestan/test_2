@@ -44,8 +44,12 @@ const mediaUpload = multer({
   },
 });
 
-fs.mkdirSync(MEDIA_DIR, { recursive: true });
-fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true });
+try {
+  fs.mkdirSync(MEDIA_DIR, { recursive: true });
+  fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true });
+} catch (e) {
+  console.error("[Media] Could not create media directories:", e.message);
+}
 
 /* ---------- YouTube helpers ---------- */
 
@@ -66,22 +70,22 @@ function extractYouTubeId(text) {
 /* ---------- Media DTO helper ---------- */
 
 function buildMedia(row) {
-  if (row.media_type === "image") {
-    const meta = JSON.parse(row.media_meta || "{}");
+  if (row.m_type === "image") {
+    const meta = JSON.parse(row.m_meta || "{}");
     return {
       type: "image",
-      url: `/media/${row.media_url}/960.webp`,
-      thumb: `/media/${row.media_url}/320.webp`,
-      full: `/media/${row.media_url}/1600.webp`,
+      url: `/media/${row.m_url}/960.webp`,
+      thumb: `/media/${row.m_url}/320.webp`,
+      full: `/media/${row.m_url}/1600.webp`,
       width: meta.w || 0,
       height: meta.h || 0,
     };
   }
-  if (row.media_type === "youtube") {
+  if (row.m_type === "youtube") {
     return {
       type: "youtube",
-      videoId: row.media_url,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${row.media_url}`,
+      videoId: row.m_url,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${row.m_url}`,
     };
   }
   return undefined;
@@ -230,9 +234,11 @@ export function mountRoutes(app) {
     console.log(`[Shouts] Fetching shouts: limit=${limit}, offset=${offset}, user=${currentUserId || "anon"}`);
 
     const topRaw = db.prepare(`
-      SELECT s.*, u.username, u.avatar, u.is_banned
+      SELECT s.*, u.username, u.avatar, u.is_banned,
+             m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
       FROM shouts s
       JOIN users u ON u.id = s.user_id
+      LEFT JOIN media m ON m.id = s.media_id
       WHERE s.parent_id IS NULL
       ORDER BY datetime(s.created_at) DESC
       LIMIT ? OFFSET ?
@@ -245,9 +251,11 @@ export function mountRoutes(app) {
     const replies = topIds.length
       ? db
           .prepare(`
-            SELECT s.*, u.username, u.avatar, u.is_banned
+            SELECT s.*, u.username, u.avatar, u.is_banned,
+                   m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
             FROM shouts s
             JOIN users u ON u.id = s.user_id
+            LEFT JOIN media m ON m.id = s.media_id
             WHERE s.parent_id IN (${topIds.map(() => "?").join(",")})
             ORDER BY datetime(s.created_at) ASC
           `)
@@ -336,47 +344,41 @@ export function mountRoutes(app) {
       return res.status(400).json({ error: "Можно прикрепить или изображение, или видео" });
     }
 
-    let media_type = null;
-    let media_url = null;
-    let media_meta = null;
+    let finalMediaId = null;
 
     if (mediaId) {
-      // Validate uploaded media exists on disk
-      const mediaDir = path.join(MEDIA_DIR, mediaId);
-      if (!fs.existsSync(mediaDir)) {
+      // Validate media exists in DB (created during upload)
+      const mediaRow = db.prepare("SELECT id FROM media WHERE id = ?").get(mediaId);
+      if (!mediaRow) {
         return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
       }
-      // Read the meta file written during upload
-      const metaPath = path.join(mediaDir, "meta.json");
-      if (fs.existsSync(metaPath)) {
-        media_meta = fs.readFileSync(metaPath, "utf-8");
-      }
-      media_type = "image";
-      media_url = mediaId;
+      finalMediaId = mediaId;
     } else if (youtubeUrl) {
       const videoId = extractYouTubeId(youtubeUrl);
       if (!videoId) {
         return res.status(400).json({ error: "Некорректная YouTube ссылка" });
       }
-      media_type = "youtube";
-      media_url = videoId;
-      media_meta = JSON.stringify({ videoId });
+      finalMediaId = crypto.randomUUID();
+      db.prepare(
+        "INSERT INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)"
+      ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify({ videoId }));
     } else if (content) {
       // Auto-detect YouTube URL in content
       const videoId = extractYouTubeId(content);
       if (videoId) {
-        media_type = "youtube";
-        media_url = videoId;
-        media_meta = JSON.stringify({ videoId });
+        finalMediaId = crypto.randomUUID();
+        db.prepare(
+          "INSERT INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)"
+        ).run(finalMediaId, req.session.user.id, "youtube", videoId, JSON.stringify({ videoId }));
       }
     }
 
     const id = crypto.randomUUID();
     db.prepare(
-      "INSERT INTO shouts (id, user_id, parent_id, content, media_type, media_url, media_meta) VALUES (?, ?, NULL, ?, ?, ?, ?)"
-    ).run(id, req.session.user.id, content, media_type, media_url, media_meta);
+      "INSERT INTO shouts (id, user_id, parent_id, content, media_id) VALUES (?, ?, NULL, ?, ?)"
+    ).run(id, req.session.user.id, content, finalMediaId);
 
-    console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${media_type || "none"}`);
+    console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
     res.json({ ok: true, id });
   });
 
@@ -470,9 +472,11 @@ export function mountRoutes(app) {
     console.log(`[Profile] Fetching shouts for user ${profileId}: limit=${limit}, offset=${offset}`);
 
     const topRaw = db.prepare(`
-      SELECT s.*, u.username, u.avatar, u.is_banned
+      SELECT s.*, u.username, u.avatar, u.is_banned,
+             m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
       FROM shouts s
       JOIN users u ON u.id = s.user_id
+      LEFT JOIN media m ON m.id = s.media_id
       WHERE s.user_id = ? AND s.parent_id IS NULL
       ORDER BY datetime(s.created_at) DESC
       LIMIT ? OFFSET ?
@@ -485,9 +489,11 @@ export function mountRoutes(app) {
     const replies = topIds.length
       ? db
           .prepare(`
-            SELECT s.*, u.username, u.avatar, u.is_banned
+            SELECT s.*, u.username, u.avatar, u.is_banned,
+                   m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
             FROM shouts s
             JOIN users u ON u.id = s.user_id
+            LEFT JOIN media m ON m.id = s.media_id
             WHERE s.parent_id IN (${topIds.map(() => "?").join(",")})
             ORDER BY datetime(s.created_at) ASC
           `)
@@ -708,13 +714,18 @@ export function mountRoutes(app) {
           urls[w] = `/media/${mediaId}/${w}.webp`;
         }
 
-        // Write meta.json for later use when creating shout
+        // Write meta.json as on-disk backup
         const metaJson = JSON.stringify({ w: meta.width, h: meta.height, size: req.file.size, mime: req.file.mimetype });
         fs.writeFileSync(path.join(tmpDir, "meta.json"), metaJson);
 
         // Atomic move: tmp → permanent
         const permanentDir = path.join(MEDIA_DIR, mediaId);
         fs.renameSync(tmpDir, permanentDir);
+
+        // Create media record in DB
+        db.prepare(
+          "INSERT INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)"
+        ).run(mediaId, userId, "image", mediaId, metaJson);
 
         console.log(`[Media] Upload complete: ${mediaId}, ${MEDIA_VARIANTS.join("/")}w`);
         res.json({
