@@ -36,8 +36,8 @@ app.use(
 
 // Rate limiting on auth endpoints
 const authLimiter = rateLimit({ windowMs: 60_000, max: 20 });
-app.use("/api/auth/login", authLimiter);
-app.use("/api/auth/register", authLimiter);
+app.use("/api/v1/auth/login", authLimiter);
+app.use("/api/v1/auth/register", authLimiter);
 
 mountRoutes(app);
 
