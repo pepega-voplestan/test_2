@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Shout } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,16 +11,62 @@ interface ShoutCardProps {
 }
 
 const SHOUT_MAX_LENGTH = 280;
+const MEDIA_MAX_MB = 5;
+
+const YT_PATTERNS = [
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
+];
+
+function detectYouTubeId(text: string): string | null {
+  for (const p of YT_PATTERNS) {
+    const m = text.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+// Render text content with clickable links and @mentions, preserving whitespace
+function renderContent(text: string) {
+  // Split by whitespace while preserving the whitespace tokens
+  const tokens = text.split(/(\s+)/);
+  return tokens.map((token, i) => {
+    // Whitespace tokens — preserve as-is
+    if (/^\s+$/.test(token)) {
+      return token;
+    }
+    // URL tokens
+    if (/^https?:\/\//.test(token)) {
+      return (
+        <a key={i} href={token} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">
+          {token}
+        </a>
+      );
+    }
+    // @mentions
+    if (token.startsWith('@')) {
+      return <span key={i} className="text-sky-500">{token}</span>;
+    }
+    return token;
+  });
+}
 
 const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia = true, onReplyAdded, parentShoutId }) => {
   const { user, openModal } = useAuth();
   const [repliesOpen, setRepliesOpen] = useState(false);
-  const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
-  const [imageExpanded, setImageExpanded] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [ytLoaded, setYtLoaded] = useState(false);
+
+  // Reply media state
+  const [replyMediaId, setReplyMediaId] = useState<string | null>(null);
+  const [replyMediaPreview, setReplyMediaPreview] = useState<string | null>(null);
+  const [isReplyUploading, setIsReplyUploading] = useState(false);
+  const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
 
   // Like state — synced from props when they change
   const [likes, setLikes] = useState(shout.likes);
@@ -40,6 +86,19 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
   const replyCharCount = replyContent.length;
   const isReplyOverLimit = replyCharCount > SHOUT_MAX_LENGTH;
 
+  const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
+  const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
+
+  // Detect YouTube URLs in reply content (only when no image attached)
+  useEffect(() => {
+    if (replyMediaId) {
+      setReplyDetectedYtId(null);
+      return;
+    }
+    const id = detectYouTubeId(replyContent);
+    setReplyDetectedYtId(id);
+  }, [replyContent, replyMediaId]);
+
   const toggleReplies = () => {
     setRepliesOpen(!repliesOpen);
   };
@@ -49,23 +108,68 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
       openModal();
       return;
     }
-    if (!isReplying) {
-        setIsReplying(true);
-        setRepliesOpen(true);
-        setReplyError(null);
-    } else {
-        setIsReplying(false);
-        setReplyContent('');
-        setReplyError(null);
-        if (!hasReplies) {
-            setRepliesOpen(false);
-        }
+    if (!repliesOpen) {
+      setRepliesOpen(true);
+    } else if (!hasReplies) {
+      setRepliesOpen(false);
     }
+  };
+
+  const handleReplyFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (file.size > MEDIA_MAX_MB * 1024 * 1024) {
+      setReplyError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`);
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setReplyError('Допустимые форматы: JPG, PNG, WebP');
+      return;
+    }
+
+    setReplyError(null);
+    setIsReplyUploading(true);
+    const localUrl = URL.createObjectURL(file);
+    setReplyMediaPreview(localUrl);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/v1/upload/media', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Ошибка ${res.status}`);
+      }
+      const data = await res.json();
+      setReplyMediaId(data.mediaId);
+      setReplyMediaPreview(data.urls.thumb);
+      URL.revokeObjectURL(localUrl);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка загрузки';
+      setReplyError(msg);
+      setReplyMediaPreview(null);
+      URL.revokeObjectURL(localUrl);
+    } finally {
+      setIsReplyUploading(false);
+    }
+  };
+
+  const removeReplyMedia = () => {
+    if (replyMediaPreview) URL.revokeObjectURL(replyMediaPreview);
+    setReplyMediaId(null);
+    setReplyMediaPreview(null);
+    setReplyError(null);
   };
 
   const handleReplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyContent.trim() || !user || isSubmittingReply || isReplyOverLimit) return;
+    if (!canSubmitReply || !user) return;
 
     const targetId = parentShoutId || shout.id;
     setIsSubmittingReply(true);
@@ -73,11 +177,19 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
     console.log(`[ShoutCard] Submitting reply to shout ${targetId}`);
 
     try {
+      const body: Record<string, string> = { content: replyContent.trim() };
+      if (replyMediaId) {
+        body.mediaId = replyMediaId;
+      } else if (replyDetectedYtId) {
+        const ytMatch = replyContent.match(/https?:\/\/[^\s]+/);
+        if (ytMatch) body.youtubeUrl = ytMatch[0];
+      }
+
       const res = await fetch(`/api/v1/shouts/${targetId}/replies`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: replyContent.trim() })
+        body: JSON.stringify(body)
       });
 
       if (!res.ok) {
@@ -88,7 +200,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
       const data = await res.json();
       console.log(`[ShoutCard] Reply posted: ${data.id}`);
 
-      // Build reply object and add to local state instead of re-fetching entire feed
       const newReply: Shout = {
         id: data.id,
         user: { id: user.id, name: user.name, avatar: user.avatar },
@@ -97,10 +208,13 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
         likes: 0,
         likedBy: [],
         replies: [],
+        ...(data.media ? { media: data.media } : {}),
       };
 
       setReplyContent('');
-      setIsReplying(false);
+      setReplyMediaId(null);
+      setReplyMediaPreview(null);
+      setReplyDetectedYtId(null);
       setReplyError(null);
 
       if (onReplyAdded) {
@@ -135,7 +249,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
       });
 
       if (!res.ok) {
-        // Revert on failure
         setIsLiked(!newIsLiked);
         setLikes(prev => newIsLiked ? prev - 1 : prev + 1);
         console.error('[ShoutCard] Like failed, reverted');
@@ -147,7 +260,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
       setIsLiked(data.isLiked);
       console.log(`[ShoutCard] Like confirmed: ${data.likes} likes, isLiked=${data.isLiked}`);
     } catch (err) {
-      // Revert on network error
       setIsLiked(!newIsLiked);
       setLikes(prev => newIsLiked ? prev - 1 : prev + 1);
       console.error('[ShoutCard] Like network error, reverted:', err);
@@ -206,36 +318,50 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
           {/* Body Text */}
           {shout.content && (
             <div className="text-zinc-300 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
-               {shout.content.split(' ').map((word, i) => {
-                   if (word.startsWith('http')) {
-                       return <a key={i} href={word} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{word} </a>;
-                   }
-                   if (word.startsWith('@')) {
-                       return <span key={i} className="text-sky-500">{word} </span>;
-                   }
-                   return word + ' ';
-               })}
+               {renderContent(shout.content)}
             </div>
           )}
 
-          {/* Image attachment */}
+          {/* Image attachment — smaller thumbnail, click opens lightbox */}
           {showMedia && shout.media?.type === 'image' && (
-             <div className="mb-3 rounded-lg overflow-hidden max-w-[600px]">
+             <div className="mb-3 rounded-lg overflow-hidden max-w-[300px]">
                  <img
-                   src={imageExpanded ? shout.media.full : shout.media.url}
+                   src={shout.media.url}
                    alt="attachment"
                    loading="lazy"
-                   onClick={() => setImageExpanded(!imageExpanded)}
-                   className={`w-full cursor-pointer transition-all ${imageExpanded ? '' : 'max-h-[600px] object-cover'}`}
+                   onClick={() => setLightboxOpen(true)}
+                   className="w-full cursor-pointer max-h-[300px] object-cover hover:opacity-90 transition-opacity"
                  />
              </div>
           )}
 
-          {/* YouTube embed — lazy: show thumbnail first, load iframe on click */}
+          {/* Lightbox modal for full-size image */}
+          {lightboxOpen && shout.media?.type === 'image' && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+              onClick={() => setLightboxOpen(false)}
+            >
+              <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                <img
+                  src={shout.media.full}
+                  alt="attachment"
+                  className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+                />
+                <button
+                  onClick={() => setLightboxOpen(false)}
+                  className="absolute -top-3 -right-3 w-8 h-8 bg-zinc-800 border border-zinc-600 rounded-full flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-700 text-sm font-bold"
+                >
+                  X
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* YouTube embed — Discord-style with title inside the box */}
           {showMedia && shout.media?.type === 'youtube' && (
-              <div className="mb-3">
+              <div className="mb-3 max-w-[400px] rounded-lg overflow-hidden bg-[#2b2d31] border border-zinc-700/50">
                 <div
-                  className="rounded-lg overflow-hidden w-full aspect-video bg-black relative cursor-pointer"
+                  className="w-full aspect-video bg-black relative cursor-pointer"
                   onClick={() => !ytLoaded && setYtLoaded(true)}
                 >
                     {ytLoaded ? (
@@ -256,8 +382,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
-                            <svg viewBox="0 0 24 24" className="w-8 h-8 text-white ml-1" fill="currentColor">
+                          <div className="w-14 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
+                            <svg viewBox="0 0 24 24" className="w-6 h-6 text-white ml-0.5" fill="currentColor">
                               <path d="M8 5v14l11-7z"/>
                             </svg>
                           </div>
@@ -266,12 +392,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                     )}
                 </div>
                 {(shout.media.title || shout.media.channel) && (
-                  <div className="mt-1.5 px-1">
+                  <div className="px-3 py-2">
                     {shout.media.title && (
                       <div className="text-sm text-zinc-200 font-medium leading-snug line-clamp-2">{shout.media.title}</div>
                     )}
                     {shout.media.channel && (
-                      <div className="text-xs text-zinc-500 mt-0.5">{shout.media.channel}</div>
+                      <div className="text-xs text-zinc-400 mt-0.5">{shout.media.channel}</div>
                     )}
                   </div>
                 )}
@@ -284,7 +410,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                 {!isReply && (
                   <button
                       onClick={handleReplyClick}
-                      className={`hover:text-zinc-300 transition-colors ${isReplying ? 'text-white' : ''}`}
+                      className={`hover:text-zinc-300 transition-colors ${repliesOpen ? 'text-white' : ''}`}
                   >
                       Ответить
                   </button>
@@ -304,19 +430,19 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
             <div className="flex items-center">
                 <button
                     onClick={handleLike}
-                    className={`flex items-center gap-2 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-zinc-500 hover:text-zinc-300'}`}
                     title={isLiked ? "Убрать лайк" : "Нравится"}
                 >
-                    <span className="text-xl font-bold">{likes}</span>
-                    <span className="text-3xl leading-none">{'\uD83E\uDD18'}</span>
+                    <span className="text-xs font-bold">{likes}</span>
+                    <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
                 </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Nested Replies */}
-      {!isReply && (repliesOpen && (hasReplies || isReplying)) && (
+      {/* Nested Replies — textbox always visible when thread is open */}
+      {!isReply && repliesOpen && (
         <div className="ml-10 mt-2">
            {hasReplies && shout.replies!.map(reply => (
                <ShoutCard
@@ -329,12 +455,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                />
            ))}
 
-           {/* Reply Input Section */}
-           {isReplying && (
+           {/* Reply Input — always visible when thread is open */}
+           {user && (
              <div className="mt-4">
                <div className="bg-[#1e1e1e] p-3 rounded flex gap-3">
                  <div className="w-8 h-8 bg-zinc-700 rounded-full shrink-0 flex items-center justify-center overflow-hidden">
-                      {user?.avatar ? (
+                      {user.avatar ? (
                         <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                       ) : (
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-zinc-400" viewBox="0 0 20 20" fill="currentColor">
@@ -351,22 +477,73 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                             value={replyContent}
                             onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
                             disabled={isSubmittingReply}
-                            autoFocus
                             maxLength={SHOUT_MAX_LENGTH + 50}
                         />
-                        {replyContent.trim() && (
+                        {/* Image upload button for replies */}
+                        <button
+                          type="button"
+                          onClick={() => replyFileInputRef.current?.click()}
+                          disabled={isReplyUploading || !!replyMediaId}
+                          className={`shrink-0 p-0.5 transition-colors ${replyMediaId ? 'text-[#0087ff]' : 'text-zinc-500 hover:text-zinc-300'} disabled:opacity-40`}
+                          title={replyMediaId ? 'Изображение прикреплено' : 'Прикрепить изображение'}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                        <input
+                          ref={replyFileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={handleReplyFileSelect}
+                        />
+                        {(replyContent.trim() || replyHasMedia) && (
                           <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-zinc-500'}`}>
                             {replyCharCount}/{SHOUT_MAX_LENGTH}
                           </span>
                         )}
                         <button
                           type="submit"
-                          disabled={!replyContent.trim() || isSubmittingReply || isReplyOverLimit}
+                          disabled={!canSubmitReply}
                           className="text-[#0087ff] hover:text-blue-400 text-sm font-medium disabled:opacity-30"
                         >
                             {isSubmittingReply ? '...' : 'Отправить'}
                         </button>
                       </div>
+
+                      {/* Reply media preview */}
+                      {replyMediaPreview && (
+                        <div className="relative inline-block mt-1">
+                          <img src={replyMediaPreview} alt="preview" className="max-h-24 rounded border border-zinc-700" />
+                          {isReplyUploading && (
+                            <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {!isReplyUploading && (
+                            <button
+                              type="button"
+                              onClick={removeReplyMedia}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-zinc-800 border border-zinc-600 rounded-full flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-700 text-[10px]"
+                            >
+                              X
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Reply YouTube auto-detect preview */}
+                      {!replyMediaId && replyDetectedYtId && (
+                        <div className="flex items-center gap-2 mt-1 bg-zinc-900/50 rounded p-1.5 border border-zinc-800">
+                          <img
+                            src={`https://img.youtube.com/vi/${replyDetectedYtId}/default.jpg`}
+                            alt="YouTube"
+                            className="w-14 h-10 rounded object-cover shrink-0"
+                          />
+                          <div className="text-[10px] text-zinc-400">YouTube видео</div>
+                        </div>
+                      )}
                   </form>
                </div>
                {replyError && (
