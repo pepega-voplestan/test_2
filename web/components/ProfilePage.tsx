@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { UserProfile, Shout } from '../types';
+import { UserProfile, Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
@@ -116,12 +116,28 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     }
   }, [profile, fetchShouts]);
 
-  // Reply callback
-  const addReplyToShout = useCallback((shoutId: string, reply: Shout) => {
+  // Comment callback
+  const addCommentToShout = useCallback((shoutId: string, comment: Comment) => {
     setShouts(prev =>
       prev.map(s =>
         s.id === shoutId
-          ? { ...s, replies: [...(s.replies || []), reply] }
+          ? { ...s, comments: [...(s.comments || []), comment] }
+          : s
+      )
+    );
+  }, []);
+
+  // Shout delete callback (remove from list without reload)
+  const removeShout = useCallback((shoutId: string) => {
+    setShouts(prev => prev.filter(s => s.id !== shoutId));
+  }, []);
+
+  // Comment delete callback (remove from parent without reload)
+  const removeComment = useCallback((shoutId: string, commentId: string) => {
+    setShouts(prev =>
+      prev.map(s =>
+        s.id === shoutId
+          ? { ...s, comments: (s.comments || []).filter(c => c.id !== commentId) }
           : s
       )
     );
@@ -427,7 +443,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             key={shout.id}
             shout={shout}
             showMedia={true}
-            onReplyAdded={addReplyToShout}
+            onCommentAdded={addCommentToShout}
+            onDelete={removeShout}
+            onCommentDeleted={removeComment}
           />
         ))}
       </div>
