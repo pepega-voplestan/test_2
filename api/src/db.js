@@ -59,8 +59,35 @@ try {
   // Column already exists — ignore
 }
 
-// Migrate: convert empty-string emails to NULL so unique index works
-db.prepare(`UPDATE users SET email = NULL WHERE email = ''`).run();
+// If email column has NOT NULL constraint (from older migration), recreate table to fix it
+try {
+  db.prepare(`UPDATE users SET email = NULL WHERE email = ''`).run();
+} catch (e) {
+  if (e.code === 'SQLITE_CONSTRAINT_NOTNULL') {
+    console.log("[DB] Fixing email column NOT NULL constraint via table rebuild");
+    db.pragma("foreign_keys = OFF");
+    db.exec(`
+      CREATE TABLE users_new (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        avatar TEXT NOT NULL,
+        is_banned INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        email TEXT DEFAULT NULL
+      );
+      INSERT INTO users_new SELECT id, username, password_hash, avatar, is_banned, created_at,
+        CASE WHEN email = '' THEN NULL ELSE email END
+        FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+    db.pragma("foreign_keys = ON");
+    console.log("[DB] Table rebuilt with nullable email column");
+  } else {
+    throw e;
+  }
+}
 
 // Unique index on email (NULLs are allowed and don't conflict)
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
