@@ -488,11 +488,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       )}
                  </div>
                   <form className="w-full flex flex-col gap-2" onSubmit={handleReplySubmit}>
-                      <div className="flex gap-2 items-center">
-                        <input type="text" placeholder="Напишите ответ..."
-                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-zinc-600"
-                            value={replyContent} onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
-                            disabled={isSubmittingReply} maxLength={SHOUT_MAX_LENGTH + 50} />
+                      <input type="text" placeholder="Напишите ответ..."
+                          className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-zinc-600"
+                          value={replyContent} onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
+                          disabled={isSubmittingReply} maxLength={SHOUT_MAX_LENGTH + 50} />
+                      <div className="flex items-center gap-2 justify-end">
                         <div className="flex items-center gap-1 shrink-0">
                           <EmojiPicker size="sm" onSelect={insertEmoji} />
                           <button type="button" onClick={() => replyFileInputRef.current?.click()}
