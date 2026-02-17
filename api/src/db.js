@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 
@@ -111,14 +112,54 @@ if (dupes.length) console.log(`[DB] Deduplicated ${dupes.length} email(s)`);
 
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
 
-// Add media columns to shouts (migration-safe)
+// Legacy inline media columns (migration-safe, kept for backward compat during transition)
 try {
   db.exec(`ALTER TABLE shouts ADD COLUMN media_type TEXT DEFAULT NULL`);
   db.exec(`ALTER TABLE shouts ADD COLUMN media_url TEXT DEFAULT NULL`);
   db.exec(`ALTER TABLE shouts ADD COLUMN media_meta TEXT DEFAULT NULL`);
-  console.log("[DB] Added media columns to shouts");
 } catch (_e) {
   // Columns already exist
+}
+
+// Separate media table — decoupled from shouts so media schema can evolve independently
+db.exec(`
+CREATE TABLE IF NOT EXISTS media (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  media_type TEXT NOT NULL,
+  media_url TEXT NOT NULL,
+  media_meta TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`);
+
+// Add media_id FK column to shouts
+try {
+  db.exec(`ALTER TABLE shouts ADD COLUMN media_id TEXT DEFAULT NULL REFERENCES media(id)`);
+  console.log("[DB] Added media_id column to shouts");
+} catch (_e) {
+  // Column already exists
+}
+
+// Migrate any existing inline media data → media table (one-time)
+const inlineMedia = db.prepare(
+  `SELECT id, user_id, media_type, media_url, media_meta FROM shouts WHERE media_type IS NOT NULL AND media_id IS NULL`
+).all();
+if (inlineMedia.length) {
+  const insertMedia = db.prepare(
+    `INSERT OR IGNORE INTO media (id, user_id, media_type, media_url, media_meta) VALUES (?, ?, ?, ?, ?)`
+  );
+  const linkShout = db.prepare(`UPDATE shouts SET media_id = ? WHERE id = ?`);
+  const migrate = db.transaction((rows) => {
+    for (const row of rows) {
+      const mediaId = crypto.randomUUID();
+      insertMedia.run(mediaId, row.user_id, row.media_type, row.media_url, row.media_meta);
+      linkShout.run(mediaId, row.id);
+    }
+  });
+  migrate(inlineMedia);
+  console.log(`[DB] Migrated ${inlineMedia.length} inline media row(s) to media table`);
 }
 
 console.log("[DB] Schema initialized");
