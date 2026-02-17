@@ -247,18 +247,40 @@ export function mountRoutes(app) {
     const currentUserId = req.session?.user?.id ?? null;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
     const offset = parseInt(req.query.offset, 10) || 0;
-    console.log(`[Shouts] Fetching shouts: limit=${limit}, offset=${offset}, user=${currentUserId || "anon"}`);
+    const sortBy = req.query.sortBy || "new";
+    console.log(`[Shouts] Fetching shouts: limit=${limit}, offset=${offset}, sort=${sortBy}, user=${currentUserId || "anon"}`);
 
-    const topRaw = db.prepare(`
-      SELECT s.*, u.username, u.avatar, u.is_banned,
-             m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
-      FROM shouts s
-      JOIN users u ON u.id = s.user_id
-      LEFT JOIN media m ON m.id = s.media_id
-      WHERE s.parent_id IS NULL
-      ORDER BY datetime(s.created_at) DESC
-      LIMIT ? OFFSET ?
-    `).all(limit + 1, offset);
+    let topRaw;
+    if (sortBy === "popular") {
+      // Popular: shouts from last 7 days, ordered by like count descending
+      topRaw = db.prepare(`
+        SELECT s.*, u.username, u.avatar, u.is_banned,
+               m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta,
+               COALESCE(lc.cnt, 0) AS like_count
+        FROM shouts s
+        JOIN users u ON u.id = s.user_id
+        LEFT JOIN media m ON m.id = s.media_id
+        LEFT JOIN (
+          SELECT shout_id, COUNT(*) AS cnt FROM shout_likes GROUP BY shout_id
+        ) lc ON lc.shout_id = s.id
+        WHERE s.parent_id IS NULL
+          AND s.is_deleted = 0
+          AND datetime(s.created_at) >= datetime('now', '-7 days')
+        ORDER BY like_count DESC, datetime(s.created_at) DESC
+        LIMIT ? OFFSET ?
+      `).all(limit + 1, offset);
+    } else {
+      topRaw = db.prepare(`
+        SELECT s.*, u.username, u.avatar, u.is_banned,
+               m.media_type AS m_type, m.media_url AS m_url, m.media_meta AS m_meta
+        FROM shouts s
+        JOIN users u ON u.id = s.user_id
+        LEFT JOIN media m ON m.id = s.media_id
+        WHERE s.parent_id IS NULL AND s.is_deleted = 0
+        ORDER BY datetime(s.created_at) DESC
+        LIMIT ? OFFSET ?
+      `).all(limit + 1, offset);
+    }
 
     const hasMore = topRaw.length > limit;
     const top = hasMore ? topRaw.slice(0, limit) : topRaw;
@@ -273,6 +295,7 @@ export function mountRoutes(app) {
             JOIN users u ON u.id = s.user_id
             LEFT JOIN media m ON m.id = s.media_id
             WHERE s.parent_id IN (${topIds.map(() => "?").join(",")})
+              AND s.is_deleted = 0
             ORDER BY datetime(s.created_at) ASC
           `)
           .all(...topIds)
@@ -337,6 +360,22 @@ export function mountRoutes(app) {
 
     console.log(`[Shouts] Returning ${dto.length} shouts, hasMore=${hasMore}`);
     res.json({ shouts: dto, hasMore });
+  });
+
+  /* delete shout (soft-delete, author only) */
+  app.delete("/api/v1/shouts/:id", requireAuth, (req, res) => {
+    const shoutId = req.params.id;
+    const userId = req.session.user.id;
+
+    const shout = db.prepare("SELECT id, user_id FROM shouts WHERE id=? AND is_deleted=0").get(shoutId);
+    if (!shout) return res.status(404).json({ error: "Запись не найдена" });
+    if (shout.user_id !== userId) return res.status(403).json({ error: "Можно удалять только свои записи" });
+
+    // Soft-delete the shout and all its replies
+    db.prepare("UPDATE shouts SET is_deleted=1 WHERE id=? OR parent_id=?").run(shoutId, shoutId);
+
+    console.log(`[Shouts] Soft-deleted shout ${shoutId} (and replies) by ${userId}`);
+    res.json({ ok: true });
   });
 
   /* new shout */
@@ -411,7 +450,7 @@ export function mountRoutes(app) {
 
     const parentId = req.params.id;
     const parent = db
-      .prepare("SELECT id FROM shouts WHERE id=?")
+      .prepare("SELECT id FROM shouts WHERE id=? AND is_deleted=0")
       .get(parentId);
     if (!parent)
       return res.status(404).json({ error: "Запись не найдена" });
@@ -508,7 +547,7 @@ export function mountRoutes(app) {
     if (!row) return res.status(404).json({ error: "Пользователь не найден" });
 
     const shoutCount = db
-      .prepare("SELECT COUNT(*) c FROM shouts WHERE user_id=? AND parent_id IS NULL")
+      .prepare("SELECT COUNT(*) c FROM shouts WHERE user_id=? AND parent_id IS NULL AND is_deleted=0")
       .get(profileId).c;
 
     const profile = {
@@ -539,7 +578,7 @@ export function mountRoutes(app) {
       FROM shouts s
       JOIN users u ON u.id = s.user_id
       LEFT JOIN media m ON m.id = s.media_id
-      WHERE s.user_id = ? AND s.parent_id IS NULL
+      WHERE s.user_id = ? AND s.parent_id IS NULL AND s.is_deleted = 0
       ORDER BY datetime(s.created_at) DESC
       LIMIT ? OFFSET ?
     `).all(profileId, limit + 1, offset);
@@ -557,6 +596,7 @@ export function mountRoutes(app) {
             JOIN users u ON u.id = s.user_id
             LEFT JOIN media m ON m.id = s.media_id
             WHERE s.parent_id IN (${topIds.map(() => "?").join(",")})
+              AND s.is_deleted = 0
             ORDER BY datetime(s.created_at) ASC
           `)
           .all(...topIds)
