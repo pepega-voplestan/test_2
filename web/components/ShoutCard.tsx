@@ -19,6 +19,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [imageExpanded, setImageExpanded] = useState(false);
+  const [ytLoaded, setYtLoaded] = useState(false);
 
   // Like state — synced from props when they change
   const [likes, setLikes] = useState(shout.likes);
@@ -202,35 +204,65 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
           </div>
 
           {/* Body Text */}
-          <div className="text-zinc-300 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
-             {shout.content.split(' ').map((word, i) => {
-                 if (word.startsWith('http')) {
-                     return <a key={i} href={word} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{word} </a>;
-                 }
-                 if (word.startsWith('@')) {
-                     return <span key={i} className="text-sky-500">{word} </span>;
-                 }
-                 return word + ' ';
-             })}
-          </div>
+          {shout.content && (
+            <div className="text-zinc-300 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+               {shout.content.split(' ').map((word, i) => {
+                   if (word.startsWith('http')) {
+                       return <a key={i} href={word} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{word} </a>;
+                   }
+                   if (word.startsWith('@')) {
+                       return <span key={i} className="text-sky-500">{word} </span>;
+                   }
+                   return word + ' ';
+               })}
+            </div>
+          )}
 
-          {/* Images */}
-          {showMedia && shout.image && (
-             <div className="mb-3 rounded overflow-hidden max-w-[600px]">
-                 <img src={shout.image} alt="attachment" className="w-full h-auto object-cover max-h-[400px]" />
+          {/* Image attachment */}
+          {showMedia && shout.media?.type === 'image' && (
+             <div className="mb-3 rounded-lg overflow-hidden max-w-[600px]">
+                 <img
+                   src={imageExpanded ? shout.media.full : shout.media.url}
+                   alt="attachment"
+                   loading="lazy"
+                   onClick={() => setImageExpanded(!imageExpanded)}
+                   className={`w-full cursor-pointer transition-all ${imageExpanded ? '' : 'max-h-[600px] object-cover'}`}
+                 />
              </div>
           )}
 
-          {/* Embeds (Youtube) */}
-          {showMedia && shout.embed && shout.embed.type === 'youtube' && (
-              <div className="mb-3 rounded overflow-hidden w-full aspect-video bg-black">
-                  <iframe
-                    className="w-full h-full"
-                    src={shout.embed.src}
-                    title="Youtube Embed"
-                    frameBorder="0"
-                    allowFullScreen
-                  />
+          {/* YouTube embed — lazy: show thumbnail first, load iframe on click */}
+          {showMedia && shout.media?.type === 'youtube' && (
+              <div
+                className="mb-3 rounded-lg overflow-hidden w-full aspect-video bg-black relative cursor-pointer"
+                onClick={() => !ytLoaded && setYtLoaded(true)}
+              >
+                  {ytLoaded ? (
+                    <iframe
+                      className="w-full h-full"
+                      src={`${shout.media.embedUrl}?autoplay=1`}
+                      title="YouTube"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      sandbox="allow-scripts allow-same-origin allow-presentation"
+                    />
+                  ) : (
+                    <>
+                      <img
+                        src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`}
+                        alt="YouTube video"
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
+                          <svg viewBox="0 0 24 24" className="w-8 h-8 text-white ml-1" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                          </svg>
+                        </div>
+                      </div>
+                    </>
+                  )}
               </div>
           )}
 
@@ -264,7 +296,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({ shout, isReply = false, showMedia
                     title={isLiked ? "Убрать лайк" : "Нравится"}
                 >
                     <span className="text-xl font-bold">{likes}</span>
-                    <span className="text-3xl leading-none">🤘</span>
+                    <span className="text-3xl leading-none">{'\uD83E\uDD18'}</span>
                 </button>
             </div>
           </div>
