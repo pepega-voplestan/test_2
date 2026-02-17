@@ -10,7 +10,7 @@ const Header: React.FC = () => {
         {/* Logo */}
         <a href="#/" className="flex items-center">
           <div className="text-white font-bold text-2xl tracking-tighter">
-            KANOBU
+            ВОПЛИ
           </div>
         </a>
 

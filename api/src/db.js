@@ -162,4 +162,12 @@ if (inlineMedia.length) {
   console.log(`[DB] Migrated ${inlineMedia.length} inline media row(s) to media table`);
 }
 
+// Add is_deleted column to shouts for soft-delete (migration-safe)
+try {
+  db.exec(`ALTER TABLE shouts ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0`);
+  console.log("[DB] Added is_deleted column to shouts");
+} catch (_e) {
+  // Column already exists
+}
+
 console.log("[DB] Schema initialized");
