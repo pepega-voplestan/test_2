@@ -6,6 +6,7 @@ import multer from "multer";
 import sharp from "sharp";
 import { db } from "./db.js";
 import { hashPassword, verifyPassword, requireAuth } from "./auth.js";
+import { sendVerificationEmail } from "./email.js";
 
 const AVATAR_DIR = path.join(path.dirname(process.env.DATABASE_PATH || "/data/app.db"), "avatars");
 const AVATAR_SIZES = [64, 128, 256];
@@ -155,6 +156,34 @@ const profileUpdateSchema = z.object({
   newPassword: z.string().min(6).max(200).optional(),
 });
 
+const sendCodeSchema = z.object({
+  username: z.string().min(3).max(32),
+  password: z.string().min(6).max(200),
+  email: z.string().email().max(200),
+});
+
+const verifyCodeSchema = z.object({
+  email: z.string().email().max(200),
+  code: z.string().length(6),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email().max(200),
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().email().max(200),
+  code: z.string().length(6),
+  newPassword: z.string().min(6).max(200),
+});
+
+const CODE_EXPIRY_MINUTES = 10;
+const CODE_MAX_ATTEMPTS = 5;
+
+function generateCode() {
+  return String(crypto.randomInt(100000, 999999));
+}
+
 /* ---------- routes ---------- */
 
 export function mountRoutes(app) {
@@ -166,9 +195,9 @@ export function mountRoutes(app) {
     res.json({ user: req.session?.user ?? null });
   });
 
-  /* register */
-  app.post("/api/v1/auth/register", async (req, res) => {
-    const parsed = registerSchema.safeParse(req.body);
+  /* register step 1: send verification code */
+  app.post("/api/v1/auth/register/send-code", async (req, res) => {
+    const parsed = sendCodeSchema.safeParse(req.body);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
       const field = firstIssue?.path[0];
@@ -179,7 +208,7 @@ export function mountRoutes(app) {
     }
 
     const { username, password, email } = parsed.data;
-    console.log(`[Auth] Register attempt: ${username} (${email})`);
+    console.log(`[Auth] Register send-code attempt: ${username} (${email})`);
 
     const existsUser = db
       .prepare("SELECT id FROM users WHERE username=?")
@@ -197,16 +226,102 @@ export function mountRoutes(app) {
       return res.status(409).json({ error: "Этот email уже используется" });
     }
 
+    // Invalidate any existing unused codes for this email + purpose
+    db.prepare(
+      "UPDATE verification_codes SET used=1 WHERE email=? AND purpose='register' AND used=0"
+    ).run(email);
+
+    const code = generateCode();
     const id = crypto.randomUUID();
     const password_hash = await hashPassword(password);
     const avatar = avatarFor(username);
+    const payload = JSON.stringify({ username, password_hash, avatar });
 
     db.prepare(
-      "INSERT INTO users (id, username, password_hash, avatar, email) VALUES (?, ?, ?, ?, ?)"
-    ).run(id, username, password_hash, avatar, email);
+      `INSERT INTO verification_codes (id, email, code, purpose, payload, expires_at)
+       VALUES (?, ?, ?, 'register', ?, datetime('now', '+${CODE_EXPIRY_MINUTES} minutes'))`
+    ).run(id, email, code, payload);
 
-    req.session.user = { id, name: username, avatar };
-    console.log(`[Auth] Registered new user: ${username} (${id})`);
+    try {
+      await sendVerificationEmail(email, code, "register");
+    } catch (err) {
+      console.error(`[Auth] Failed to send registration code to ${email}:`, err.message);
+      return res.status(500).json({ error: err.message });
+    }
+
+    console.log(`[Auth] Registration code sent to ${email} for user "${username}"`);
+    res.json({ ok: true });
+  });
+
+  /* register step 2: verify code and create account */
+  app.post("/api/v1/auth/register/verify", async (req, res) => {
+    const parsed = verifyCodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Введите 6-значный код из письма" });
+    }
+
+    const { email, code } = parsed.data;
+    console.log(`[Auth] Register verify attempt for ${email}`);
+
+    const record = db.prepare(
+      `SELECT * FROM verification_codes
+       WHERE email=? AND purpose='register' AND used=0
+       ORDER BY created_at DESC LIMIT 1`
+    ).get(email);
+
+    if (!record) {
+      return res.status(400).json({ error: "Код не найден. Запросите новый код" });
+    }
+
+    // Check expiry
+    const now = new Date();
+    const expiresAt = new Date(record.expires_at + "Z");
+    if (now > expiresAt) {
+      db.prepare("UPDATE verification_codes SET used=1 WHERE id=?").run(record.id);
+      return res.status(400).json({ error: "Код истёк. Запросите новый код" });
+    }
+
+    // Check attempts
+    if (record.attempts >= CODE_MAX_ATTEMPTS) {
+      db.prepare("UPDATE verification_codes SET used=1 WHERE id=?").run(record.id);
+      return res.status(400).json({ error: "Слишком много попыток. Запросите новый код" });
+    }
+
+    // Increment attempts
+    db.prepare("UPDATE verification_codes SET attempts=attempts+1 WHERE id=?").run(record.id);
+
+    if (record.code !== code) {
+      const remaining = CODE_MAX_ATTEMPTS - record.attempts - 1;
+      return res.status(400).json({
+        error: remaining > 0
+          ? `Неверный код. Осталось попыток: ${remaining}`
+          : "Неверный код. Запросите новый код"
+      });
+    }
+
+    // Mark code as used
+    db.prepare("UPDATE verification_codes SET used=1 WHERE id=?").run(record.id);
+
+    // Create user from stored payload
+    const { username, password_hash, avatar } = JSON.parse(record.payload);
+
+    // Re-check uniqueness (race condition guard)
+    const existsUser = db.prepare("SELECT id FROM users WHERE username=?").get(username);
+    if (existsUser) {
+      return res.status(409).json({ error: "Это имя пользователя уже занято" });
+    }
+    const existsEmail = db.prepare("SELECT id FROM users WHERE email=?").get(email);
+    if (existsEmail) {
+      return res.status(409).json({ error: "Этот email уже используется" });
+    }
+
+    const userId = crypto.randomUUID();
+    db.prepare(
+      "INSERT INTO users (id, username, password_hash, avatar, email) VALUES (?, ?, ?, ?, ?)"
+    ).run(userId, username, password_hash, avatar, email);
+
+    req.session.user = { id: userId, name: username, avatar };
+    console.log(`[Auth] Registered new user: ${username} (${userId})`);
     res.json({ ok: true, user: req.session.user });
   });
 
@@ -253,6 +368,118 @@ export function mountRoutes(app) {
     const userName = req.session?.user?.name || "unknown";
     console.log(`[Auth] Logout: ${userName}`);
     req.session.destroy(() => res.json({ ok: true }));
+  });
+
+  /* forgot password step 1: send reset code */
+  app.post("/api/v1/auth/forgot-password/send-code", async (req, res) => {
+    const parsed = forgotPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Введите корректный email" });
+    }
+
+    const { email } = parsed.data;
+    console.log(`[Auth] Forgot-password send-code for ${email}`);
+
+    const user = db.prepare("SELECT id, username FROM users WHERE email=?").get(email);
+    if (!user) {
+      // Don't reveal whether email exists — still return ok
+      console.log(`[Auth] Forgot-password: email "${email}" not found (silent ok)`);
+      return res.json({ ok: true });
+    }
+
+    // Invalidate any existing unused codes for this email + purpose
+    db.prepare(
+      "UPDATE verification_codes SET used=1 WHERE email=? AND purpose='reset' AND used=0"
+    ).run(email);
+
+    const code = generateCode();
+    const id = crypto.randomUUID();
+
+    db.prepare(
+      `INSERT INTO verification_codes (id, email, code, purpose, payload, expires_at)
+       VALUES (?, ?, ?, 'reset', ?, datetime('now', '+${CODE_EXPIRY_MINUTES} minutes'))`
+    ).run(id, email, code, JSON.stringify({ userId: user.id, username: user.username }));
+
+    try {
+      await sendVerificationEmail(email, code, "reset");
+    } catch (err) {
+      console.error(`[Auth] Failed to send reset code to ${email}:`, err.message);
+      return res.status(500).json({ error: err.message });
+    }
+
+    console.log(`[Auth] Reset code sent to ${email}`);
+    res.json({ ok: true });
+  });
+
+  /* forgot password step 2: verify code and set new password */
+  app.post("/api/v1/auth/forgot-password/reset", async (req, res) => {
+    const parsed = resetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const field = parsed.error.issues[0]?.path[0];
+      if (field === "newPassword") return res.status(400).json({ error: "Пароль: минимум 6 символов" });
+      if (field === "code") return res.status(400).json({ error: "Введите 6-значный код из письма" });
+      return res.status(400).json({ error: "Некорректные данные" });
+    }
+
+    const { email, code, newPassword } = parsed.data;
+    console.log(`[Auth] Forgot-password reset attempt for ${email}`);
+
+    const record = db.prepare(
+      `SELECT * FROM verification_codes
+       WHERE email=? AND purpose='reset' AND used=0
+       ORDER BY created_at DESC LIMIT 1`
+    ).get(email);
+
+    if (!record) {
+      return res.status(400).json({ error: "Код не найден. Запросите новый код" });
+    }
+
+    // Check expiry
+    const now = new Date();
+    const expiresAt = new Date(record.expires_at + "Z");
+    if (now > expiresAt) {
+      db.prepare("UPDATE verification_codes SET used=1 WHERE id=?").run(record.id);
+      return res.status(400).json({ error: "Код истёк. Запросите новый код" });
+    }
+
+    // Check attempts
+    if (record.attempts >= CODE_MAX_ATTEMPTS) {
+      db.prepare("UPDATE verification_codes SET used=1 WHERE id=?").run(record.id);
+      return res.status(400).json({ error: "Слишком много попыток. Запросите новый код" });
+    }
+
+    // Increment attempts
+    db.prepare("UPDATE verification_codes SET attempts=attempts+1 WHERE id=?").run(record.id);
+
+    if (record.code !== code) {
+      const remaining = CODE_MAX_ATTEMPTS - record.attempts - 1;
+      return res.status(400).json({
+        error: remaining > 0
+          ? `Неверный код. Осталось попыток: ${remaining}`
+          : "Неверный код. Запросите новый код"
+      });
+    }
+
+    // Mark code as used
+    db.prepare("UPDATE verification_codes SET used=1 WHERE id=?").run(record.id);
+
+    // Get user and update password
+    const { userId, username } = JSON.parse(record.payload);
+    const user = db.prepare("SELECT id, username, avatar, is_banned FROM users WHERE id=?").get(userId);
+    if (!user) {
+      return res.status(400).json({ error: "Пользователь не найден" });
+    }
+    if (user.is_banned) {
+      return res.status(403).json({ error: "Аккаунт заблокирован" });
+    }
+
+    const newHash = await hashPassword(newPassword);
+    db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(newHash, userId);
+
+    // Auto-login
+    req.session.user = { id: user.id, name: user.username, avatar: user.avatar };
+    console.log(`[Auth] Password reset and auto-login: ${user.username} (${user.id})`);
+    res.json({ ok: true, user: req.session.user });
   });
 
   /* get shouts */
