@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String @id @default(uuid())
+  username      String @unique
+  password_hash String
+  avatar        String
+  email         String? @unique
+  is_banned     Int    @default(0)
+  created_at    String @default(dbgenerated("(datetime('now'))"))
+
+  shouts       Shout[]
+  media        Media[]
+  shoutLikes   ShoutLike[]
+  comments     Comment[]
+  commentLikes CommentLike[]
+
+  @@map("users")
+}
+
+model Shout {
+  id         String  @id @default(uuid())
+  user_id    String
+  parent_id  String?
+  content    String
+  media_id   String?
+  is_deleted Int     @default(0)
+  created_at String  @default(dbgenerated("(datetime('now'))"))
+
+  // Legacy inline media columns — retained for baseline, remove in follow-up migration
+  media_type String?
+  media_url  String?
+  media_meta String?
+
+  user     User       @relation(fields: [user_id], references: [id])
+  parent   Shout?     @relation("ShoutReplies", fields: [parent_id], references: [id])
+  children Shout[]    @relation("ShoutReplies")
+  media    Media?     @relation(fields: [media_id], references: [id])
+  likes    ShoutLike[]
+  comments Comment[]
+
+  @@index([parent_id, created_at], name: "idx_shouts_parent_created")
+  @@index([created_at], name: "idx_shouts_created")
+  @@map("shouts")
+}
+
+model Media {
+  id         String  @id @default(uuid())
+  user_id    String
+  media_type String
+  media_url  String
+  media_meta String?
+  created_at String  @default(dbgenerated("(datetime('now'))"))
+
+  user     User      @relation(fields: [user_id], references: [id])
+  shouts   Shout[]
+  comments Comment[]
+
+  @@map("media")
+}
+
+model ShoutLike {
+  shout_id   String
+  user_id    String
+  created_at String @default(dbgenerated("(datetime('now'))"))
+
+  shout Shout @relation(fields: [shout_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([shout_id, user_id])
+  @@index([shout_id], name: "idx_likes_shout")
+  @@index([user_id], name: "idx_likes_user")
+  @@map("shout_likes")
+}
+
+model Comment {
+  id         String  @id @default(uuid())
+  shout_id   String
+  user_id    String
+  content    String
+  media_id   String?
+  is_deleted Int     @default(0)
+  created_at String  @default(dbgenerated("(datetime('now'))"))
+
+  shout Shout         @relation(fields: [shout_id], references: [id])
+  user  User          @relation(fields: [user_id], references: [id])
+  media Media?        @relation(fields: [media_id], references: [id])
+  likes CommentLike[]
+
+  @@index([shout_id, created_at], name: "idx_comments_shout_created")
+  @@index([user_id], name: "idx_comments_user")
+  @@map("comments")
+}
+
+model CommentLike {
+  comment_id String
+  user_id    String
+  created_at String @default(dbgenerated("(datetime('now'))"))
+
+  comment Comment @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([comment_id, user_id])
+  @@index([comment_id], name: "idx_comment_likes_comment")
+  @@index([user_id], name: "idx_comment_likes_user")
+  @@map("comment_likes")
+}
+
+model VerificationCode {
+  id         String  @id @default(uuid())
+  email      String
+  code       String
+  purpose    String
+  payload    String?
+  expires_at String
+  used       Int     @default(0)
+  attempts   Int     @default(0)
+  created_at String  @default(dbgenerated("(datetime('now'))"))
+
+  @@index([email, purpose, used], name: "idx_verification_codes_email_purpose")
+  @@map("verification_codes")
+}
