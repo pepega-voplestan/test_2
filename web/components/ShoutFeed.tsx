@@ -17,7 +17,7 @@ const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading
   if (isLoading) {
     return (
       <div className="flex justify-center py-8">
-        <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
       </div>
     );
   }
@@ -30,16 +30,16 @@ const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading
 
   if (!announcement) {
     return (
-      <div className="text-center text-zinc-500 text-sm py-8">
+      <div className="text-center text-th-text-4 text-sm py-8">
         Нет объявлений
       </div>
     );
   }
 
   return (
-    <div className="bg-[#1e1e1e] rounded-lg p-6 border border-zinc-800">
-      <div className="text-white whitespace-pre-wrap break-words">{announcement.content}</div>
-      <div className="mt-4 text-xs text-zinc-500">
+    <div className="bg-th-card rounded-lg p-6 border border-th-border-2">
+      <div className="text-th-text whitespace-pre-wrap break-words">{announcement.content}</div>
+      <div className="mt-4 text-xs text-th-text-4">
         {new Date(announcement.createdAt).toLocaleString('ru-RU', {
           day: 'numeric',
           month: 'long',
@@ -181,14 +181,14 @@ const ShoutFeed: React.FC = () => {
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-white">Вопли</h1>
+        <h1 className="text-3xl font-bold text-th-text">Вопли</h1>
 
         <div className="flex items-center gap-4">
-          <div className="flex bg-[#1e1e1e] rounded p-1">
+          <div className="flex bg-th-card rounded p-1">
             <button
               onClick={() => handleTabChange('new')}
               className={`px-3 py-1 text-sm font-medium rounded shadow-sm transition-all ${
-                activeTab === 'new' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
+                activeTab === 'new' ? 'bg-th-elevated text-th-text' : 'text-th-text-3 hover:text-th-text'
               }`}
             >
               Все
@@ -196,7 +196,7 @@ const ShoutFeed: React.FC = () => {
             <button
               onClick={() => handleTabChange('popular')}
               className={`px-3 py-1 text-sm font-medium rounded shadow-sm transition-all ${
-                activeTab === 'popular' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
+                activeTab === 'popular' ? 'bg-th-elevated text-th-text' : 'text-th-text-3 hover:text-th-text'
               }`}
             >
               Популярные
@@ -204,7 +204,7 @@ const ShoutFeed: React.FC = () => {
             <button
               onClick={() => handleTabChange('announcements')}
               className={`px-3 py-1 text-sm font-medium rounded shadow-sm transition-all ${
-                activeTab === 'announcements' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
+                activeTab === 'announcements' ? 'bg-th-elevated text-th-text' : 'text-th-text-3 hover:text-th-text'
               }`}
             >
               Объявления
@@ -214,7 +214,7 @@ const ShoutFeed: React.FC = () => {
           {isFeedTab && (
             <button
               onClick={() => setShowMedia(!showMedia)}
-              className={`p-1 transition-colors ${showMedia ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}
+              className={`p-1 transition-colors ${showMedia ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
               title={showMedia ? 'Скрыть медиа' : 'Показать медиа'}
             >
               {'\uD83D\uDC41'}
@@ -235,7 +235,7 @@ const ShoutFeed: React.FC = () => {
 
           {isLoading && shouts.length === 0 && (
             <div className="flex justify-center py-8">
-              <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
             </div>
           )}
 
@@ -247,7 +247,7 @@ const ShoutFeed: React.FC = () => {
           )}
 
           {!isLoading && !error && shouts.length === 0 && (
-            <div className="text-center text-zinc-500 text-sm py-8">
+            <div className="text-center text-th-text-4 text-sm py-8">
               {activeTab === 'popular' ? 'Нет популярных воплей за последние 7 дней' : 'Пока нет воплей. Будь первым'}
             </div>
           )}
@@ -272,11 +272,11 @@ const ShoutFeed: React.FC = () => {
               <button
                 onClick={() => fetchShouts(false)}
                 disabled={isLoadingMore}
-                className="px-6 py-2 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 rounded-full border border-th-border text-th-text-3 hover:text-th-text hover:border-th-text-3 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoadingMore ? (
                   <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
+                    <span className="w-4 h-4 border-2 border-th-border border-t-th-text-2 rounded-full animate-spin" />
                     Загрузка...
                   </span>
                 ) : (
