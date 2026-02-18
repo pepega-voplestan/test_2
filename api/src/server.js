@@ -22,7 +22,7 @@ const SQLiteStore = SQLiteStoreFactory(session);
 app.use(
   session({
     store: new SQLiteStore({ db: "sessions.sqlite", dir: "/data" }),
-    secret: process.env.SESSION_SECRET || "dev-secret",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     proxy: true,
@@ -54,7 +54,7 @@ app.use("/api/v1/shouts", postLimiter);
 
 // In dev, serve media files directly (in prod, the media container does this)
 if (!isProd) {
-  const mediaPath = process.env.MEDIA_PATH || "/media";
+  const mediaPath = process.env.MEDIA_PATH;
   app.use("/media", express.static(mediaPath, {
     maxAge: "1d",
     setHeaders: (res) => {
@@ -65,4 +65,4 @@ if (!isProd) {
 
 mountRoutes(app);
 
-app.listen(3000, () => console.log(`[API] Server listening on :3000 (env=${process.env.NODE_ENV || "development"})`));
+app.listen(3000, () => console.log(`[API] Server listening on :3000 (env=${process.env.NODE_ENV})`));
