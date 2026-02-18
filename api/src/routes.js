@@ -133,6 +133,8 @@ function avatarFor(username) {
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
+const ANNOUNCEMENTS_SECRET = process.env.ANNOUNCEMENTS_SECRET || "";
+
 const SHOUT_MAX_LENGTH = 280;
 
 const registerSchema = z.object({
@@ -156,6 +158,11 @@ const commentSchema = z.object({
   content: z.string().max(SHOUT_MAX_LENGTH).default(""),
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
+});
+
+const announcementSchema = z.object({
+  content: z.string().min(1).max(5000),
+  secret_key: z.string().min(1),
 });
 
 const profileUpdateSchema = z.object({
@@ -958,6 +965,44 @@ export function mountRoutes(app) {
 
     console.log(`[Comments] Like toggle on ${commentId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
     res.json({ likes, isLiked: !exists });
+  }));
+
+  /* ---- Announcements ---- */
+
+  app.get("/api/v1/announcements", asyncHandler(async (_req, res) => {
+    const announcement = await prisma.announcement.findFirst({
+      where: { is_deleted: 0 },
+      orderBy: { created_at: "desc" },
+    });
+
+    res.json({ announcement: announcement ? { id: announcement.id, content: announcement.content, createdAt: utcTimestamp(announcement.created_at) } : null });
+  }));
+
+  app.post("/api/v1/announcements", asyncHandler(async (req, res) => {
+    const parsed = announcementSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Некорректные данные" });
+    }
+
+    const { content, secret_key } = parsed.data;
+
+    if (!ANNOUNCEMENTS_SECRET || secret_key !== ANNOUNCEMENTS_SECRET) {
+      return res.status(403).json({ error: "Неверный ключ" });
+    }
+
+    // Soft-delete all currently active announcements
+    await prisma.announcement.updateMany({
+      where: { is_deleted: 0 },
+      data: { is_deleted: 1 },
+    });
+
+    const id = crypto.randomUUID();
+    await prisma.announcement.create({
+      data: { id, content },
+    });
+
+    console.log(`[Announcements] New announcement ${id}`);
+    res.json({ ok: true, id });
   }));
 
   /* ---- Profile endpoints ---- */

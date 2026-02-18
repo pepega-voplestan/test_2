@@ -5,8 +5,55 @@ import { Shout, Comment } from '../types';
 
 const PAGE_SIZE = 10;
 
+type FeedTab = 'new' | 'popular' | 'announcements';
+
+interface Announcement {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
+const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading: boolean; error: string | null }> = ({ announcement, isLoading, error }) => {
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center text-red-400 text-sm py-8">{error}</div>
+    );
+  }
+
+  if (!announcement) {
+    return (
+      <div className="text-center text-zinc-500 text-sm py-8">
+        Нет объявлений
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[#1e1e1e] rounded-lg p-6 border border-zinc-800">
+      <div className="text-white whitespace-pre-wrap break-words">{announcement.content}</div>
+      <div className="mt-4 text-xs text-zinc-500">
+        {new Date(announcement.createdAt).toLocaleString('ru-RU', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </div>
+    </div>
+  );
+};
+
 const ShoutFeed: React.FC = () => {
-  const [sortBy, setSortBy] = useState<'new' | 'popular'>('new');
+  const [activeTab, setActiveTab] = useState<FeedTab>('new');
   const [showMedia, setShowMedia] = useState(true);
 
   const [shouts, setShouts] = useState<Shout[]>([]);
@@ -15,18 +62,23 @@ const ShoutFeed: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
+  // Announcements state
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [announcementLoading, setAnnouncementLoading] = useState(false);
+  const [announcementError, setAnnouncementError] = useState<string | null>(null);
+
   // Accordion: only one thread open at a time
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
 
   const offsetRef = useRef(0);
-  const sortByRef = useRef(sortBy);
+  const activeTabRef = useRef(activeTab);
 
-  // Keep sortByRef in sync
-  sortByRef.current = sortBy;
+  // Keep ref in sync
+  activeTabRef.current = activeTab;
 
   const fetchShouts = useCallback(async (reset = false) => {
     const currentOffset = reset ? 0 : offsetRef.current;
-    const currentSort = sortByRef.current;
+    const currentTab = activeTabRef.current;
 
     if (reset) {
       setIsLoading(true);
@@ -40,7 +92,7 @@ const ShoutFeed: React.FC = () => {
         limit: String(PAGE_SIZE),
         offset: String(currentOffset),
       });
-      if (currentSort === 'popular') {
+      if (currentTab === 'popular') {
         params.set('sortBy', 'popular');
       }
 
@@ -60,19 +112,39 @@ const ShoutFeed: React.FC = () => {
     }
   }, []);
 
+  const fetchAnnouncement = useCallback(async () => {
+    setAnnouncementLoading(true);
+    setAnnouncementError(null);
+    try {
+      const res = await fetch('/api/v1/announcements', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setAnnouncement(data.announcement || null);
+    } catch (err) {
+      console.error('[ShoutFeed] Announcement fetch error:', err);
+      setAnnouncementError('Не удалось загрузить объявления.');
+    } finally {
+      setAnnouncementLoading(false);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     fetchShouts(true);
   }, [fetchShouts]);
 
-  // Re-fetch when sortBy changes
-  const handleSortChange = (newSort: 'new' | 'popular') => {
-    if (newSort === sortBy) return;
-    setSortBy(newSort);
-    sortByRef.current = newSort;
+  const handleTabChange = (newTab: FeedTab) => {
+    if (newTab === activeTab) return;
+    setActiveTab(newTab);
+    activeTabRef.current = newTab;
     setOpenThreadId(null);
-    offsetRef.current = 0;
-    fetchShouts(true);
+
+    if (newTab === 'announcements') {
+      fetchAnnouncement();
+    } else {
+      offsetRef.current = 0;
+      fetchShouts(true);
+    }
   };
 
   const addCommentToShout = useCallback((shoutId: string, comment: Comment) => {
@@ -104,6 +176,8 @@ const ShoutFeed: React.FC = () => {
     setOpenThreadId(prev => prev === shoutId ? null : shoutId);
   }, []);
 
+  const isFeedTab = activeTab === 'new' || activeTab === 'popular';
+
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-6">
@@ -112,86 +186,106 @@ const ShoutFeed: React.FC = () => {
         <div className="flex items-center gap-4">
           <div className="flex bg-[#1e1e1e] rounded p-1">
             <button
-              onClick={() => handleSortChange('new')}
+              onClick={() => handleTabChange('new')}
               className={`px-3 py-1 text-sm font-medium rounded shadow-sm transition-all ${
-                sortBy === 'new' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
+                activeTab === 'new' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
               }`}
             >
               Все
             </button>
             <button
-              onClick={() => handleSortChange('popular')}
+              onClick={() => handleTabChange('popular')}
               className={`px-3 py-1 text-sm font-medium rounded shadow-sm transition-all ${
-                sortBy === 'popular' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
+                activeTab === 'popular' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
               }`}
             >
               Популярные
             </button>
+            <button
+              onClick={() => handleTabChange('announcements')}
+              className={`px-3 py-1 text-sm font-medium rounded shadow-sm transition-all ${
+                activeTab === 'announcements' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Объявления
+            </button>
           </div>
 
-          <button
-            onClick={() => setShowMedia(!showMedia)}
-            className={`p-1 transition-colors ${showMedia ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}
-            title={showMedia ? 'Скрыть медиа' : 'Показать медиа'}
-          >
-            {'\uD83D\uDC41'}
-          </button>
+          {isFeedTab && (
+            <button
+              onClick={() => setShowMedia(!showMedia)}
+              className={`p-1 transition-colors ${showMedia ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}
+              title={showMedia ? 'Скрыть медиа' : 'Показать медиа'}
+            >
+              {'\uD83D\uDC41'}
+            </button>
+          )}
         </div>
       </div>
 
-      <ShoutInput onShoutCreated={() => { sortByRef.current = sortBy; fetchShouts(true); }} />
+      {activeTab === 'announcements' ? (
+        <AnnouncementBlock
+          announcement={announcement}
+          isLoading={announcementLoading}
+          error={announcementError}
+        />
+      ) : (
+        <>
+          <ShoutInput onShoutCreated={() => { activeTabRef.current = activeTab; fetchShouts(true); }} />
 
-      {isLoading && shouts.length === 0 && (
-        <div className="flex justify-center py-8">
-          <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
-        </div>
-      )}
+          {isLoading && shouts.length === 0 && (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+            </div>
+          )}
 
-      {!isLoading && error && (
-        <div className="text-center text-red-400 text-sm mb-4">
-          {error}
-          <button onClick={() => fetchShouts(shouts.length === 0)} className="ml-2 underline hover:text-red-300">Повторить</button>
-        </div>
-      )}
+          {!isLoading && error && (
+            <div className="text-center text-red-400 text-sm mb-4">
+              {error}
+              <button onClick={() => fetchShouts(shouts.length === 0)} className="ml-2 underline hover:text-red-300">Повторить</button>
+            </div>
+          )}
 
-      {!isLoading && !error && shouts.length === 0 && (
-        <div className="text-center text-zinc-500 text-sm py-8">
-          {sortBy === 'popular' ? 'Нет популярных воплей за последние 7 дней' : 'Пока нет воплей. Будь первым'}
-        </div>
-      )}
+          {!isLoading && !error && shouts.length === 0 && (
+            <div className="text-center text-zinc-500 text-sm py-8">
+              {activeTab === 'popular' ? 'Нет популярных воплей за последние 7 дней' : 'Пока нет воплей. Будь первым'}
+            </div>
+          )}
 
-      <div className="flex flex-col gap-6">
-        {shouts.map((shout) => (
-          <ShoutCard
-            key={shout.id}
-            shout={shout}
-            showMedia={showMedia}
-            onCommentAdded={addCommentToShout}
-            onDelete={removeShout}
-            onCommentDeleted={removeComment}
-            isThreadOpen={openThreadId === shout.id}
-            onThreadToggle={handleThreadToggle}
-          />
-        ))}
-      </div>
+          <div className="flex flex-col gap-6">
+            {shouts.map((shout) => (
+              <ShoutCard
+                key={shout.id}
+                shout={shout}
+                showMedia={showMedia}
+                onCommentAdded={addCommentToShout}
+                onDelete={removeShout}
+                onCommentDeleted={removeComment}
+                isThreadOpen={openThreadId === shout.id}
+                onThreadToggle={handleThreadToggle}
+              />
+            ))}
+          </div>
 
-      {hasMore && !isLoading && (
-        <div className="flex justify-center py-8">
-          <button
-            onClick={() => fetchShouts(false)}
-            disabled={isLoadingMore}
-            className="px-6 py-2 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoadingMore ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
-                Загрузка...
-              </span>
-            ) : (
-              'Загрузить ещё'
-            )}
-          </button>
-        </div>
+          {hasMore && !isLoading && (
+            <div className="flex justify-center py-8">
+              <button
+                onClick={() => fetchShouts(false)}
+                disabled={isLoadingMore}
+                className="px-6 py-2 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoadingMore ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
+                    Загрузка...
+                  </span>
+                ) : (
+                  'Загрузить ещё'
+                )}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
