@@ -135,7 +135,13 @@ const asyncHandler = (fn) => (req, res, next) =>
 
 const ANNOUNCEMENTS_SECRET = process.env.ANNOUNCEMENTS_SECRET || "";
 
-const SHOUT_MAX_LENGTH = 280;
+const SHOUT_MAX_LENGTH = 400;
+const NEWLINE_CHAR_COST = 40;
+
+function effectiveCharCount(text) {
+  const newlines = (text.match(/\n/g) || []).length;
+  return text.length + newlines * (NEWLINE_CHAR_COST - 1);
+}
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
@@ -149,13 +155,19 @@ const loginSchema = z.object({
 });
 
 const shoutSchema = z.object({
-  content: z.string().max(SHOUT_MAX_LENGTH).default(""),
+  content: z.string().default("").refine(
+    (val) => effectiveCharCount(val) <= SHOUT_MAX_LENGTH,
+    { message: `Текст слишком длинный (макс. ${SHOUT_MAX_LENGTH} символов)` }
+  ),
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
 });
 
 const commentSchema = z.object({
-  content: z.string().max(SHOUT_MAX_LENGTH).default(""),
+  content: z.string().default("").refine(
+    (val) => effectiveCharCount(val) <= SHOUT_MAX_LENGTH,
+    { message: `Текст слишком длинный (макс. ${SHOUT_MAX_LENGTH} символов)` }
+  ),
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
 });

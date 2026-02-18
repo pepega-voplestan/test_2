@@ -13,7 +13,8 @@ interface ShoutCardProps {
   onThreadToggle?: (shoutId: string) => void;
 }
 
-const SHOUT_MAX_LENGTH = 280;
+const SHOUT_MAX_LENGTH = 400;
+const NEWLINE_CHAR_COST = 40;
 const MEDIA_MAX_MB = 5;
 
 const YT_PATTERNS = [
@@ -133,11 +134,11 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           {showMedia && comment.media?.type === 'image' && (
-            <div className="mb-2 rounded-lg overflow-hidden">
+            <div className="mb-2 rounded-lg">
               <img
                 src={comment.media.url} alt="attachment" loading="lazy"
                 onClick={() => setLightboxOpen(true)}
-                className="w-full cursor-pointer max-h-[200px] object-cover hover:opacity-90 transition-opacity rounded-lg"
+                className="block cursor-pointer max-h-[200px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
               />
             </div>
           )}
@@ -225,6 +226,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [isReplyUploading, setIsReplyUploading] = useState(false);
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [likes, setLikes] = useState(shout.likes);
   const [isLiked, setIsLiked] = useState(
@@ -239,7 +241,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const repliesOpen = isThreadOpen ?? false;
   const hasComments = shout.comments && shout.comments.length > 0;
   const commentCount = shout.comments ? shout.comments.length : 0;
-  const replyCharCount = replyContent.length;
+  const replyNewlineCount = (replyContent.match(/\n/g) || []).length;
+  const replyCharCount = replyContent.length + replyNewlineCount * (NEWLINE_CHAR_COST - 1);
   const isReplyOverLimit = replyCharCount > SHOUT_MAX_LENGTH;
   const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
   const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
@@ -250,6 +253,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     setReplyDetectedYtId(detectYouTubeId(replyContent));
   }, [replyContent, replyMediaId]);
 
+  useEffect(() => {
+    const ta = replyTextareaRef.current;
+    if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+  }, [replyContent]);
+
   const toggleThread = () => {
     if (onThreadToggle) onThreadToggle(shout.id);
   };
@@ -259,10 +267,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     toggleThread();
   };
 
-  const handleReplyFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
+  const uploadReplyFile = async (file: File) => {
     if (file.size > MEDIA_MAX_MB * 1024 * 1024) { setReplyError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`); return; }
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP'); return; }
     setReplyError(null);
@@ -282,6 +287,27 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       setReplyError(err instanceof Error ? err.message : 'Ошибка загрузки');
       setReplyMediaPreview(null); URL.revokeObjectURL(localUrl);
     } finally { setIsReplyUploading(false); }
+  };
+
+  const handleReplyFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    await uploadReplyFile(file);
+  };
+
+  const handleReplyPaste = async (e: React.ClipboardEvent) => {
+    if (replyMediaId || isReplyUploading) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) await uploadReplyFile(file);
+        return;
+      }
+    }
   };
 
   const removeReplyMedia = () => {
@@ -389,11 +415,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           )}
 
           {showMedia && shout.media?.type === 'image' && (
-             <div className="mb-3 rounded-lg overflow-hidden">
+             <div className="mb-3 rounded-lg">
                  <img
                    src={shout.media.url} alt="attachment" loading="lazy"
                    onClick={() => setLightboxOpen(true)}
-                   className="w-full cursor-pointer max-h-[300px] object-cover hover:opacity-90 transition-opacity rounded-lg"
+                   className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
                  />
              </div>
           )}
@@ -488,10 +514,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       )}
                  </div>
                   <form className="w-full flex flex-col gap-2" onSubmit={handleReplySubmit}>
-                      <input type="text" placeholder="Напишите ответ..."
-                          className="bg-transparent border-none outline-none text-th-text text-sm w-full placeholder-th-text-4"
+                      <textarea ref={replyTextareaRef} placeholder="Напишите ответ..."
+                          className="bg-transparent border-none outline-none text-th-text text-sm w-full placeholder-th-text-4 resize-none overflow-hidden"
+                          rows={1}
                           value={replyContent} onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
-                          disabled={isSubmittingReply} maxLength={SHOUT_MAX_LENGTH + 50} />
+                          onPaste={handleReplyPaste}
+                          disabled={isSubmittingReply} />
                       <div className="flex items-center gap-2 justify-end">
                         <div className="flex items-center gap-1 shrink-0">
                           <EmojiPicker size="sm" onSelect={insertEmoji} />
