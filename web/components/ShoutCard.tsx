@@ -97,14 +97,14 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   };
 
   return (
-    <div className="flex flex-col mt-4 border-l-2 border-zinc-800 pl-4">
+    <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
       <div className="flex gap-3">
         <a href={`#/profile/${comment.user.id}`} className="shrink-0">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-zinc-800 hover:ring-2 hover:ring-zinc-600 transition-all">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
             {comment.user.avatar ? (
               <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs font-bold">
+              <div className="w-full h-full flex items-center justify-center text-th-text-4 text-xs font-bold">
                 {comment.user.name.charAt(0).toUpperCase()}
               </div>
             )}
@@ -113,12 +113,12 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
         <div className="grow min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
-            <a href={`#/profile/${comment.user.id}`} className={`font-bold text-xs hover:underline ${comment.user.isBanned ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+            <a href={`#/profile/${comment.user.id}`} className={`font-bold text-xs hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
               {comment.user.name}
             </a>
-            <span className="text-[10px] text-zinc-500">{formatTimestamp(comment.timestamp)}</span>
+            <span className="text-[10px] text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
             {isOwner && (
-              <button onClick={() => setConfirmDelete(true)} className="text-xs text-zinc-600 hover:text-red-400 transition-colors ml-auto" title="Удалить">
+              <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
@@ -127,7 +127,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           </div>
 
           {comment.content && (
-            <div className="text-zinc-300 text-sm leading-relaxed break-words whitespace-pre-wrap mb-2">
+            <div className="text-th-text-2 text-sm leading-relaxed break-words whitespace-pre-wrap mb-2">
               {renderContent(comment.content)}
             </div>
           )}
@@ -146,13 +146,13 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
               <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <img src={comment.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" />
-                <button onClick={() => setLightboxOpen(false)} className="absolute -top-3 -right-3 w-8 h-8 bg-zinc-800 border border-zinc-600 rounded-full flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-700 text-sm font-bold">X</button>
+                <button onClick={() => setLightboxOpen(false)} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
               </div>
             </div>
           )}
 
           {showMedia && comment.media?.type === 'youtube' && (
-            <div className="mb-2 rounded-lg overflow-hidden bg-[#2b2d31] border border-zinc-700/50">
+            <div className="mb-2 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
               <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
                 {ytLoaded ? (
                   <iframe className="w-full h-full" src={`${comment.media.embedUrl}?autoplay=1`} title={comment.media.title || "YouTube"}
@@ -171,15 +171,15 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               </div>
               {(comment.media.title || comment.media.channel) && (
                 <div className="px-3 py-2">
-                  {comment.media.title && <div className="text-xs text-zinc-200 font-medium leading-snug line-clamp-2">{comment.media.title}</div>}
-                  {comment.media.channel && <div className="text-[10px] text-zinc-400 mt-0.5">{comment.media.channel}</div>}
+                  {comment.media.title && <div className="text-xs text-th-text-2 font-medium leading-snug line-clamp-2">{comment.media.title}</div>}
+                  {comment.media.channel && <div className="text-[10px] text-th-text-3 mt-0.5">{comment.media.channel}</div>}
                 </div>
               )}
             </div>
           )}
 
-          <div className="flex items-center justify-end text-xs font-medium text-zinc-500 select-none mt-1">
-            <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-zinc-500 hover:text-zinc-300'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+          <div className="flex items-center justify-end text-xs font-medium text-th-text-4 select-none mt-1">
+            <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
               <span className="text-[10px] font-bold">{likes}</span>
               <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
             </button>
@@ -189,11 +189,11 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !isDeleting && setConfirmDelete(false)}>
-          <div className="bg-[#1e1e1e] border border-zinc-700 rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="text-white font-medium mb-2">Удалить комментарий?</div>
-            <div className="text-zinc-400 text-sm mb-4">Это действие нельзя отменить. Комментарий будет скрыт от всех пользователей.</div>
+          <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-th-text font-medium mb-2">Удалить комментарий?</div>
+            <div className="text-th-text-3 text-sm mb-4">Это действие нельзя отменить. Комментарий будет скрыт от всех пользователей.</div>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="px-4 py-1.5 text-sm text-zinc-400 hover:text-white transition-colors rounded">Отмена</button>
+              <button onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="px-4 py-1.5 text-sm text-th-text-3 hover:text-th-text transition-colors rounded">Отмена</button>
               <button onClick={handleDelete} disabled={isDeleting} className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded font-medium disabled:opacity-50 transition-colors">
                 {isDeleting ? 'Удаление...' : 'Удалить'}
               </button>
@@ -356,11 +356,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     <div className="flex flex-col mb-4">
       <div className="flex gap-4">
         <a href={`#/profile/${shout.user.id}`} className="shrink-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-800 hover:ring-2 hover:ring-zinc-600 transition-all">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
             {shout.user.avatar ? (
               <img src={shout.user.avatar} alt={shout.user.name} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm font-bold">
+              <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
                 {shout.user.name.charAt(0).toUpperCase()}
               </div>
             )}
@@ -369,12 +369,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
         <div className="grow min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
-            <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+            <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
               {shout.user.name}
             </a>
-            <span className="text-xs text-zinc-500">{formatTimestamp(shout.timestamp)}</span>
+            <span className="text-xs text-th-text-4">{formatTimestamp(shout.timestamp)}</span>
             {isOwner && (
-              <button onClick={() => setConfirmDelete(true)} className="text-xs text-zinc-600 hover:text-red-400 transition-colors ml-auto" title="Удалить">
+              <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
@@ -383,7 +383,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           </div>
 
           {shout.content && (
-            <div className="text-zinc-300 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+            <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
                {renderContent(shout.content)}
             </div>
           )}
@@ -402,13 +402,13 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
               <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <img src={shout.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" />
-                <button onClick={() => setLightboxOpen(false)} className="absolute -top-3 -right-3 w-8 h-8 bg-zinc-800 border border-zinc-600 rounded-full flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-700 text-sm font-bold">X</button>
+                <button onClick={() => setLightboxOpen(false)} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
               </div>
             </div>
           )}
 
           {showMedia && shout.media?.type === 'youtube' && (
-              <div className="mb-3 rounded-lg overflow-hidden bg-[#2b2d31] border border-zinc-700/50">
+              <div className="mb-3 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
                 <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
                     {ytLoaded ? (
                       <iframe className="w-full h-full" src={`${shout.media.embedUrl}?autoplay=1`} title={shout.media.title || "YouTube"}
@@ -427,18 +427,18 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 </div>
                 {(shout.media.title || shout.media.channel) && (
                   <div className="px-3 py-2">
-                    {shout.media.title && <div className="text-sm text-zinc-200 font-medium leading-snug line-clamp-2">{shout.media.title}</div>}
-                    {shout.media.channel && <div className="text-xs text-zinc-400 mt-0.5">{shout.media.channel}</div>}
+                    {shout.media.title && <div className="text-sm text-th-text-2 font-medium leading-snug line-clamp-2">{shout.media.title}</div>}
+                    {shout.media.channel && <div className="text-xs text-th-text-3 mt-0.5">{shout.media.channel}</div>}
                   </div>
                 )}
               </div>
           )}
 
-          <div className="flex items-center justify-between text-xs font-medium text-zinc-500 select-none mt-2">
+          <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-2">
             <div className="flex items-center gap-4">
-              <button onClick={handleReplyClick} className={`hover:text-zinc-300 transition-colors ${repliesOpen ? 'text-white' : ''}`}>Ответить</button>
+              <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>
               {hasComments ? (
-                <button onClick={toggleThread} className={`transition-colors ${repliesOpen ? 'text-white' : 'hover:text-zinc-300'}`}>
+                <button onClick={toggleThread} className={`transition-colors ${repliesOpen ? 'text-th-text' : 'hover:text-th-text-2'}`}>
                   {repliesOpen ? 'Закрыть' : `${commentCount} ${getReplyDeclension(commentCount)}`}
                 </button>
               ) : (
@@ -446,7 +446,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               )}
             </div>
             <div className="flex items-center">
-                <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-zinc-500 hover:text-zinc-300'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+                <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
                     <span className="text-xs font-bold">{likes}</span>
                     <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
                 </button>
@@ -457,11 +457,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !isDeleting && setConfirmDelete(false)}>
-          <div className="bg-[#1e1e1e] border border-zinc-700 rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="text-white font-medium mb-2">Удалить вопль?</div>
-            <div className="text-zinc-400 text-sm mb-4">Это действие нельзя отменить. Вопль будет скрыт от всех пользователей.</div>
+          <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-th-text font-medium mb-2">Удалить вопль?</div>
+            <div className="text-th-text-3 text-sm mb-4">Это действие нельзя отменить. Вопль будет скрыт от всех пользователей.</div>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="px-4 py-1.5 text-sm text-zinc-400 hover:text-white transition-colors rounded">Отмена</button>
+              <button onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="px-4 py-1.5 text-sm text-th-text-3 hover:text-th-text transition-colors rounded">Отмена</button>
               <button onClick={handleDelete} disabled={isDeleting} className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded font-medium disabled:opacity-50 transition-colors">
                 {isDeleting ? 'Удаление...' : 'Удалить'}
               </button>
@@ -477,19 +477,19 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
            ))}
            {user && (
              <div className="mt-4">
-               <div className="bg-[#1e1e1e] p-3 rounded flex gap-3">
-                 <div className="w-8 h-8 bg-zinc-700 rounded-full shrink-0 flex items-center justify-center overflow-hidden">
+               <div className="bg-th-card p-3 rounded flex gap-3">
+                 <div className="w-8 h-8 bg-th-elevated rounded-full shrink-0 flex items-center justify-center overflow-hidden">
                       {user.avatar ? (
                         <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                       ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-zinc-400" viewBox="0 0 20 20" fill="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-th-text-3" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                         </svg>
                       )}
                  </div>
                   <form className="w-full flex flex-col gap-2" onSubmit={handleReplySubmit}>
                       <input type="text" placeholder="Напишите ответ..."
-                          className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-zinc-600"
+                          className="bg-transparent border-none outline-none text-th-text text-sm w-full placeholder-th-text-4"
                           value={replyContent} onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
                           disabled={isSubmittingReply} maxLength={SHOUT_MAX_LENGTH + 50} />
                       <div className="flex items-center gap-2 justify-end">
@@ -497,7 +497,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                           <EmojiPicker size="sm" onSelect={insertEmoji} />
                           <button type="button" onClick={() => replyFileInputRef.current?.click()}
                             disabled={isReplyUploading || !!replyMediaId}
-                            className={`p-0.5 transition-colors ${replyMediaId ? 'text-[#0087ff]' : 'text-zinc-500 hover:text-zinc-300'} disabled:opacity-40`}
+                            className={`p-0.5 transition-colors ${replyMediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
                             title={replyMediaId ? 'Изображение прикреплено' : 'Прикрепить изображение'}>
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
@@ -506,7 +506,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                         </div>
                         <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleReplyFileSelect} />
                         {(replyContent.trim() || replyHasMedia) && (
-                          <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-zinc-500'}`}>
+                          <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
                             {replyCharCount}/{SHOUT_MAX_LENGTH}
                           </span>
                         )}
@@ -516,15 +516,15 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       </div>
                       {replyMediaPreview && (
                         <div className="relative inline-block mt-1">
-                          <img src={replyMediaPreview} alt="preview" className="max-h-24 rounded border border-zinc-700" />
-                          {isReplyUploading && <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center"><div className="w-4 h-4 border-2 border-zinc-500 border-t-white rounded-full animate-spin" /></div>}
-                          {!isReplyUploading && <button type="button" onClick={removeReplyMedia} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-zinc-800 border border-zinc-600 rounded-full flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-700 text-[10px]">X</button>}
+                          <img src={replyMediaPreview} alt="preview" className="max-h-24 rounded border border-th-border" />
+                          {isReplyUploading && <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center"><div className="w-4 h-4 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" /></div>}
+                          {!isReplyUploading && <button type="button" onClick={removeReplyMedia} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-[10px]">X</button>}
                         </div>
                       )}
                       {!replyMediaId && replyDetectedYtId && (
-                        <div className="flex items-center gap-2 mt-1 bg-zinc-900/50 rounded p-1.5 border border-zinc-800">
+                        <div className="flex items-center gap-2 mt-1 bg-th-inset/50 rounded p-1.5 border border-th-border-2">
                           <img src={`https://img.youtube.com/vi/${replyDetectedYtId}/default.jpg`} alt="YouTube" className="w-14 h-10 rounded object-cover shrink-0" />
-                          <div className="text-[10px] text-zinc-400">YouTube видео</div>
+                          <div className="text-[10px] text-th-text-3">YouTube видео</div>
                         </div>
                       )}
                   </form>
