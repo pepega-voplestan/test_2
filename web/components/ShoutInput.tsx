@@ -6,7 +6,8 @@ interface ShoutInputProps {
   onShoutCreated: () => void;
 }
 
-const SHOUT_MAX_LENGTH = 280;
+const SHOUT_MAX_LENGTH = 400;
+const NEWLINE_CHAR_COST = 40;
 const MEDIA_MAX_MB = 5;
 
 const YT_PATTERNS = [
@@ -43,7 +44,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   // YouTube auto-detection
   const [detectedYtId, setDetectedYtId] = useState<string | null>(null);
 
-  const charCount = content.length;
+  const newlineCount = (content.match(/\n/g) || []).length;
+  const charCount = content.length + newlineCount * (NEWLINE_CHAR_COST - 1);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = !!mediaId || !!detectedYtId;
   const canSubmit = (content.trim() || hasMedia) && !isOverLimit && !isSubmitting && !isUploading;
@@ -163,6 +165,20 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     }
   };
 
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    if (mediaId || isUploading) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) await uploadFile(file);
+        return;
+      }
+    }
+  };
+
   const removeMedia = () => {
     if (mediaPreview) URL.revokeObjectURL(mediaPreview);
     setMediaId(null);
@@ -259,8 +275,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             rows={1}
                             value={content}
                             onChange={(e) => { setContent(e.target.value); setError(null); }}
+                            onPaste={handlePaste}
                             disabled={isSubmitting}
-                            maxLength={SHOUT_MAX_LENGTH + 50}
                         />
                         <div className="flex items-center gap-2 justify-end">
                           <div className="flex items-center gap-1 shrink-0">
