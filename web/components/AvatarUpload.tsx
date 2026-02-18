@@ -89,7 +89,7 @@ export default function AvatarUpload({ currentAvatar, onFileSelected, onFileClea
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-zinc-400 mb-1">Аватар</div>
+      <div className="text-xs text-th-text-3 mb-1">Аватар</div>
 
       <div
         onDrop={onDrop}
@@ -101,23 +101,23 @@ export default function AvatarUpload({ currentAvatar, onFileSelected, onFileClea
             ? 'border-green-500/50 bg-green-500/5'
             : dragOver
             ? 'border-sky-500 bg-sky-500/5'
-            : 'border-zinc-700 hover:border-zinc-500',
+            : 'border-th-border hover:border-th-text-3',
           disabled ? 'opacity-50 pointer-events-none' : 'cursor-pointer',
         ].join(' ')}
         onClick={() => !disabled && fileRef.current?.click()}
       >
         {/* Current / preview avatar */}
-        <div className={`w-16 h-16 rounded-full overflow-hidden bg-zinc-800 shrink-0 ring-2 ${hasPending ? 'ring-green-500/50' : 'ring-zinc-700'}`}>
+        <div className={`w-16 h-16 rounded-full overflow-hidden bg-th-input shrink-0 ring-2 ${hasPending ? 'ring-green-500/50' : 'ring-th-border'}`}>
           {displaySrc ? (
             <img src={displaySrc} alt="Аватар" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xl font-bold">?</div>
+            <div className="w-full h-full flex items-center justify-center text-th-text-4 text-xl font-bold">?</div>
           )}
         </div>
 
         {/* Text */}
         <div className="flex-1 min-w-0">
-          <div className="text-sm text-zinc-300">
+          <div className="text-sm text-th-text-2">
             {hasPending
               ? 'Новый аватар выбран'
               : dragOver
@@ -128,7 +128,7 @@ export default function AvatarUpload({ currentAvatar, onFileSelected, onFileClea
             {hasPending ? (
               <span className="text-green-400">Будет применён после сохранения</span>
             ) : (
-              <span className="text-zinc-500">JPG, PNG, WebP · до 2 МБ · мин. 256×256</span>
+              <span className="text-th-text-4">JPG, PNG, WebP · до 2 МБ · мин. 256×256</span>
             )}
           </div>
         </div>
@@ -142,13 +142,13 @@ export default function AvatarUpload({ currentAvatar, onFileSelected, onFileClea
               onFileCleared();
               setError(null);
             }}
-            className="text-zinc-400 hover:text-white text-lg shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+            className="text-th-text-3 hover:text-th-text text-lg shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-th-ring/10 transition-colors"
             title="Отменить выбор"
           >
             ✕
           </button>
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-zinc-500 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-th-text-4 shrink-0">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
         )}

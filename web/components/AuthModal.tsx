@@ -144,13 +144,13 @@ export default function AuthModal() {
         onClick={onClose}
       />
 
-      <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-zinc-900 text-zinc-100 shadow-2xl ring-1 ring-white/10">
+      <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-th-card text-th-text shadow-2xl ring-1 ring-th-ring/10">
         <div className="flex items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2">
             {!isLoginOrRegisterTab && (
               <button
                 onClick={() => switchMode("login")}
-                className="rounded-lg px-2 py-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                className="rounded-lg px-2 py-1 text-th-text-3 hover:bg-th-ring/10 hover:text-th-text-2"
                 title="Назад"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
@@ -160,7 +160,7 @@ export default function AuthModal() {
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+            className="rounded-lg px-2 py-1 text-th-text-3 hover:bg-th-ring/10 hover:text-th-text-2"
           >
             ✕
           </button>
@@ -169,15 +169,15 @@ export default function AuthModal() {
         {/* Tabs — only for login/register base modes */}
         {isLoginOrRegisterTab && (
           <div className="px-5">
-            <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-1">
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-th-ring/5 p-1">
               <button
                 type="button"
                 onClick={() => switchMode("login")}
                 className={[
                   "rounded-lg px-3 py-2 text-sm transition",
                   mode === "login"
-                    ? "bg-white/10 text-white"
-                    : "text-zinc-400 hover:text-zinc-200",
+                    ? "bg-th-ring/10 text-th-text"
+                    : "text-th-text-3 hover:text-th-text-2",
                 ].join(" ")}
               >
                 Вход
@@ -188,8 +188,8 @@ export default function AuthModal() {
                 className={[
                   "rounded-lg px-3 py-2 text-sm transition",
                   mode === "register"
-                    ? "bg-white/10 text-white"
-                    : "text-zinc-400 hover:text-zinc-200",
+                    ? "bg-th-ring/10 text-th-text"
+                    : "text-th-text-3 hover:text-th-text-2",
                 ].join(" ")}
               >
                 Регистрация
@@ -200,13 +200,13 @@ export default function AuthModal() {
 
         <form onSubmit={onSubmit} className="px-5 pb-5 pt-4">
           {error && (
-            <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200 dark:text-red-200 text-red-700">
               {error}
             </div>
           )}
 
           {info && (
-            <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+            <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-200">
               {info}
             </div>
           )}
@@ -215,21 +215,21 @@ export default function AuthModal() {
           {mode === "login" && (
             <>
               <label className="block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Имя пользователя или email
                 </div>
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="username или email"
                   disabled={submitting}
                 />
               </label>
 
               <label className="mt-3 block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Пароль
                 </div>
                 <input
@@ -237,7 +237,7 @@ export default function AuthModal() {
                   onChange={(e) => setPassword(e.target.value)}
                   type="password"
                   autoComplete="current-password"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="••••••••"
                   disabled={submitting}
                 />
@@ -247,7 +247,7 @@ export default function AuthModal() {
                 <button
                   type="button"
                   onClick={() => switchMode("forgot")}
-                  className="text-xs text-zinc-400 hover:text-zinc-200 hover:underline"
+                  className="text-xs text-th-text-3 hover:text-th-text-2 hover:underline"
                 >
                   Забыли пароль?
                 </button>
@@ -259,21 +259,21 @@ export default function AuthModal() {
           {mode === "register" && (
             <>
               <label className="block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Имя пользователя
                 </div>
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="например: maksim"
                   disabled={submitting}
                 />
               </label>
 
               <label className="mt-3 block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Email
                 </div>
                 <input
@@ -281,14 +281,14 @@ export default function AuthModal() {
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
                   autoComplete="email"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="user@example.com"
                   disabled={submitting}
                 />
               </label>
 
               <label className="mt-3 block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Пароль
                 </div>
                 <input
@@ -296,7 +296,7 @@ export default function AuthModal() {
                   onChange={(e) => setPassword(e.target.value)}
                   type="password"
                   autoComplete="new-password"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="••••••••"
                   disabled={submitting}
                 />
@@ -307,11 +307,11 @@ export default function AuthModal() {
           {/* ---- REGISTER verify (step 2: enter code) ---- */}
           {mode === "register-verify" && (
             <>
-              <p className="mb-3 text-sm text-zinc-400">
-                Введите 6-значный код, отправленный на <span className="text-zinc-200">{email}</span>
+              <p className="mb-3 text-sm text-th-text-3">
+                Введите 6-значный код, отправленный на <span className="text-th-text-2">{email}</span>
               </p>
               <label className="block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Код подтверждения
                 </div>
                 <input
@@ -319,7 +319,7 @@ export default function AuthModal() {
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-center text-lg font-mono tracking-[0.3em] outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-center text-lg font-mono tracking-[0.3em] outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="000000"
                   maxLength={6}
                   disabled={submitting}
@@ -332,11 +332,11 @@ export default function AuthModal() {
           {/* ---- FORGOT PASSWORD (step 1: enter email) ---- */}
           {mode === "forgot" && (
             <>
-              <p className="mb-3 text-sm text-zinc-400">
+              <p className="mb-3 text-sm text-th-text-3">
                 Введите email, указанный при регистрации. Мы отправим код для сброса пароля.
               </p>
               <label className="block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Email
                 </div>
                 <input
@@ -344,7 +344,7 @@ export default function AuthModal() {
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
                   autoComplete="email"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="user@example.com"
                   disabled={submitting}
                   autoFocus
@@ -356,11 +356,11 @@ export default function AuthModal() {
           {/* ---- FORGOT PASSWORD (step 2: enter code) ---- */}
           {mode === "forgot-verify" && (
             <>
-              <p className="mb-3 text-sm text-zinc-400">
-                Введите 6-значный код, отправленный на <span className="text-zinc-200">{email}</span>
+              <p className="mb-3 text-sm text-th-text-3">
+                Введите 6-значный код, отправленный на <span className="text-th-text-2">{email}</span>
               </p>
               <label className="block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Код подтверждения
                 </div>
                 <input
@@ -368,7 +368,7 @@ export default function AuthModal() {
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-center text-lg font-mono tracking-[0.3em] outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-center text-lg font-mono tracking-[0.3em] outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="000000"
                   maxLength={6}
                   disabled={submitting}
@@ -381,11 +381,11 @@ export default function AuthModal() {
           {/* ---- FORGOT PASSWORD (step 3: new password) ---- */}
           {mode === "forgot-newpass" && (
             <>
-              <p className="mb-3 text-sm text-zinc-400">
+              <p className="mb-3 text-sm text-th-text-3">
                 Введите новый пароль для вашего аккаунта.
               </p>
               <label className="block">
-                <div className="mb-1 text-xs font-medium text-zinc-400">
+                <div className="mb-1 text-xs font-medium text-th-text-3">
                   Новый пароль
                 </div>
                 <input
@@ -393,7 +393,7 @@ export default function AuthModal() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   type="password"
                   autoComplete="new-password"
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="••••••••"
                   disabled={submitting}
                   autoFocus
@@ -406,7 +406,7 @@ export default function AuthModal() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-4 w-full rounded-xl bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-4 w-full rounded-xl bg-th-text px-3 py-2 text-sm font-semibold text-th-page hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 transition-opacity"
           >
             {submitting
               ? "Подожди..."
@@ -424,14 +424,14 @@ export default function AuthModal() {
           </button>
 
           {/* Footer links */}
-          <div className="mt-3 text-center text-xs text-zinc-500">
+          <div className="mt-3 text-center text-xs text-th-text-4">
             {mode === "login" && (
               <>
                 Нет аккаунта?{" "}
                 <button
                   type="button"
                   onClick={() => switchMode("register")}
-                  className="text-zinc-200 hover:underline"
+                  className="text-th-text-2 hover:underline"
                 >
                   Зарегистрироваться
                 </button>
@@ -443,7 +443,7 @@ export default function AuthModal() {
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
-                  className="text-zinc-200 hover:underline"
+                  className="text-th-text-2 hover:underline"
                 >
                   Войти
                 </button>
@@ -453,7 +453,7 @@ export default function AuthModal() {
               <button
                 type="button"
                 onClick={() => switchMode("register")}
-                className="text-zinc-200 hover:underline"
+                className="text-th-text-2 hover:underline"
               >
                 Изменить данные
               </button>
@@ -462,7 +462,7 @@ export default function AuthModal() {
               <button
                 type="button"
                 onClick={() => switchMode("login")}
-                className="text-zinc-200 hover:underline"
+                className="text-th-text-2 hover:underline"
               >
                 Вернуться ко входу
               </button>

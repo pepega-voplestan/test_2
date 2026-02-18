@@ -4,26 +4,84 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Вопли</title>
-    <!-- Keeping Tailwind CDN for simplicity as requested, though usually built in production -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      body {
-        background-color: rgb(19, 19, 20);
-        color: #ffffff;
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              th: {
+                page:       'rgb(var(--th-page) / <alpha-value>)',
+                card:       'rgb(var(--th-card) / <alpha-value>)',
+                elevated:   'rgb(var(--th-elevated) / <alpha-value>)',
+                inset:      'rgb(var(--th-inset) / <alpha-value>)',
+                input:      'rgb(var(--th-input) / <alpha-value>)',
+                text:       'rgb(var(--th-text) / <alpha-value>)',
+                'text-2':   'rgb(var(--th-text-2) / <alpha-value>)',
+                'text-3':   'rgb(var(--th-text-3) / <alpha-value>)',
+                'text-4':   'rgb(var(--th-text-4) / <alpha-value>)',
+                border:     'rgb(var(--th-border) / <alpha-value>)',
+                'border-2': 'rgb(var(--th-border-2) / <alpha-value>)',
+                ring:       'rgb(var(--th-ring) / <alpha-value>)',
+              }
+            }
+          }
+        }
       }
-      /* Custom scrollbar to match the dark theme */
+    </script>
+    <style>
+      /* ===== Light theme (default) ===== */
+      :root {
+        --th-page:     244 244 245;
+        --th-card:     255 255 255;
+        --th-elevated: 228 228 231;
+        --th-inset:    244 244 245;
+        --th-input:    228 228 231;
+        --th-text:      24  24  27;
+        --th-text-2:    63  63  70;
+        --th-text-3:   113 113 122;
+        --th-text-4:   161 161 170;
+        --th-border:   212 212 216;
+        --th-border-2: 228 228 231;
+        --th-ring:       0   0   0;
+      }
+
+      /* ===== Dark theme ===== */
+      .dark {
+        --th-page:      19  19  20;
+        --th-card:      30  30  30;
+        --th-elevated:  51  51  51;
+        --th-inset:     24  24  27;
+        --th-input:     39  39  42;
+        --th-text:     255 255 255;
+        --th-text-2:   228 228 231;
+        --th-text-3:   161 161 170;
+        --th-text-4:   113 113 122;
+        --th-border:    63  63  70;
+        --th-border-2:  39  39  42;
+        --th-ring:     255 255 255;
+      }
+
+      body {
+        background-color: rgb(var(--th-page));
+        color: rgb(var(--th-text));
+        transition: background-color 0.2s, color 0.2s;
+      }
+
+      /* Custom scrollbar */
       ::-webkit-scrollbar {
         width: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #131314;
+        background: rgb(var(--th-page));
       }
       ::-webkit-scrollbar-thumb {
-        background: #333;
+        background: rgb(var(--th-elevated));
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #555;
+        background: rgb(var(--th-text-4));
       }
     </style>
 </head>
