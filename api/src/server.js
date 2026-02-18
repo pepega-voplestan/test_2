@@ -3,7 +3,7 @@ import session from "express-session";
 import rateLimit from "express-rate-limit";
 import SQLiteStoreFactory from "connect-sqlite3";
 import { mountRoutes } from "./routes.js";
-import "./db.js";
+import { prisma } from "./db.js";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -22,6 +22,7 @@ const SQLiteStore = SQLiteStoreFactory(session);
 app.use(
   session({
     store: new SQLiteStore({ db: "sessions.sqlite", dir: "/data" }),
+    secret: process.env.SESSION_SECRET,
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -66,3 +67,12 @@ if (!isProd) {
 mountRoutes(app);
 
 app.listen(3000, () => console.log(`[API] Server listening on :3000 (env=${process.env.NODE_ENV})`));
+
+// Graceful shutdown — close Prisma connection
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, async () => {
+    console.log(`[API] ${signal} received, shutting down...`);
+    await prisma.$disconnect();
+    process.exit(0);
+  });
+}
