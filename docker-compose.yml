@@ -6,9 +6,12 @@ services:
       context: ./api
     environment:
       DATABASE_PATH: /data/app.db
-      SESSION_SECRET: "CHANGE_ME_LONG_RANDOM_SECRET"
+      SESSION_SECRET: "REDACTED_SESSION_SECRET"
       MEDIA_PATH: /media
       NODE_ENV: production
+      RESEND_API_KEY: "REDACTED_RESEND_KEY"
+      EMAIL_FROM: "Вопли <noreply@vopley.net>"
+
     volumes:
       - appdata:/data
       - media:/media
