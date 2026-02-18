@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 
-const dbPath = process.env.DATABASE_PATH || "/data/app.db";
+const dbPath = process.env.DATABASE_PATH;
 const dbDir = path.dirname(dbPath);
 
 fs.mkdirSync(dbDir, { recursive: true });
