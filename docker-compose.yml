@@ -11,6 +11,8 @@ services:
       NODE_ENV: ${NODE_ENV}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
+    networks:
+      - vopli
 
     volumes:
       - appdata:/data
@@ -25,6 +27,8 @@ services:
       - ./media-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     expose:
       - "80"
+    networks:
+      - vopli
 
   nginx:
     image: nginx:alpine
@@ -36,6 +40,8 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - webdist:/usr/share/nginx/html:ro
+    networks:
+      - vopli
 
   web-build:
     build:
@@ -43,6 +49,12 @@ services:
     volumes:
       - webdist:/out
     command: sh -c "rm -rf /out/* && cp -r /app/dist/* /out/"
+    networks:
+      - vopli
+
+networks:
+  vopli:
+    driver: bridge
 
 volumes:
   appdata:
