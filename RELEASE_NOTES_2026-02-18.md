@@ -22,3 +22,4 @@
 - Fixed long comment text wrapping/overflow
 - Fixed image display issues in the feed
 - Added clipboard paste support for image uploads in the composer
+- Added Escape key and outside-click to close image modals/overlays
