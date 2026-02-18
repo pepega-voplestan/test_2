@@ -2,17 +2,21 @@
   "name": "voplestan-api",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@prisma/client": "^6.4.0",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.5.0",
     "connect-sqlite3": "^0.9.0",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
     "express-session": "^1.17.3",
     "multer": "^2.0.2",
     "nodemailer": "^8.0.1",
+    "prisma": "^6.4.0",
     "sharp": "^0.34.5",
     "zod": "^3.23.8"
   }
