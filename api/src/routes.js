@@ -8,7 +8,7 @@ import { db } from "./db.js";
 import { hashPassword, verifyPassword, requireAuth } from "./auth.js";
 import { sendVerificationEmail } from "./email.js";
 
-const AVATAR_DIR = path.join(path.dirname(process.env.DATABASE_PATH || "/data/app.db"), "avatars");
+const AVATAR_DIR = path.join(path.dirname(process.env.DATABASE_PATH), "avatars");
 const AVATAR_SIZES = [64, 128, 256];
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const AVATAR_MIN_DIM = 256;
@@ -27,7 +27,7 @@ const upload = multer({
 
 /* ---------- Media upload constants ---------- */
 
-const MEDIA_DIR = process.env.MEDIA_PATH || "/media";
+const MEDIA_DIR = process.env.MEDIA_PATH;
 const MEDIA_TMP_DIR = path.join(MEDIA_DIR, ".tmp");
 const MEDIA_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const MEDIA_MAX_DIM = 4096;

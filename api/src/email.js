@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const EMAIL_FROM = process.env.EMAIL_FROM || "Вопли <onboarding@resend.dev>";
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_FROM = process.env.EMAIL_FROM;
 
 let transporter = null;
 
