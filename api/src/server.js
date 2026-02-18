@@ -56,7 +56,6 @@ app.use("/api/v1/shouts", postLimiter);
 // In dev, serve media files directly (in prod, the media container does this)
 if (!isProd) {
   const mediaPath = process.env.MEDIA_PATH;
-  const mediaPath = process.env.MEDIA_PATH;
   app.use("/media", express.static(mediaPath, {
     maxAge: "1d",
     setHeaders: (res) => {
