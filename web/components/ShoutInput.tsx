@@ -223,7 +223,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`bg-[#1e1e1e] rounded-lg p-4 shadow-sm border transition-colors ${isDragging ? 'border-[#0087ff] bg-[#0087ff]/5' : 'border-zinc-800/50'}`}
+        className={`bg-th-card rounded-lg p-4 shadow-sm border transition-colors ${isDragging ? 'border-[#0087ff] bg-[#0087ff]/5' : 'border-th-border-2/50'}`}
       >
         {/* Drag overlay */}
         {isDragging && (
@@ -239,7 +239,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
           <>
             <div className="flex gap-4">
               <div className="shrink-0">
-                <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-th-input flex items-center justify-center overflow-hidden">
                   {user ? (
                       <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                   ) : (
@@ -255,7 +255,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                         <textarea
                             ref={textareaRef}
                             placeholder="Расскажите, что нового?"
-                            className="bg-transparent w-full border-none outline-none text-white placeholder-zinc-500 resize-none overflow-hidden"
+                            className="bg-transparent w-full border-none outline-none text-th-text placeholder-th-text-4 resize-none overflow-hidden"
                             rows={1}
                             value={content}
                             onChange={(e) => { setContent(e.target.value); setError(null); }}
@@ -269,7 +269,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                               type="button"
                               onClick={() => fileInputRef.current?.click()}
                               disabled={isUploading || !!mediaId}
-                              className={`p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-zinc-500 hover:text-zinc-300'} disabled:opacity-40`}
+                              className={`p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
                               title={mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение (или перетащите)'}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
@@ -286,7 +286,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                           />
                           {(content.trim() || hasMedia) && (
                               <>
-                                <span className={`text-xs whitespace-nowrap ${isOverLimit ? 'text-red-400 font-semibold' : charCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-zinc-500'}`}>
+                                <span className={`text-xs whitespace-nowrap ${isOverLimit ? 'text-red-400 font-semibold' : charCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
                                   {charCount}/{SHOUT_MAX_LENGTH}
                                 </span>
                                 <button
@@ -301,8 +301,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                         </div>
                     </div>
                 ) : (
-                    <div className="text-zinc-400 text-sm">
-                        Чтобы оставить Вопль, <button type="button" onClick={openModal} className="text-white hover:underline font-medium">Войдите</button> или <button type="button" onClick={openModal} className="text-white hover:underline font-medium">Зарегистрируйтесь</button>
+                    <div className="text-th-text-3 text-sm">
+                        Чтобы оставить Вопль, <button type="button" onClick={openModal} className="text-th-text hover:underline font-medium">Войдите</button> или <button type="button" onClick={openModal} className="text-th-text hover:underline font-medium">Зарегистрируйтесь</button>
                     </div>
                 )}
               </div>
@@ -311,17 +311,17 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
             {/* Image preview */}
             {mediaPreview && (
               <div className="mt-3 ml-14 relative inline-block">
-                <img src={mediaPreview} alt="preview" className="max-h-40 rounded-lg border border-zinc-700" />
+                <img src={mediaPreview} alt="preview" className="max-h-40 rounded-lg border border-th-border" />
                 {isUploading && (
                   <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" />
                   </div>
                 )}
                 {!isUploading && (
                   <button
                     type="button"
                     onClick={removeMedia}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-zinc-800 border border-zinc-600 rounded-full flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-700 text-xs"
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-xs"
                   >
                     X
                   </button>
@@ -331,13 +331,13 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
             {/* YouTube auto-detect preview */}
             {!mediaId && detectedYtId && (
-              <div className="mt-3 ml-14 flex items-center gap-3 bg-zinc-900/50 rounded-lg p-2 border border-zinc-800">
+              <div className="mt-3 ml-14 flex items-center gap-3 bg-th-inset/50 rounded-lg p-2 border border-th-border-2">
                 <img
                   src={`https://img.youtube.com/vi/${detectedYtId}/default.jpg`}
                   alt="YouTube"
                   className="w-20 h-15 rounded object-cover shrink-0"
                 />
-                <div className="text-xs text-zinc-400">
+                <div className="text-xs text-th-text-3">
                   YouTube видео будет встроено в вопль
                 </div>
               </div>
