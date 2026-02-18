@@ -35,7 +35,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`${btnPad} text-zinc-500 hover:text-zinc-300 transition-colors shrink-0`}
+        className={`${btnPad} text-th-text-4 hover:text-th-text-2 transition-colors shrink-0`}
         title="Эмодзи"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className={btnSize} viewBox="0 0 20 20" fill="currentColor">
@@ -44,17 +44,17 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-1 w-64 bg-[#1e1e1e] border border-zinc-700 rounded-lg shadow-xl z-50 p-2 max-h-52 overflow-y-auto">
+        <div className="absolute bottom-full right-0 mb-1 w-64 bg-th-card border border-th-border rounded-lg shadow-xl z-50 p-2 max-h-52 overflow-y-auto">
           {EMOJI_GROUPS.map((group) => (
             <div key={group.label} className="mb-2 last:mb-0">
-              <div className="text-[10px] text-zinc-500 font-medium px-1 mb-1">{group.label}</div>
+              <div className="text-[10px] text-th-text-4 font-medium px-1 mb-1">{group.label}</div>
               <div className="flex flex-wrap gap-0.5">
                 {group.emojis.map((emoji, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => { onSelect(emoji); setIsOpen(false); }}
-                    className="w-7 h-7 flex items-center justify-center text-base hover:bg-zinc-700 rounded transition-colors"
+                    className="w-7 h-7 flex items-center justify-center text-base hover:bg-th-elevated rounded transition-colors"
                   >
                     {emoji}
                   </button>

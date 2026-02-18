@@ -243,7 +243,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   if (isLoadingProfile) {
     return (
       <div className="flex justify-center py-16">
-        <div className="w-8 h-8 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
       </div>
     );
   }
@@ -252,7 +252,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   if (profileError || !profile) {
     return (
       <div className="text-center py-16">
-        <div className="text-zinc-500 text-lg mb-2">Пользователь не найден</div>
+        <div className="text-th-text-4 text-lg mb-2">Пользователь не найден</div>
         <a href="#/" className="text-sky-500 hover:underline text-sm">Вернуться к ленте</a>
       </div>
     );
@@ -261,7 +261,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   return (
     <div className="w-full">
       {/* Back button */}
-      <a href="#/" className="inline-flex items-center gap-1 text-zinc-500 hover:text-white text-sm mb-6 transition-colors">
+      <a href="#/" className="inline-flex items-center gap-1 text-th-text-4 hover:text-th-text text-sm mb-6 transition-colors">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
@@ -269,14 +269,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       </a>
 
       {/* Profile Header */}
-      <div className="bg-[#1e1e1e] rounded-lg p-6 border border-zinc-800/50 mb-6">
+      <div className="bg-th-card rounded-lg p-6 border border-th-border-2/50 mb-6">
         <div className="flex items-start gap-5">
           {/* Avatar */}
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-th-input shrink-0">
             {profile.avatar ? (
               <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-zinc-400 text-2xl font-bold">
+              <div className="w-full h-full flex items-center justify-center text-th-text-3 text-2xl font-bold">
                 {profile.name.charAt(0).toUpperCase()}
               </div>
             )}
@@ -285,7 +285,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           {/* Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
-              <h1 className={`text-xl font-bold ${profile.isBanned ? 'text-zinc-500 line-through' : 'text-white'}`}>
+              <h1 className={`text-xl font-bold ${profile.isBanned ? 'text-th-text-4 line-through' : 'text-th-text'}`}>
                 {profile.name}
               </h1>
               {profile.isBanned && (
@@ -293,7 +293,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               )}
             </div>
 
-            <div className="text-zinc-500 text-sm mb-3">
+            <div className="text-th-text-4 text-sm mb-3">
               {profile.shoutCount} {getDeclension(profile.shoutCount ?? 0, 'вопль', 'вопля', 'воплей')}
               <span className="mx-2">·</span>
               На сайте с {formatDate(profile.createdAt)}
@@ -303,7 +303,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             {profile.isOwner && !isEditing && (
               <button
                 onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); }}
-                className="text-sm text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 px-4 py-1.5 rounded-lg transition-colors"
+                className="text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 px-4 py-1.5 rounded-lg transition-colors"
               >
                 Редактировать профиль
               </button>
@@ -320,7 +320,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
         {/* Edit Form */}
         {profile.isOwner && isEditing && (
-          <form onSubmit={handleSave} className="mt-6 border-t border-zinc-800 pt-5 space-y-4">
+          <form onSubmit={handleSave} className="mt-6 border-t border-th-border-2 pt-5 space-y-4">
             {editError && (
               <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 {editError}
@@ -328,23 +328,23 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             )}
 
             <label className="block">
-              <div className="text-xs text-zinc-400 mb-1">Имя пользователя</div>
+              <div className="text-xs text-th-text-3 mb-1">Имя пользователя</div>
               <input
                 value={editForm.username}
                 onChange={(e) => setEditForm(f => ({ ...f, username: e.target.value }))}
-                className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-white/20"
+                className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
                 disabled={isSaving}
               />
             </label>
 
             <label className="block">
-              <div className="text-xs text-zinc-400 mb-1">Email</div>
+              <div className="text-xs text-th-text-3 mb-1">Email</div>
               <input
                 type="email"
                 value={editForm.email}
                 onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="user@example.com"
-                className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-2 focus:ring-white/20"
+                className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                 disabled={isSaving}
               />
             </label>
@@ -363,27 +363,27 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               }}
             />
 
-            <div className="border-t border-zinc-800 pt-4">
-              <div className="text-xs text-zinc-400 mb-3">Смена пароля (оставьте пустым, чтобы не менять)</div>
+            <div className="border-t border-th-border-2 pt-4">
+              <div className="text-xs text-th-text-3 mb-3">Смена пароля (оставьте пустым, чтобы не менять)</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <div className="text-xs text-zinc-500 mb-1">Текущий пароль</div>
+                  <div className="text-xs text-th-text-4 mb-1">Текущий пароль</div>
                   <input
                     type="password"
                     value={editForm.currentPassword}
                     onChange={(e) => setEditForm(f => ({ ...f, currentPassword: e.target.value }))}
-                    className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-white/20"
+                    className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
                     disabled={isSaving}
                     autoComplete="current-password"
                   />
                 </label>
                 <label className="block">
-                  <div className="text-xs text-zinc-500 mb-1">Новый пароль</div>
+                  <div className="text-xs text-th-text-4 mb-1">Новый пароль</div>
                   <input
                     type="password"
                     value={editForm.newPassword}
                     onChange={(e) => setEditForm(f => ({ ...f, newPassword: e.target.value }))}
-                    className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-white/20"
+                    className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
                     disabled={isSaving}
                     autoComplete="new-password"
                   />
@@ -395,7 +395,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="px-5 py-2 bg-white text-zinc-900 text-sm font-semibold rounded-lg hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2 bg-th-text text-th-page text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
               >
                 {isSaving ? 'Сохранение...' : 'Сохранить'}
               </button>
@@ -415,7 +415,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   });
                 }}
                 disabled={isSaving}
-                className="px-5 py-2 text-sm text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 rounded-lg transition-colors"
+                className="px-5 py-2 text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 rounded-lg transition-colors"
               >
                 Отмена
               </button>
@@ -425,20 +425,20 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       </div>
 
       {/* Section title */}
-      <h2 className="text-lg font-bold text-white mb-4">
+      <h2 className="text-lg font-bold text-th-text mb-4">
         {profile.isOwner ? 'Мои вопли' : `Вопли ${profile.name}`}
       </h2>
 
       {/* Shouts loading */}
       {isLoadingShouts && shouts.length === 0 && (
         <div className="flex justify-center py-8">
-          <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
         </div>
       )}
 
       {/* Empty state */}
       {!isLoadingShouts && shouts.length === 0 && (
-        <div className="text-center text-zinc-500 text-sm py-8">
+        <div className="text-center text-th-text-4 text-sm py-8">
           {profile.isOwner ? 'Вы ещё ничего не написали' : 'Пользователь ещё ничего не написал'}
         </div>
       )}
@@ -465,11 +465,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           <button
             onClick={() => fetchShouts(false)}
             disabled={isLoadingMore}
-            className="px-6 py-2 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-2 rounded-full border border-th-border text-th-text-3 hover:text-th-text hover:border-th-text-3 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoadingMore ? (
               <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-th-border border-t-th-text-2 rounded-full animate-spin" />
                 Загрузка...
               </span>
             ) : (
