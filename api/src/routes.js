@@ -16,13 +16,14 @@ const AVATAR_DIR = path.join(
 const AVATAR_SIZES = [64, 128, 256];
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const AVATAR_MIN_DIM = 256;
-const IMAGE_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const AVATAR_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MEDIA_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: AVATAR_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (!IMAGE_ALLOWED_MIME.has(file.mimetype)) {
+    if (!AVATAR_ALLOWED_MIME.has(file.mimetype)) {
       return cb(new Error("Допустимые форматы: JPG, PNG, WebP"));
     }
     cb(null, true);
@@ -42,8 +43,8 @@ const mediaUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MEDIA_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (!IMAGE_ALLOWED_MIME.has(file.mimetype)) {
-      return cb(new Error("Допустимые форматы: JPG, PNG, WebP"));
+    if (!MEDIA_ALLOWED_MIME.has(file.mimetype)) {
+      return cb(new Error("Допустимые форматы: JPG, PNG, WebP, GIF"));
     }
     cb(null, true);
   },
@@ -98,6 +99,7 @@ function buildMedia(mediaObj) {
       full: `/media/${mediaObj.media_url}/1600.webp`,
       width: meta.w || 0,
       height: meta.h || 0,
+      ...(meta.animated && { animated: true, gif: `/media/${mediaObj.media_url}/original.gif` }),
     };
   }
   if (mediaObj.media_type === "youtube") {
@@ -1238,13 +1240,11 @@ export function mountRoutes(app) {
         const meta = await image.metadata();
 
         // Validate via sharp metadata (magic bytes check — sharp rejects invalid images)
-        if (!IMAGE_ALLOWED_MIME.has(`image/${meta.format === "jpeg" ? "jpeg" : meta.format}`)) {
+        if (!MEDIA_ALLOWED_MIME.has(`image/${meta.format === "jpeg" ? "jpeg" : meta.format}`)) {
           return res.status(400).json({ error: "Недопустимый формат изображения" });
         }
 
-        if (meta.pages && meta.pages > 1) {
-          return res.status(400).json({ error: "Анимированные изображения не поддерживаются" });
-        }
+        const isAnimatedGif = meta.format === "gif" && meta.pages && meta.pages > 1;
 
         if (!meta.width || !meta.height) {
           return res.status(400).json({ error: "Не удалось определить размер изображения" });
@@ -1262,19 +1262,33 @@ export function mountRoutes(app) {
         const tmpDir = path.join(MEDIA_TMP_DIR, mediaId);
         fs.mkdirSync(tmpDir, { recursive: true });
 
-        // Strip EXIF by re-encoding, generate width-capped variants
-        const rotated = image.rotate(); // auto-rotate by EXIF, then EXIF is stripped
         const urls = {};
 
-        for (const w of MEDIA_VARIANTS) {
-          const resized = rotated.clone().resize(w, null, { withoutEnlargement: true });
-          const outPath = path.join(tmpDir, `${w}.webp`);
-          await resized.webp({ quality: 82 }).toFile(outPath);
-          urls[w] = `/media/${mediaId}/${w}.webp`;
+        if (isAnimatedGif) {
+          // Store original GIF for animated playback
+          fs.writeFileSync(path.join(tmpDir, "original.gif"), req.file.buffer);
+          urls.gif = `/media/${mediaId}/original.gif`;
+
+          // Generate static WebP thumbnails from the first frame
+          const firstFrame = sharp(req.file.buffer, { pages: 1 });
+          for (const w of MEDIA_VARIANTS) {
+            const outPath = path.join(tmpDir, `${w}.webp`);
+            await firstFrame.clone().resize(w, null, { withoutEnlargement: true }).webp({ quality: 82 }).toFile(outPath);
+            urls[w] = `/media/${mediaId}/${w}.webp`;
+          }
+        } else {
+          // Strip EXIF by re-encoding, generate width-capped variants
+          const rotated = image.rotate(); // auto-rotate by EXIF, then EXIF is stripped
+          for (const w of MEDIA_VARIANTS) {
+            const resized = rotated.clone().resize(w, null, { withoutEnlargement: true });
+            const outPath = path.join(tmpDir, `${w}.webp`);
+            await resized.webp({ quality: 82 }).toFile(outPath);
+            urls[w] = `/media/${mediaId}/${w}.webp`;
+          }
         }
 
         // Write meta.json as on-disk backup
-        const metaJson = JSON.stringify({ w: meta.width, h: meta.height, size: req.file.size, mime: req.file.mimetype });
+        const metaJson = JSON.stringify({ w: meta.width, h: meta.height, size: req.file.size, mime: req.file.mimetype, animated: isAnimatedGif });
         fs.writeFileSync(path.join(tmpDir, "meta.json"), metaJson);
 
         // Atomic move: tmp → permanent
@@ -1292,7 +1306,7 @@ export function mountRoutes(app) {
           },
         });
 
-        console.log(`[Media] Upload complete: ${mediaId}, ${MEDIA_VARIANTS.join("/")}w`);
+        console.log(`[Media] Upload complete: ${mediaId}, ${MEDIA_VARIANTS.join("/")}w${isAnimatedGif ? " (animated GIF)" : ""}`);
         res.json({
           ok: true,
           mediaId,
@@ -1300,6 +1314,7 @@ export function mountRoutes(app) {
             thumb: urls[320],
             medium: urls[960],
             full: urls[1600],
+            ...(isAnimatedGif && { gif: urls.gif }),
           },
         });
       } catch (err) {
