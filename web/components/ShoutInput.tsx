@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
+import { Shout } from '../types';
 
 interface ShoutInputProps {
-  onShoutCreated: () => void;
+  onShoutCreated: (shout: Shout) => void;
 }
 
 const SHOUT_MAX_LENGTH = 400;
@@ -210,9 +211,9 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
         body: JSON.stringify(body)
       });
 
+      const result = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Ошибка ${res.status}`);
+        throw new Error(result.error || `Ошибка ${res.status}`);
       }
 
       console.log('[ShoutInput] Shout created successfully');
@@ -221,7 +222,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       setMediaPreview(null);
       setDetectedYtId(null);
       setError(null);
-      onShoutCreated();
+      onShoutCreated(result.shout as Shout);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Не удалось отправить вопль';
       console.error('[ShoutInput] Error:', msg);
