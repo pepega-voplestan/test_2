@@ -294,7 +294,7 @@ const ShoutFeed: React.FC = () => {
         />
       ) : (
         <>
-          <ShoutInput onShoutCreated={() => { activeTabRef.current = activeTab; fetchShouts(true); }} />
+          <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); offsetRef.current += 1; }} />
 
           {isLoading && shouts.length === 0 && (
             <div className="flex justify-center py-8">
