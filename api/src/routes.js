@@ -740,7 +740,7 @@ export function mountRoutes(app) {
     await prisma.comment.updateMany({ where: { shout_id: shoutId }, data: { is_deleted: 1 } });
 
     console.log(`[Shouts] Soft-deleted shout ${shoutId} (and comments) by ${userId}`);
-    broadcast("delete_shout", { shoutId });
+    broadcast("delete_shout", { shoutId, userId });
     res.json({ ok: true });
   }));
 
@@ -822,7 +822,7 @@ export function mountRoutes(app) {
     });
 
     console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
-    broadcast("new_shout", { shoutId: id });
+    broadcast("new_shout", { shoutId: id, userId: req.session.user.id });
     res.json({ ok: true, id });
   }));
 
@@ -914,7 +914,7 @@ export function mountRoutes(app) {
     });
 
     console.log(`[Comments] Comment ${id} on shout ${shoutId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
-    broadcast("new_comment", { shoutId, commentId: id });
+    broadcast("new_comment", { shoutId, commentId: id, userId: req.session.user.id });
     res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
   }));
 
@@ -933,7 +933,7 @@ export function mountRoutes(app) {
     await prisma.comment.update({ where: { id: commentId }, data: { is_deleted: 1 } });
 
     console.log(`[Comments] Soft-deleted comment ${commentId} by ${userId}`);
-    broadcast("delete_comment", { shoutId: comment.shout_id, commentId });
+    broadcast("delete_comment", { shoutId: comment.shout_id, commentId, userId });
     res.json({ ok: true });
   }));
 
@@ -959,7 +959,7 @@ export function mountRoutes(app) {
     const likes = await prisma.shoutLike.count({ where: { shout_id: shoutId } });
 
     console.log(`[Shouts] Like toggle on ${shoutId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
-    broadcast("shout_like", { shoutId, likes });
+    broadcast("shout_like", { shoutId, likes, userId });
     res.json({ likes, isLiked: !exists });
   }));
 
@@ -985,7 +985,7 @@ export function mountRoutes(app) {
     const likes = await prisma.commentLike.count({ where: { comment_id: commentId } });
 
     console.log(`[Comments] Like toggle on ${commentId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
-    broadcast("comment_like", { commentId, likes });
+    broadcast("comment_like", { commentId, likes, userId });
     res.json({ likes, isLiked: !exists });
   }));
 

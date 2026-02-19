@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ShoutInput from './ShoutInput';
 import ShoutCard from './ShoutCard';
 import { Shout, Comment } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { useSSE } from '../hooks/useSSE';
 
 const PAGE_SIZE = 10;
 
@@ -53,6 +55,7 @@ const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading
 };
 
 const ShoutFeed: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<FeedTab>('new');
   const [showMedia, setShowMedia] = useState(true);
 
@@ -72,6 +75,8 @@ const ShoutFeed: React.FC = () => {
 
   const offsetRef = useRef(0);
   const activeTabRef = useRef(activeTab);
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
 
   // Keep ref in sync
   activeTabRef.current = activeTab;
@@ -177,6 +182,66 @@ const ShoutFeed: React.FC = () => {
   }, []);
 
   const isFeedTab = activeTab === 'new' || activeTab === 'popular';
+
+  // --- SSE real-time updates ---
+  const sseListeners = useMemo(() => ({
+    new_shout: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      if (activeTabRef.current !== 'new') return;
+      // Re-fetch feed to get the full shout with user/media data
+      offsetRef.current = 0;
+      fetchShouts(true);
+    },
+    delete_shout: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      setShouts(prev => prev.filter(s => s.id !== data.shoutId));
+    },
+    new_comment: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      const shoutId = data.shoutId as string;
+      // Fetch the single shout's data to get the new comment
+      fetch(`/api/v1/shouts?limit=50&offset=0`, { credentials: 'include' })
+        .then(res => res.json())
+        .then(result => {
+          const updated = (result.shouts as Shout[]).find(s => s.id === shoutId);
+          if (updated) {
+            setShouts(prev => prev.map(s => s.id === shoutId ? { ...s, comments: updated.comments } : s));
+          }
+        })
+        .catch(() => {});
+    },
+    delete_comment: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      const shoutId = data.shoutId as string;
+      const commentId = data.commentId as string;
+      setShouts(prev => prev.map(s =>
+        s.id === shoutId
+          ? { ...s, comments: (s.comments || []).filter(c => c.id !== commentId) }
+          : s
+      ));
+    },
+    shout_like: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      const shoutId = data.shoutId as string;
+      const likes = data.likes as number;
+      setShouts(prev => prev.map(s =>
+        s.id === shoutId ? { ...s, likes } : s
+      ));
+    },
+    comment_like: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      const commentId = data.commentId as string;
+      const likes = data.likes as number;
+      setShouts(prev => prev.map(s => ({
+        ...s,
+        comments: (s.comments || []).map(c =>
+          c.id === commentId ? { ...c, likes } : c
+        ),
+      })));
+    },
+  }), [fetchShouts]);
+
+  useSSE(sseListeners);
 
   return (
     <div className="w-full">
