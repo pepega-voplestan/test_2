@@ -9,7 +9,10 @@ import { hashPassword, verifyPassword, requireAuth } from "./auth.js";
 import { sendVerificationEmail } from "./email.js";
 import { addClient, broadcast } from "./sse.js";
 
-const AVATAR_DIR = path.join(path.dirname(process.env.DATABASE_URL), "avatars");
+const AVATAR_DIR = path.join(
+  path.dirname(process.env.DATABASE_URL.replace(/^file:/, "")),
+  "avatars"
+);
 const AVATAR_SIZES = [64, 128, 256];
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const AVATAR_MIN_DIM = 256;
@@ -1203,6 +1206,7 @@ export function mountRoutes(app) {
     const { userId, file } = req.params;
     const filePath = path.join(AVATAR_DIR, userId, file);
     if (!fs.existsSync(filePath)) {
+      res.setHeader("Cache-Control", "no-store");
       return res.status(404).json({ error: "Avatar not found" });
     }
     res.setHeader("Content-Type", "image/webp");
