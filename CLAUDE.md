@@ -12,11 +12,12 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 .
 ├── api/                    # Backend (Express.js)
 │   ├── src/
-│   │   ├── server.js       # Express app setup, session middleware, rate limiting
+│   │   ├── server.js       # Express app setup, session middleware, rate limiting, dotenv
 │   │   ├── routes.js       # All API route handlers
 │   │   ├── db.js           # Prisma client init (WAL mode, foreign keys)
 │   │   ├── auth.js         # Password hashing, session auth utilities
-│   │   └── email.js        # Email sending via nodemailer + Resend SMTP
+│   │   ├── email.js        # Email sending via nodemailer + Resend SMTP
+│   │   └── sse.js          # Server-Sent Events: client registry, broadcast, heartbeat
 │   ├── prisma/
 │   │   ├── schema.prisma   # Prisma schema (all models)
 │   │   └── migrations/     # Prisma migration files
@@ -27,33 +28,38 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   └── .dockerignore
 ├── web/                    # Frontend (React + TypeScript)
 │   ├── components/
-│   │   ├── Header.tsx        # App header with auth & navigation buttons
+│   │   ├── Header.tsx        # App header with auth, navigation, theme toggle
 │   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step with email verification)
-│   │   ├── ShoutFeed.tsx     # Main feed with pagination, sort, media toggle
-│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop
+│   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates
+│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste
 │   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
 │   │   └── EmojiPicker.tsx   # Emoji picker with grouped categories
 │   ├── context/
-│   │   └── AuthContext.tsx   # Auth state via React Context + API helper
+│   │   ├── AuthContext.tsx   # Auth state via React Context + API helper
+│   │   └── ThemeContext.tsx  # Dark/light theme toggle with localStorage persistence
 │   ├── hooks/
-│   │   └── useRoute.ts       # Hash-based client-side routing
-│   ├── App.tsx               # Root component with routing
+│   │   ├── useRoute.ts       # Hash-based client-side routing
+│   │   └── useSSE.ts         # SSE client hook with auto-reconnect + exponential backoff
+│   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider
 │   ├── index.tsx             # React entry point (StrictMode)
 │   ├── types.ts              # TypeScript type definitions
-│   ├── index.html            # HTML template (Tailwind CDN, dark preset)
+│   ├── index.html            # HTML template (Tailwind CDN, CSS custom properties for theming)
 │   ├── tsconfig.json
 │   ├── vite.config.ts        # Dev proxy: /api and /media → localhost:3000
 │   ├── package.json
 │   ├── Dockerfile
 │   └── .dockerignore
+├── scripts/
+│   ├── backup.sh             # Backup Docker volumes (DB + media) with rotation, optional rclone upload
+│   └── restore.sh            # Restore Docker volumes from a timestamped backup
 ├── docker-compose.yml      # Production: 4 services on port 3005
 ├── docker-compose.dev.yml  # Development: 4 services on port 3006 (isolated volumes)
 ├── nginx.conf              # Production reverse proxy
 ├── nginx-dev.conf          # Development reverse proxy
-├── media-nginx.conf        # Security-hardened media file server
-├── Makefile                # Shortcuts for docker-compose commands (prod + dev)
+├── media-nginx.conf        # Security-hardened media file server (webp/jpg/jpeg/png/gif)
+├── Makefile                # Shortcuts for docker-compose + backup/restore commands
 ├── .env                    # Production environment variables
 ├── .env.dev                # Development environment variables
 ├── .env.example            # Template with placeholder values
@@ -80,7 +86,7 @@ cd ../web && npm install
 cd web && npm run dev
 ```
 
-This uses `concurrently` to start both the backend API (`node src/server.js` on port 3000) and the Vite dev server (port 5173). In dev mode the API also serves `/media` as static files.
+This uses `concurrently` to start both the backend API (`node src/server.js` on port 3000) and the Vite dev server (port 5173). In dev mode the API also serves `/media` as static files. The API auto-loads `.env` via `dotenv/config`.
 
 ### Run with Docker
 
@@ -104,6 +110,13 @@ make dev
 | `make logs-dev` | Follow development logs |
 | `make rebuild` | Force rebuild production (no cache) |
 | `make rebuild-dev` | Force rebuild development (no cache) |
+| `make backup` | Backup production volumes (DB + media) |
+| `make backup-upload` | Backup production + upload to Google Drive via rclone |
+| `make backup-dev` | Backup development volumes |
+| `make restore` | Restore production volumes (latest or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
+| `make restore-dev` | Restore development volumes |
+| `make deploy` | Backup, rebuild, and start production (safe redeploy) |
+| `make deploy-dev` | Backup, rebuild, and start development |
 
 ## API Endpoints
 
@@ -113,6 +126,7 @@ All endpoints are prefixed with `/api/v1/`.
 |--------|------|------|-------------|
 | GET | `/health` | No | Health check — `{ ok: true }` |
 | GET | `/me` | No | Get current user session |
+| GET | `/events` | No | SSE stream — real-time feed events |
 | POST | `/auth/register/send-code` | No | Step 1: validate inputs, send email verification code (rate limited 20/min) |
 | POST | `/auth/register/verify` | No | Step 2: verify code, create account, auto-login (rate limited 20/min) |
 | POST | `/auth/login` | No | Login with username or email (rate limited 20/min) |
@@ -126,12 +140,33 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/shouts/:id/like` | Yes | Toggle like, returns new count |
 | DELETE | `/comments/:id` | Yes | Soft-delete own comment |
 | POST | `/comments/:id/like` | Yes | Toggle like on a comment |
+| GET | `/announcements` | No | Get the current active announcement (or `null`) |
+| POST | `/announcements` | Secret key | Replace current announcement; requires `secret_key` matching `ANNOUNCEMENTS_SECRET` |
 | GET | `/users/:id` | No | Get user profile (email visible to owner only) |
 | GET | `/users/:id/shouts` | No | Paginated list of a user's shouts |
 | PUT | `/users/:id` | Yes | Update profile (username, email, avatar, password) |
-| POST | `/upload/media` | Yes | Upload image (≤5MB JPG/PNG/WebP; generates 320/960/1600px WebP variants) |
+| POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP variants; GIFs also store original) |
 | POST | `/upload/avatar` | Yes | Upload avatar (≤2MB JPG/PNG/WebP; generates 64/128/256px square WebP) |
 | GET | `/avatars/:userId/:size.webp` | No | Serve avatar with immutable cache headers |
+
+## SSE Real-Time Events
+
+The `/api/v1/events` endpoint streams Server-Sent Events to all connected clients. The backend broadcasts on all write operations. The frontend subscribes via `useSSE` hook in `ShoutFeed`.
+
+**Events emitted:**
+
+| Event | Payload | Trigger |
+|-------|---------|---------|
+| `new_shout` | Shout object | Shout created |
+| `delete_shout` | `{ id }` | Shout soft-deleted |
+| `new_comment` | Comment object | Comment added |
+| `delete_comment` | `{ id, shoutId }` | Comment soft-deleted |
+| `shout_like` | `{ id, likes }` | Shout like toggled |
+| `comment_like` | `{ id, likes }` | Comment like toggled |
+
+The SSE module (`api/src/sse.js`) also exports `broadcastToUser(userId, event, data)` for targeted delivery. A heartbeat ping is sent every 30 seconds to keep connections alive through proxies. The `useSSE` hook reconnects with exponential backoff (1s → 30s max) on error.
+
+**Important**: SSE real-time updates only apply to the `new` (newest) tab. The `popular` and `announcements` tabs load on demand and do not react to live events.
 
 ## Database
 
@@ -176,7 +211,7 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `user_id` (String, FK → users)
 - `media_type` (String): `"image"` or `"youtube"`
 - `media_url` (String): relative path for images, video ID for YouTube
-- `media_meta` (String?): JSON blob with width/height/title/channel
+- `media_meta` (String?): JSON blob with `w`, `h`, `size`, `mime`, `animated` (bool)
 - `created_at` (String, ISO datetime)
 
 **ShoutLike** (`shout_likes`)
@@ -186,6 +221,14 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 **CommentLike** (`comment_likes`)
 - Composite PK: `(comment_id, user_id)`
 - Cascading deletes
+
+**Announcement** (`announcements`)
+- `id` (String, UUID, PK)
+- `content` (String)
+- `is_deleted` (Int, default 0, soft-delete)
+- `created_at` (String, ISO datetime)
+- Index: `(is_deleted, created_at)`
+- Only the latest non-deleted announcement is displayed. Posting a new one soft-deletes all previous ones.
 
 **VerificationCode** (`verification_codes`)
 - `id` (String, UUID, PK)
@@ -203,7 +246,8 @@ Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/
 | `NODE_ENV` | `development` | Environment mode (enables secure cookie in production) |
 | `MEDIA_PATH` | `/media` | Directory for uploaded media files |
 | `RESEND_API_KEY` | — | Resend SMTP API key for sending emails (falls back to console logging if unset) |
-| `EMAIL_FROM` | — | Sender address for emails (set in docker-compose, e.g. `"Вопли <noreply@vopley.net>"`) |
+| `EMAIL_FROM` | — | Sender address for emails (e.g. `"Вопли <noreply@vopley.net>"`) |
+| `ANNOUNCEMENTS_SECRET` | — | Secret key required to post/replace announcements via the API |
 
 Environment files: `.env` (production), `.env.dev` (development), `.env.example` (template).
 
@@ -212,24 +256,30 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 ### Backend (api/)
 
 - ES Modules (`import`/`export`) — `"type": "module"` in package.json
+- `dotenv/config` imported at the top of `server.js` — `.env` file is auto-loaded in dev
 - Database access via **Prisma Client** (`prisma.user.findUnique(...)`, `prisma.shout.findMany(...)`, etc.)
 - Input validation with **Zod** schemas (see `routes.js` for all schemas)
 - Session-based auth (not JWT) — sessions stored in SQLite via `connect-sqlite3`
+- Sessions have a 30-day max age with `rolling: true` (extended on every authenticated request)
 - Password hashing with **bcryptjs** (10 rounds)
 - Email sending via **nodemailer** through Resend SMTP (`smtp.resend.com:465`)
 - Rate limiting: auth endpoints at 20 req/min (forgot-password/send-code at 5/min); upload and shout creation at 100 req/10min per user (falls back to IP)
 - All IDs are UUIDs generated with `crypto.randomUUID()`
 - JSON error responses: `{ error: "message" }`
 - Image processing via **Sharp**: auto-rotate, strip EXIF, generate WebP variants, atomic move from tmp to permanent storage
+- Animated GIFs: original `.gif` is preserved alongside static WebP thumbnails generated from the first frame
+- Shout/comment character limit: 400 effective chars, where each newline costs 40 chars (`effectiveCharCount` helper)
 
 ### Frontend (web/)
 
 - Functional components with TypeScript strict mode
 - Source files live directly under `web/` (no `src/` subdirectory)
-- React Context for auth state management — use `useAuth()` hook
+- React Context for auth state — use `useAuth()` hook from `AuthContext.tsx`
+- React Context for theme — use `useTheme()` hook from `ThemeContext.tsx`; theme stored in `localStorage`
 - Auth flow: 2-step registration (send code → verify), password reset (send code → verify → new password)
 - Hash-based routing via `useRoute.ts` — routes: `#/` (feed), `#/profile/{userId}`
-- Styling with **Tailwind CSS** utility classes (loaded via CDN in `index.html`)
+- Styling with **Tailwind CSS** utility classes (loaded via CDN in `index.html`) and CSS custom properties
+- Theme tokens: all colors use `th-*` Tailwind classes (e.g. `bg-th-card`, `text-th-text-3`) backed by CSS variables `--th-*`. Dark mode is toggled via the `.dark` class on `<html>`.
 - Fetch API with `credentials: "include"` for all requests
 - Optimistic UI updates with rollback on error (likes, delete)
 - PascalCase for components, camelCase for functions/variables
@@ -244,11 +294,34 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
 - YouTube URLs in shout content are auto-detected via regex and metadata is fetched from the oEmbed API (5s timeout, graceful fallback).
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
-- The media nginx container serves files from the `/media` volume with a strict allowlist: only `.webp`, `.jpg`, `.jpeg`, `.png` extensions, no dotfiles or directory listing, immutable 1-year cache headers.
+- Animated GIFs skip re-encoding; the original GIF is stored as `original.gif` alongside WebP thumbnail variants. The `animated: true` flag and `gif` URL are included in the media DTO.
+- The media nginx container serves files from the `/media` volume with a strict allowlist: `.webp`, `.jpg`, `.jpeg`, `.png`, `.gif` extensions only; no dotfiles or directory listing; immutable 1-year cache headers.
 - Popular sort: shouts from the last 7 days, ordered by like count.
-- Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation.
+- Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation. Codes expire in 10 minutes, max 5 attempts.
 - Password reset follows the same email verification pattern.
+- Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
 - The `web/package.json` dev script runs both the API and Vite concurrently for local development.
+- `App.tsx` wraps the app in `<ThemeProvider>` (outer) then `<AuthProvider>` (inner).
+
+## Backup & Restore
+
+The `scripts/` directory at the repo root contains backup/restore tooling for Docker volumes.
+
+```sh
+# Backup production (creates timestamped tarballs in ./backups/)
+./scripts/backup.sh prod
+
+# Backup and sync to Google Drive via rclone
+./scripts/backup.sh prod --upload
+
+# Restore from latest backup (prompts for confirmation, stops containers first)
+./scripts/restore.sh prod
+
+# Restore from a specific timestamp
+./scripts/restore.sh prod 20260218_120000
+```
+
+Backups keep the last 3 snapshots per type (configurable via `KEEP` variable in the script). The database is backed up using `sqlite3 .backup` for atomic hot snapshots without stopping the server.
 
 ## Docker Services
 
@@ -259,7 +332,7 @@ Each defines four services:
 | Service | Description |
 |---------|-------------|
 | `api` / `api-dev` | Express backend (internal port 3000). Runs `prisma migrate deploy` on startup via `scripts/start.sh` |
-| `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images only) |
+| `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images and GIFs only) |
 | `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, SPA fallback |
 | `web-build` / `web-build-dev` | One-shot container that builds the React app and populates the `webdist` shared volume |
 
