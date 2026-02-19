@@ -245,8 +245,8 @@ const ShoutFeed: React.FC = () => {
 
   return (
     <div className="w-full">
-      <div className="flex items-center mb-6">
-        <div className="flex items-center gap-4 w-full">
+      <div className="flex items-center justify-end mb-6">
+        <div className="flex items-center gap-4">
           <div className="flex bg-th-card rounded p-1">
             <button
               onClick={() => handleTabChange('new')}
