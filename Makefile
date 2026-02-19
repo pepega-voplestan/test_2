@@ -1,4 +1,4 @@
-.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-dev restore restore-dev deploy deploy-dev
+.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev
 
 # Start production server
 prod:
@@ -35,6 +35,10 @@ rebuild-dev:
 # Backup production volumes (database + media)
 backup:
 	./scripts/backup.sh prod
+
+# Backup production + upload to Google Drive
+backup-upload:
+	./scripts/backup.sh prod --upload
 
 # Backup development volumes (database + media)
 backup-dev:
