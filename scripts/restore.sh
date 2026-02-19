@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Restore Docker volumes (database + media) for Vopli app
-# Usage: ./scripts/restore.sh [prod|dev] <timestamp>
+# Usage: ./scripts/restore.sh [prod|dev] [timestamp]
 #   timestamp format: YYYYMMDD_HHMMSS
 #   If no timestamp, uses the latest backup
 
@@ -58,16 +58,18 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# Stop running containers to avoid conflicts
+# Stop running containers to avoid write conflicts
 echo "Stopping containers..."
 docker compose -f "$COMPOSE_FILE" $ENV_FILE down 2>/dev/null || true
 
+# Restore database: clean /data (remove old WAL/SHM files too), extract clean .db files
 echo "Restoring database..."
 docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
     --entrypoint sh \
     -v "$(pwd)/$BACKUP_DIR:/backup" \
     "$SERVICE" -c "rm -rf /data/* && tar xzf /backup/${PREFIX}-appdata-${TIMESTAMP}.tar.gz -C /data"
 
+# Restore media
 echo "Restoring media..."
 docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
     --entrypoint sh \
