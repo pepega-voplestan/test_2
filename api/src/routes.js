@@ -816,7 +816,7 @@ export function mountRoutes(app) {
     }
 
     const id = crypto.randomUUID();
-    await prisma.shout.create({
+    const shout = await prisma.shout.create({
       data: {
         id,
         user_id: req.session.user.id,
@@ -824,11 +824,31 @@ export function mountRoutes(app) {
         content,
         media_id: finalMediaId,
       },
+      include: {
+        user: { select: { username: true, avatar: true, is_banned: true } },
+        media: true,
+      },
     });
 
+    const shoutDto = {
+      id: shout.id,
+      user: {
+        id: shout.user_id,
+        name: shout.user.username,
+        avatar: shout.user.avatar,
+        isBanned: !!shout.user.is_banned,
+      },
+      content: shout.content,
+      timestamp: utcTimestamp(shout.created_at),
+      likes: 0,
+      likedBy: [],
+      comments: [],
+      ...(shout.media ? { media: buildMedia(shout.media) } : {}),
+    };
+
     console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
-    broadcast("new_shout", { shoutId: id, userId: req.session.user.id });
-    res.json({ ok: true, id });
+    broadcast("new_shout", { shoutId: id, userId: req.session.user.id, shout: shoutDto });
+    res.json({ ok: true, id, shout: shoutDto });
   }));
 
   /* reply (create comment) */
@@ -908,7 +928,7 @@ export function mountRoutes(app) {
     }
 
     const id = crypto.randomUUID();
-    await prisma.comment.create({
+    const comment = await prisma.comment.create({
       data: {
         id,
         shout_id: shoutId,
@@ -916,10 +936,30 @@ export function mountRoutes(app) {
         content,
         media_id: finalMediaId,
       },
+      include: {
+        user: { select: { username: true, avatar: true, is_banned: true } },
+        media: true,
+      },
     });
 
+    const commentDto = {
+      id: comment.id,
+      shoutId: comment.shout_id,
+      user: {
+        id: comment.user_id,
+        name: comment.user.username,
+        avatar: comment.user.avatar,
+        isBanned: !!comment.user.is_banned,
+      },
+      content: comment.content,
+      timestamp: utcTimestamp(comment.created_at),
+      likes: 0,
+      likedBy: [],
+      ...(comment.media ? { media: buildMedia(comment.media) } : {}),
+    };
+
     console.log(`[Comments] Comment ${id} on shout ${shoutId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
-    broadcast("new_comment", { shoutId, commentId: id, userId: req.session.user.id });
+    broadcast("new_comment", { shoutId, commentId: id, userId: req.session.user.id, comment: commentDto });
     res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
   }));
 
