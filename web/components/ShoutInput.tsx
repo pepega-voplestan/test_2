@@ -78,8 +78,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       return;
     }
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError('Допустимые форматы: JPG, PNG, WebP');
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setError('Допустимые форматы: JPG, PNG, WebP, GIF');
       return;
     }
 
@@ -296,7 +296,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                           <input
                             ref={fileInputRef}
                             type="file"
-                            accept="image/jpeg,image/png,image/webp"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
                             className="hidden"
                             onChange={handleFileSelect}
                           />

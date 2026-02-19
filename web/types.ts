@@ -17,7 +17,7 @@ export interface UserProfile {
 }
 
 export type ShoutMedia =
-  | { type: 'image'; url: string; thumb: string; full: string; width: number; height: number }
+  | { type: 'image'; url: string; thumb: string; full: string; width: number; height: number; animated?: boolean; gif?: string }
   | { type: 'youtube'; videoId: string; embedUrl: string; title?: string | null; channel?: string | null };
 
 export interface Comment {
