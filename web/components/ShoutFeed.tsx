@@ -188,9 +188,11 @@ const ShoutFeed: React.FC = () => {
     new_shout: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
       if (activeTabRef.current !== 'new') return;
-      // Re-fetch feed to get the full shout with user/media data
-      offsetRef.current = 0;
-      fetchShouts(true);
+      const shout = data.shout as Shout | undefined;
+      if (shout) {
+        setShouts(prev => [shout, ...prev]);
+        offsetRef.current += 1;
+      }
     },
     delete_shout: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
@@ -199,16 +201,14 @@ const ShoutFeed: React.FC = () => {
     new_comment: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
       const shoutId = data.shoutId as string;
-      // Fetch the single shout's data to get the new comment
-      fetch(`/api/v1/shouts?limit=50&offset=0`, { credentials: 'include' })
-        .then(res => res.json())
-        .then(result => {
-          const updated = (result.shouts as Shout[]).find(s => s.id === shoutId);
-          if (updated) {
-            setShouts(prev => prev.map(s => s.id === shoutId ? { ...s, comments: updated.comments } : s));
-          }
-        })
-        .catch(() => {});
+      const comment = data.comment as Comment | undefined;
+      if (comment) {
+        setShouts(prev => prev.map(s =>
+          s.id === shoutId
+            ? { ...s, comments: [...(s.comments || []), comment] }
+            : s
+        ));
+      }
     },
     delete_comment: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
@@ -239,7 +239,7 @@ const ShoutFeed: React.FC = () => {
         ),
       })));
     },
-  }), [fetchShouts]);
+  }), []);
 
   useSSE(sseListeners);
 
