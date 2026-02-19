@@ -19,18 +19,21 @@ app.use((req, _res, next) => {
 
 const SQLiteStore = SQLiteStoreFactory(session);
 
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 app.use(
   session({
     store: new SQLiteStore({ db: "sessions.sqlite", dir: "/data" }),
     secret: process.env.SESSION_SECRET,
-    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     proxy: true,
+    rolling: true,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
       secure: isProd,
+      maxAge: SESSION_MAX_AGE,
     },
   })
 );

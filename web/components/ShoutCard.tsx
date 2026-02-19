@@ -143,7 +143,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           {showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
               <img
-                src={comment.media.url} alt="attachment" loading="lazy"
+                src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.url} alt="attachment" loading="lazy"
                 onClick={() => setLightboxOpen(true)}
                 className="block cursor-pointer max-h-[200px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
               />
@@ -153,7 +153,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           {lightboxOpen && comment.media?.type === 'image' && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
               <div className="relative max-w-[90vw] max-h-[90vh]">
-                <img src={comment.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
+                <img src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
                 <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
               </div>
             </div>
@@ -431,7 +431,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           {showMedia && shout.media?.type === 'image' && (
              <div className="mb-3 rounded-lg">
                  <img
-                   src={shout.media.url} alt="attachment" loading="lazy"
+                   src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.url} alt="attachment" loading="lazy"
                    onClick={() => setLightboxOpen(true)}
                    className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
                  />
@@ -441,7 +441,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           {lightboxOpen && shout.media?.type === 'image' && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
               <div className="relative max-w-[90vw] max-h-[90vh]">
-                <img src={shout.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
+                <img src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
                 <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
               </div>
             </div>
