@@ -9,6 +9,13 @@ const Header: React.FC = () => {
   return (
     <header className="bg-th-page h-[52px] border-b border-th-border-2 sticky top-0 z-50 flex items-center justify-center transition-colors">
       <div className="w-full max-w-[1100px] px-4 flex items-center justify-between">
+        {/* Logo */}
+        <a href="#/" className="flex items-center">
+          <div className="text-th-text font-bold text-2xl tracking-tighter">
+            ВОПЛИ
+          </div>
+        </a>
+
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-th-text-3">
             {/* Feed Icon */}
