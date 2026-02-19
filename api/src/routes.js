@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { prisma } from "./db.js";
 import { hashPassword, verifyPassword, requireAuth } from "./auth.js";
 import { sendVerificationEmail } from "./email.js";
+import { addClient, broadcast } from "./sse.js";
 
 const AVATAR_DIR = path.join(path.dirname(process.env.DATABASE_URL), "avatars");
 const AVATAR_SIZES = [64, 128, 256];
@@ -332,6 +333,9 @@ async function enrichFeed(topShouts, currentUserId) {
 export function mountRoutes(app) {
   /* health */
   app.get("/api/v1/health", (_req, res) => res.json({ ok: true }));
+
+  /* SSE event stream */
+  app.get("/api/v1/events", (req, res) => addClient(req, res));
 
   /* me */
   app.get("/api/v1/me", (req, res) => {
@@ -736,6 +740,7 @@ export function mountRoutes(app) {
     await prisma.comment.updateMany({ where: { shout_id: shoutId }, data: { is_deleted: 1 } });
 
     console.log(`[Shouts] Soft-deleted shout ${shoutId} (and comments) by ${userId}`);
+    broadcast("delete_shout", { shoutId });
     res.json({ ok: true });
   }));
 
@@ -817,6 +822,7 @@ export function mountRoutes(app) {
     });
 
     console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
+    broadcast("new_shout", { shoutId: id });
     res.json({ ok: true, id });
   }));
 
@@ -908,6 +914,7 @@ export function mountRoutes(app) {
     });
 
     console.log(`[Comments] Comment ${id} on shout ${shoutId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
+    broadcast("new_comment", { shoutId, commentId: id });
     res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
   }));
 
@@ -926,6 +933,7 @@ export function mountRoutes(app) {
     await prisma.comment.update({ where: { id: commentId }, data: { is_deleted: 1 } });
 
     console.log(`[Comments] Soft-deleted comment ${commentId} by ${userId}`);
+    broadcast("delete_comment", { shoutId: comment.shout_id, commentId });
     res.json({ ok: true });
   }));
 
@@ -951,6 +959,7 @@ export function mountRoutes(app) {
     const likes = await prisma.shoutLike.count({ where: { shout_id: shoutId } });
 
     console.log(`[Shouts] Like toggle on ${shoutId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
+    broadcast("shout_like", { shoutId, likes });
     res.json({ likes, isLiked: !exists });
   }));
 
@@ -976,6 +985,7 @@ export function mountRoutes(app) {
     const likes = await prisma.commentLike.count({ where: { comment_id: commentId } });
 
     console.log(`[Comments] Like toggle on ${commentId} by ${userId}: now ${likes} likes, isLiked=${!exists}`);
+    broadcast("comment_like", { commentId, likes });
     res.json({ likes, isLiked: !exists });
   }));
 
