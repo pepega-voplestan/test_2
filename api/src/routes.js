@@ -848,7 +848,7 @@ export function mountRoutes(app) {
 
     console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
     broadcast("new_shout", { shoutId: id, userId: req.session.user.id, shout: shoutDto });
-    res.json({ ok: true, id });
+    res.json({ ok: true, id, shout: shoutDto });
   }));
 
   /* reply (create comment) */
