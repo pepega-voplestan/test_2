@@ -3,7 +3,7 @@ import express from "express";
 import session from "express-session";
 import rateLimit from "express-rate-limit";
 import SQLiteStoreFactory from "connect-sqlite3";
-import { mountRoutes } from "./routes.js";
+import { mountRoutes } from "./routes/index.js";
 import { prisma } from "./db.js";
 
 const isProd = process.env.NODE_ENV === "production";
