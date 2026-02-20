@@ -4,6 +4,8 @@ import session from "express-session";
 import rateLimit from "express-rate-limit";
 import SQLiteStoreFactory from "connect-sqlite3";
 import { mountRoutes } from "./routes/index.js";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./swagger.js";
 import { prisma } from "./db.js";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -56,6 +58,12 @@ const uploadLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator:
 const postLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator: perUserKey, message: { error: "Слишком много воплей. Подождите немного" } });
 app.use("/api/v1/upload/media", uploadLimiter);
 app.use("/api/v1/shouts", postLimiter);
+
+// Swagger UI — dev only
+if (!isProd) {
+  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  console.log("[API] Swagger UI available at /api/docs");
+}
 
 // In dev, serve media files directly (in prod, the media container does this)
 if (!isProd) {
