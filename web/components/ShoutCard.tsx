@@ -3,6 +3,7 @@ import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
+import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
 
 interface ShoutCardProps {
   shout: Shout;
@@ -285,16 +286,28 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
 /* ---------- Content rendering ---------- */
 
 function renderContent(text: string) {
-  const tokens = text.split(/(\s+)/);
-  return tokens.map((token, i) => {
-    if (/^\s+$/.test(token)) return token;
-    if (/^https?:\/\//.test(token)) {
-      return <a key={i} href={token} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{token}</a>;
+  // Split on mention tokens @[name:id] and URLs, keeping the delimiters
+  const parts = text.split(/((?:@\[[^\]]+:[^\]]+\])|(?:https?:\/\/[^\s]+))/);
+  return parts.map((part, i) => {
+    // Structured mention token: @[username:userId]
+    const mentionMatch = part.match(/^@\[([^\]]+):([^\]]+)\]$/);
+    if (mentionMatch) {
+      const [, name, id] = mentionMatch;
+      return (
+        <a key={i} href={`#/profile/${id}`} className="text-blue-400 hover:underline font-medium">
+          @{name}
+        </a>
+      );
     }
-    if (token.startsWith('@')) {
-      return <span key={i} className="text-sky-500">{token}</span>;
+    // URL
+    if (/^https?:\/\//.test(part)) {
+      return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{part}</a>;
     }
-    return token;
+    // Legacy bare @username (backwards-compat with old shouts)
+    if (part.startsWith('@') && !part.includes('[')) {
+      return <span key={i} className="text-sky-500">{part}</span>;
+    }
+    return part;
   });
 }
 
@@ -487,7 +500,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [isReplyUploading, setIsReplyUploading] = useState(false);
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
-  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionInputRef = useRef<MentionInputHandle>(null);
 
   const [likes, setLikes] = useState(shout.likes);
   const [isLiked, setIsLiked] = useState(
@@ -506,8 +519,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const repliesOpen = isThreadOpen ?? false;
   const hasComments = shout.comments && shout.comments.length > 0;
   const commentCount = shout.comments ? shout.comments.length : 0;
-  const replyNewlineCount = (replyContent.match(/\n/g) || []).length;
-  const replyCharCount = replyContent.length + replyNewlineCount * (NEWLINE_CHAR_COST - 1);
+  const replyCharCount = effectiveLength(replyContent, NEWLINE_CHAR_COST);
   const isReplyOverLimit = replyCharCount > SHOUT_MAX_LENGTH;
   const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
   const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
@@ -517,11 +529,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (replyMediaId) { setReplyDetectedYtId(null); return; }
     setReplyDetectedYtId(detectYouTubeId(replyContent));
   }, [replyContent, replyMediaId]);
-
-  useEffect(() => {
-    const ta = replyTextareaRef.current;
-    if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
-  }, [replyContent]);
 
   const toggleThread = () => {
     if (onThreadToggle) onThreadToggle(shout.id);
@@ -561,27 +568,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     await uploadReplyFile(file);
   };
 
-  const handleReplyPaste = async (e: React.ClipboardEvent) => {
-    if (replyMediaId || isReplyUploading) return;
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) await uploadReplyFile(file);
-        return;
-      }
-    }
-  };
-
   const removeReplyMedia = () => {
     if (replyMediaPreview) URL.revokeObjectURL(replyMediaPreview);
     setReplyMediaId(null); setReplyMediaPreview(null); setReplyError(null);
   };
 
-  const handleReplySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitReply = async () => {
     if (!canSubmitReply || !user) return;
     setIsSubmittingReply(true); setReplyError(null);
     try {
@@ -602,7 +594,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
         likes: 0, likedBy: [],
         ...(data.media ? { media: data.media } : {}),
       };
-      setReplyContent(''); setReplyMediaId(null); setReplyMediaPreview(null);
+      mentionInputRef.current?.clear(); // also calls onContentChange('') → setReplyContent('')
+      setReplyMediaId(null); setReplyMediaPreview(null);
       setReplyDetectedYtId(null); setReplyError(null);
       if (onCommentAdded) onCommentAdded(shout.id, newComment);
     } catch (err: unknown) {
@@ -641,7 +634,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (onCommentDeleted) onCommentDeleted(shout.id, commentId);
   };
 
-  const insertEmoji = (emoji: string) => setReplyContent(prev => prev + emoji);
+  const insertEmoji = (emoji: string) => mentionInputRef.current?.insertText(emoji);
 
   const embeds = shout.content ? extractEmbeds(shout.content) : [];
 
@@ -782,13 +775,18 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                         </svg>
                       )}
                  </div>
-                  <form className="w-full flex flex-col gap-2" onSubmit={handleReplySubmit}>
-                      <textarea ref={replyTextareaRef} placeholder="Напишите ответ..."
-                          className="bg-transparent border-none outline-none text-th-text text-sm w-full placeholder-th-text-4 resize-none overflow-hidden"
-                          rows={1}
-                          value={replyContent} onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
-                          onPaste={handleReplyPaste}
-                          disabled={isSubmittingReply} />
+                  <form className="w-full flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); submitReply(); }}>
+                      <MentionInput
+                          ref={mentionInputRef}
+                          placeholder="Напишите ответ..."
+                          disabled={isSubmittingReply}
+                          onContentChange={(text) => { setReplyContent(text); setReplyError(null); }}
+                          onSubmit={submitReply}
+                          onImagePaste={async (file) => {
+                            if (!replyMediaId && !isReplyUploading) await uploadReplyFile(file);
+                          }}
+                          size="sm"
+                      />
                       <div className="flex items-center gap-2 justify-end">
                         <div className="flex items-center gap-1 shrink-0">
                           <EmojiPicker size="sm" onSelect={insertEmoji} />

@@ -31,6 +31,12 @@ export interface Comment {
   media?: ShoutMedia;
 }
 
+export interface MentionUser {
+  id: string;
+  name: string;
+  avatar: string;
+}
+
 export interface Shout {
   id: string;
   user: User;

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
+import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
 import { Shout } from '../types';
 
 interface ShoutInputProps {
@@ -36,7 +37,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionInputRef = useRef<MentionInputHandle>(null);
 
   // Drag-and-drop state
   const [isDragging, setIsDragging] = useState(false);
@@ -45,22 +46,10 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   // YouTube auto-detection
   const [detectedYtId, setDetectedYtId] = useState<string | null>(null);
 
-  const newlineCount = (content.match(/\n/g) || []).length;
-  const charCount = content.length + newlineCount * (NEWLINE_CHAR_COST - 1);
+  const charCount = effectiveLength(content, NEWLINE_CHAR_COST);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = !!mediaId || !!detectedYtId;
   const canSubmit = (content.trim() || hasMedia) && !isOverLimit && !isSubmitting && !isUploading;
-
-  // Auto-resize textarea
-  const resizeTextarea = () => {
-    const ta = textareaRef.current;
-    if (ta) {
-      ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
-    }
-  };
-
-  useEffect(resizeTextarea, [content]);
 
   // Detect YouTube URLs in content (only when no image is attached)
   useEffect(() => {
@@ -166,20 +155,6 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     }
   };
 
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    if (mediaId || isUploading) return;
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) await uploadFile(file);
-        return;
-      }
-    }
-  };
-
   const removeMedia = () => {
     if (mediaPreview) URL.revokeObjectURL(mediaPreview);
     setMediaId(null);
@@ -187,8 +162,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitShout = async () => {
     if (!canSubmit || !user) return;
 
     setIsSubmitting(true);
@@ -217,7 +191,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       }
 
       console.log('[ShoutInput] Shout created successfully');
-      setContent('');
+      mentionInputRef.current?.clear(); // also calls onContentChange('') → setContent('')
       setMediaId(null);
       setMediaPreview(null);
       setDetectedYtId(null);
@@ -235,7 +209,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   return (
     <div className="mb-6">
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => { e.preventDefault(); submitShout(); }}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -269,20 +243,20 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
               <div className="grow flex flex-col">
                 {user ? (
                     <div className="flex flex-col w-full gap-2">
-                        <textarea
-                            ref={textareaRef}
+                        <MentionInput
+                            ref={mentionInputRef}
                             placeholder="Расскажите, что нового?"
-                            className="bg-transparent w-full border-none outline-none text-th-text placeholder-th-text-4 resize-none overflow-hidden"
-                            rows={1}
-                            value={content}
-                            onChange={(e) => { setContent(e.target.value); setError(null); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSubmit(e); } }}
-                            onPaste={handlePaste}
                             disabled={isSubmitting}
+                            onContentChange={(text) => { setContent(text); setError(null); }}
+                            onSubmit={submitShout}
+                            onImagePaste={async (file) => {
+                              if (!mediaId && !isUploading) await uploadFile(file);
+                            }}
+                            size="md"
                         />
                         <div className="flex items-center gap-2 justify-end">
                           <div className="flex items-center gap-1 shrink-0">
-                            <EmojiPicker onSelect={(emoji) => setContent(prev => prev + emoji)} />
+                            <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} />
                             <button
                               type="button"
                               onClick={() => fileInputRef.current?.click()}
