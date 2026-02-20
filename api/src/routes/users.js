@@ -7,6 +7,15 @@ import { enrichFeed } from "../helpers/feed.js";
 
 const router = Router();
 
+/* list users for mention autocomplete */
+router.get("/users/mentions", asyncHandler(async (_req, res) => {
+  const users = await prisma.user.findMany({
+    where: { is_banned: 0 },
+    select: { id: true, username: true, avatar: true },
+  });
+  res.json({ users: users.map(u => ({ id: u.id, name: u.username, avatar: u.avatar })) });
+}));
+
 /* get user profile */
 router.get("/users/:id", asyncHandler(async (req, res) => {
   const profileId = req.params.id;
