@@ -13,7 +13,20 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 ├── api/                    # Backend (Express.js)
 │   ├── src/
 │   │   ├── server.js       # Express app setup, session middleware, rate limiting, dotenv
-│   │   ├── routes.js       # All API route handlers
+│   │   ├── routes/         # Domain-split route handlers
+│   │   │   ├── index.js        # Mounts all domain routers via mountRoutes(app)
+│   │   │   ├── auth.js         # Auth routes (register, login, logout, password reset)
+│   │   │   ├── shouts.js       # Shout CRUD + replies
+│   │   │   ├── comments.js     # Comment CRUD
+│   │   │   ├── likes.js        # Shout and comment like toggles
+│   │   │   ├── users.js        # User profile + mentions autocomplete
+│   │   │   ├── upload.js       # Media and avatar upload
+│   │   │   └── announcements.js # Announcement read/write
+│   │   ├── helpers/        # Shared utilities
+│   │   │   ├── common.js       # asyncHandler, requireAuth, and other shared middleware
+│   │   │   ├── feed.js         # enrichFeed: joins users/media/likes onto shout/comment rows
+│   │   │   ├── media.js        # Sharp image processing, GIF handling, avatar generation
+│   │   │   └── validation.js   # Zod schemas shared across routes
 │   │   ├── db.js           # Prisma client init (WAL mode, foreign keys)
 │   │   ├── auth.js         # Password hashing, session auth utilities
 │   │   ├── email.js        # Email sending via nodemailer + Resend SMTP
@@ -31,7 +44,7 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── Header.tsx        # App header with auth, navigation, theme toggle
 │   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step with email verification)
 │   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates
-│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste
+│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit
 │   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
@@ -142,6 +155,7 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/comments/:id/like` | Yes | Toggle like on a comment |
 | GET | `/announcements` | No | Get the current active announcement (or `null`) |
 | POST | `/announcements` | Secret key | Replace current announcement; requires `secret_key` matching `ANNOUNCEMENTS_SECRET` |
+| GET | `/users/mentions` | No | List all non-banned users for mention autocomplete (`{ users: [{ id, name, avatar }] }`) |
 | GET | `/users/:id` | No | Get user profile (email visible to owner only) |
 | GET | `/users/:id/shouts` | No | Paginated list of a user's shouts |
 | PUT | `/users/:id` | Yes | Update profile (username, email, avatar, password) |
@@ -258,7 +272,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - ES Modules (`import`/`export`) — `"type": "module"` in package.json
 - `dotenv/config` imported at the top of `server.js` — `.env` file is auto-loaded in dev
 - Database access via **Prisma Client** (`prisma.user.findUnique(...)`, `prisma.shout.findMany(...)`, etc.)
-- Input validation with **Zod** schemas (see `routes.js` for all schemas)
+- Input validation with **Zod** schemas (defined in `helpers/validation.js`, used across domain route files)
 - Session-based auth (not JWT) — sessions stored in SQLite via `connect-sqlite3`
 - Sessions have a 30-day max age with `rolling: true` (extended on every authenticated request)
 - Password hashing with **bcryptjs** (10 rounds)
@@ -331,7 +345,7 @@ Each defines four services:
 
 | Service | Description |
 |---------|-------------|
-| `api` / `api-dev` | Express backend (internal port 3000). Runs `prisma migrate deploy` on startup via `scripts/start.sh` |
+| `api` / `api-dev` | Express backend (internal port 3000). Runs `prisma migrate deploy` on startup via `scripts/start.sh`. Dev container mounts `./api/src` as read-only for hot-reload without rebuild. |
 | `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images and GIFs only) |
 | `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, SPA fallback |
 | `web-build` / `web-build-dev` | One-shot container that builds the React app and populates the `webdist` shared volume |
