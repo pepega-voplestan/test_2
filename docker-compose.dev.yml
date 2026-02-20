@@ -12,10 +12,10 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
       ANNOUNCEMENTS_SECRET: ${ANNOUNCEMENTS_SECRET}
-
     volumes:
       - appdata-dev:/data
       - media-dev:/media
+      - ./api/src:/app/src:ro
     expose:
       - "3000"
     networks:
