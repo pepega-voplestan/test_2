@@ -276,6 +276,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             rows={1}
                             value={content}
                             onChange={(e) => { setContent(e.target.value); setError(null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSubmit(e); } }}
                             onPaste={handlePaste}
                             disabled={isSubmitting}
                         />
