@@ -7,6 +7,7 @@ export interface MentionInputHandle {
   clear(): void;
   focus(): void;
   insertText(text: string): void;
+  insertMention(user: { id: string; name: string }): void;
 }
 
 export interface MentionInputProps {
@@ -242,6 +243,43 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const el = editorRef.current;
       if (!el) return;
       insertAtCursor(el, text);
+    },
+    insertMention(user: { id: string; name: string }) {
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus();
+      const sel = window.getSelection()!;
+      // Move cursor to end of content
+      const endRange = document.createRange();
+      endRange.selectNodeContents(el);
+      endRange.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(endRange);
+
+      const span = document.createElement('span');
+      span.contentEditable = 'false';
+      span.dataset.mentionId = user.id;
+      span.dataset.mentionName = user.name;
+      span.textContent = `@${user.name}`;
+      span.className = 'text-blue-400 font-medium';
+
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(span);
+
+      const spaceNode = document.createTextNode('\u00A0');
+      span.after(spaceNode);
+
+      const newRange = document.createRange();
+      newRange.setStart(spaceNode, 1);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+
+      const serialized = serializeContent(el);
+      setIsEmpty(serialized === '');
+      onContentChangeRef.current(serialized);
+      setMentionQuery(null);
     },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 

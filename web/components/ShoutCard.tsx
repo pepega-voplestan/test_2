@@ -290,8 +290,9 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
 /* ---------- Content rendering ---------- */
 
 function renderContent(text: string) {
-  // Split on mention tokens @[name:id] and URLs, keeping the delimiters
-  const parts = text.split(/((?:@\[[^\]]+:[^\]]+\])|(?:https?:\/\/[^\s]+))/);
+  // Split on mention tokens @[name:id], bare @words (legacy), and URLs, keeping the delimiters.
+  // Structured mentions must come first so @[name:id] is never partially matched by @word.
+  const parts = text.split(/((?:@\[[^\]]+:[^\]]+\])|(?:@[a-zA-Z0-9_-]+)|(?:https?:\/\/[^\s]+))/);
   return parts.map((part, i) => {
     // Structured mention token: @[username:userId]
     const mentionMatch = part.match(/^@\[([^\]]+):([^\]]+)\]$/);
@@ -307,8 +308,9 @@ function renderContent(text: string) {
     if (/^https?:\/\//.test(part)) {
       return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{part}</a>;
     }
-    // Legacy bare @username (backwards-compat with old shouts)
-    if (part.startsWith('@') && !part.includes('[')) {
+    // Legacy bare @username (backwards-compat with old shouts).
+    // Strict check: only a single word, never an arbitrary segment starting with @.
+    if (/^@[a-zA-Z0-9_-]+$/.test(part)) {
       return <span key={i} className="text-sky-500">{part}</span>;
     }
     return part;
@@ -321,9 +323,10 @@ interface CommentCardProps {
   comment: Comment;
   showMedia?: boolean;
   onDelete?: (commentId: string) => void;
+  onReply?: (author: { id: string; name: string }) => void;
 }
 
-const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, onDelete }) => {
+const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, onDelete, onReply }) => {
   const { user, openModal } = useAuth();
   const [likes, setLikes] = useState(comment.likes);
   const [isLiked, setIsLiked] = useState(
@@ -457,7 +460,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             </div>
           )}
 
-          <div className="flex items-center justify-end text-xs font-medium text-th-text-4 select-none mt-1">
+          <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-1">
+            <button onClick={() => onReply?.({ id: comment.user.id, name: comment.user.name })} className="hover:text-th-text-2 transition-colors">Ответить</button>
             <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
               <span className="text-[10px] font-bold">{likes}</span>
               <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
@@ -505,6 +509,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const mentionInputRef = useRef<MentionInputHandle>(null);
+  const [pendingMention, setPendingMention] = useState<{ id: string; name: string } | null>(null);
 
   const [likes, setLikes] = useState(shout.likes);
   const [isLiked, setIsLiked] = useState(
@@ -538,9 +543,30 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (onThreadToggle) onThreadToggle(shout.id);
   };
 
-  const handleReplyClick = () => {
+  // Once the thread is open and a pending mention is queued, insert it into the reply box
+  useEffect(() => {
+    if (!repliesOpen || !pendingMention) return;
+    const id = setTimeout(() => {
+      mentionInputRef.current?.insertMention(pendingMention);
+      mentionInputRef.current?.focus();
+      setPendingMention(null);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [repliesOpen, pendingMention]);
+
+  const handleMentionReply = (author: { id: string; name: string }) => {
     if (!user) { openModal(); return; }
-    toggleThread();
+    if (!repliesOpen) {
+      toggleThread();
+      setPendingMention(author);
+    } else {
+      mentionInputRef.current?.insertMention(author);
+      mentionInputRef.current?.focus();
+    }
+  };
+
+  const handleReplyClick = () => {
+    handleMentionReply({ id: shout.user.id, name: shout.user.name });
   };
 
   const uploadReplyFile = async (file: File) => {
@@ -765,7 +791,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       {repliesOpen && (
         <div className="ml-10 mt-2">
            {hasComments && shout.comments!.map(comment => (
-               <CommentCard key={comment.id} comment={comment} showMedia={showMedia} onDelete={handleCommentDelete} />
+               <CommentCard key={comment.id} comment={comment} showMedia={showMedia} onDelete={handleCommentDelete} onReply={handleMentionReply} />
            ))}
            {user && (
              <div className="mt-4">
