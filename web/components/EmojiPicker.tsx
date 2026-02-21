@@ -89,7 +89,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
   const popupRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties | null>(null);
 
   const positionPopup = useCallback(() => {
     const btn = btnRef.current;
@@ -136,6 +136,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
           popupRef.current && !popupRef.current.contains(e.target as Node)) {
         setIsOpen(false);
         setSearch('');
+        setPopupStyle(null);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -165,7 +166,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       <button
         ref={btnRef}
         type="button"
-        onClick={() => { setIsOpen(!isOpen); if (isOpen) setSearch(''); }}
+        onClick={() => { setIsOpen(!isOpen); if (isOpen) { setSearch(''); setPopupStyle(null); } }}
         className={`${btnPad} text-th-text-4 hover:text-th-text-2 transition-colors shrink-0`}
         title="Эмодзи"
       >
@@ -177,7 +178,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       {isOpen && (
         <div
           ref={popupRef}
-          style={popupStyle}
+          style={popupStyle ? popupStyle : { position: 'fixed', top: -9999, left: -9999, width: 272 }}
           className="bg-th-card border border-th-border rounded-lg shadow-xl z-[9999] flex flex-col max-h-80"
         >
           {/* Search input */}
