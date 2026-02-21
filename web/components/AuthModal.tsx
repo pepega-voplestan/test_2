@@ -176,14 +176,12 @@ export default function AuthModal() {
             )}
             <div className="text-lg font-semibold">{title}</div>
           </div>
-          {!isVerifyMode && (
-            <button
-              onClick={onClose}
-              className="rounded-lg px-2 py-1 text-th-text-3 hover:bg-th-ring/10 hover:text-th-text-2"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            onClick={onClose}
+            className="rounded-lg px-2 py-1 text-th-text-3 hover:bg-th-ring/10 hover:text-th-text-2"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Tabs — only for login/register base modes */}
