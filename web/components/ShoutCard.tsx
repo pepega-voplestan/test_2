@@ -228,24 +228,16 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   }
 
   if (embed.type === 'imgur-album') {
-    if (imgError) return null;
     return (
-      <a href={embed.url} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-lg overflow-hidden border border-th-border/50 hover:border-th-text-4 transition-colors group">
-        <div className="relative">
-          <img
-            src={`https://i.imgur.com/${embed.albumId}h.jpg`}
-            alt="Imgur album"
-            loading="lazy"
-            onError={() => setImgError(true)}
-            className="w-full max-h-[300px] object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-3 flex items-center gap-2">
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-green-400 shrink-0" fill="currentColor"><path d="M2 6h6v6H2V6zm8 0h6v6h-6V6zm8 0h6v6h-6V6zM2 14h6v6H2v-6zm8 0h6v6h-6v-6z"/></svg>
-            <span className="text-white text-sm font-medium truncate">Imgur альбом</span>
-            <svg viewBox="0 0 20 20" className="w-4 h-4 text-white/70 ml-auto shrink-0 group-hover:text-white transition-colors" fill="currentColor"><path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5zm7.25-.75a.75.75 0 01.75-.75h3.5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0V6.31l-5.47 5.47a.75.75 0 01-1.06-1.06l5.47-5.47H12.25a.75.75 0 01-.75-.75z" clipRule="evenodd"/></svg>
-          </div>
+      <a href={embed.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 mb-2 px-3 py-2.5 rounded-lg border border-th-border/50 hover:border-th-text-4 bg-th-elevated/50 transition-colors group">
+        <div className="w-10 h-10 rounded-lg bg-[#1bb76e] flex items-center justify-center shrink-0">
+          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor"><path d="M2 6h6v6H2V6zm8 0h6v6h-6V6zm8 0h6v6h-6V6zM2 14h6v6H2v-6zm8 0h6v6h-6v-6z"/></svg>
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-th-text text-sm font-medium truncate">Imgur альбом</div>
+          <div className="text-th-text-4 text-xs truncate">{embed.url}</div>
+        </div>
+        <svg viewBox="0 0 20 20" className="w-4 h-4 text-th-text-4 shrink-0 group-hover:text-th-text-2 transition-colors" fill="currentColor"><path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5zm7.25-.75a.75.75 0 01.75-.75h3.5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0V6.31l-5.47 5.47a.75.75 0 01-1.06-1.06l5.47-5.47H12.25a.75.75 0 01-.75-.75z" clipRule="evenodd"/></svg>
       </a>
     );
   }
