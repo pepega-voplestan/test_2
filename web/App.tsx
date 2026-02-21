@@ -17,7 +17,7 @@ const App: React.FC = () => {
           <Header />
 
           <main className="flex justify-center max-w-[1200px] mx-auto px-4 pb-20 pt-6 gap-8">
-            <div className="w-full max-w-[700px]">
+            <div className="w-full max-w-[700px] bg-th-feed rounded-2xl px-5 py-6 sm:px-6">
               {route.page === 'profile' ? (
                 <ProfilePage userId={route.userId} />
               ) : (
