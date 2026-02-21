@@ -240,7 +240,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                   )}
                 </div>
               </div>
-              <div className="grow flex flex-col">
+              <div className="grow flex flex-col min-w-0">
                 {user ? (
                     <div className="flex flex-col w-full gap-2">
                         <MentionInput
