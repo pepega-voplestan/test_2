@@ -291,14 +291,18 @@ const ShoutFeed: React.FC = () => {
       </div>
 
       {activeTab === 'announcements' ? (
-        <AnnouncementBlock
-          announcement={announcement}
-          isLoading={announcementLoading}
-          error={announcementError}
-        />
+        <div className="bg-th-feed rounded-xl px-5 py-4">
+          <AnnouncementBlock
+            announcement={announcement}
+            isLoading={announcementLoading}
+            error={announcementError}
+          />
+        </div>
       ) : (
         <>
-          <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); offsetRef.current += 1; }} />
+          <div className="bg-th-feed rounded-xl px-5 py-4 mb-3">
+            <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); offsetRef.current += 1; }} />
+          </div>
 
           {isLoading && shouts.length === 0 && (
             <div className="flex justify-center py-8">
@@ -319,10 +323,9 @@ const ShoutFeed: React.FC = () => {
             </div>
           )}
 
-          <div className="flex flex-col">
-            {shouts.map((shout, index) => (
-              <React.Fragment key={shout.id}>
-                {index > 0 && <div className="border-t border-th-border-2 my-4" />}
+          <div className="flex flex-col gap-3">
+            {shouts.map((shout) => (
+              <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
                 <ShoutCard
                   shout={shout}
                   showMedia={showMedia}
@@ -332,7 +335,7 @@ const ShoutFeed: React.FC = () => {
                   isThreadOpen={openThreadId === shout.id}
                   onThreadToggle={handleThreadToggle}
                 />
-              </React.Fragment>
+              </div>
             ))}
           </div>
 
