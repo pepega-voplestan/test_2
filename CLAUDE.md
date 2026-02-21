@@ -46,6 +46,7 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates
 │   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit
 │   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete
+│   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
 │   │   └── EmojiPicker.tsx   # Emoji picker with grouped categories
@@ -54,7 +55,8 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   └── ThemeContext.tsx  # Dark/light theme toggle with localStorage persistence
 │   ├── hooks/
 │   │   ├── useRoute.ts       # Hash-based client-side routing
-│   │   └── useSSE.ts         # SSE client hook with auto-reconnect + exponential backoff
+│   │   ├── useSSE.ts         # SSE client hook with auto-reconnect + exponential backoff
+│   │   └── useMentionUsers.ts # Module-level singleton cache for mention user list (lazy-loaded on first @)
 │   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider
 │   ├── index.tsx             # React entry point (StrictMode)
 │   ├── types.ts              # TypeScript type definitions
@@ -305,6 +307,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - The frontend is a single-page application using hash-based routing — no server-side route handling needed.
 - Comments are stored in a separate `comments` table (not as shouts) — single level of threading, no deep nesting.
 - Shout and comment deletion is a soft-delete: the `is_deleted` flag is set but the row is retained.
+- @mentions are supported in shouts and comments. The composer (`MentionInput.tsx`) is a `contenteditable` div. Typing `@` opens a dropdown of up to 5 matching users (filtered client-side from a module-level cached list). Selected mentions are serialized as `@[username:userId]` tokens in the stored content string. `renderContent` in `ShoutCard.tsx` parses these tokens and renders them as `#/profile/:id` links. Character counting normalizes `@[name:id]` back to `@name` before applying the 400-char limit. The user list is fetched lazily (only on first `@` trigger) via `GET /users/mentions` and cached for the browser session.
 - Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
 - YouTube URLs in shout content are auto-detected via regex and metadata is fetched from the oEmbed API (5s timeout, graceful fallback).
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
