@@ -31,6 +31,148 @@ function detectYouTubeId(text: string): string | null {
   return null;
 }
 
+/* ---------- Scroll lock helper ---------- */
+
+function useScrollLock(isLocked: boolean) {
+  useEffect(() => {
+    if (!isLocked) return;
+    const scrollY = window.scrollY;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = 'hidden';
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, [isLocked]);
+}
+
+/* ---------- Embed detection & rendering ---------- */
+
+type EmbedInfo =
+  | { type: 'imgur'; imageId: string; ext: string }
+  | { type: 'coub'; videoId: string }
+  | { type: 'tenor'; url: string; tenorId: string }
+  | { type: 'imgur-direct'; url: string };
+
+function extractEmbeds(text: string): EmbedInfo[] {
+  const embeds: EmbedInfo[] = [];
+  const urls = text.match(/https?:\/\/[^\s]+/g) || [];
+  for (const url of urls) {
+    // Direct imgur image: i.imgur.com/XXXX.ext
+    const imgurDirect = url.match(/https?:\/\/i\.imgur\.com\/([a-zA-Z0-9]+)\.(jpg|jpeg|png|gif|webp|mp4)/i);
+    if (imgurDirect) {
+      embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+    // Imgur page: imgur.com/XXXX (not album, not gallery)
+    const imgurPage = url.match(/https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]{5,10})(?:[?#]|$)/);
+    if (imgurPage) {
+      embeds.push({ type: 'imgur', imageId: imgurPage[1], ext: 'jpg' });
+      continue;
+    }
+    // Imgur album: imgur.com/a/XXXX or imgur.com/gallery/XXXX
+    const imgurAlbum = url.match(/https?:\/\/(?:www\.)?imgur\.com\/(?:a|gallery)\/([a-zA-Z0-9]+)/);
+    if (imgurAlbum) {
+      embeds.push({ type: 'imgur', imageId: imgurAlbum[1], ext: 'jpg' });
+      continue;
+    }
+    // Coub: coub.com/view/XXXX
+    const coub = url.match(/https?:\/\/(?:www\.)?coub\.com\/view\/([a-zA-Z0-9_-]+)/);
+    if (coub) {
+      embeds.push({ type: 'coub', videoId: coub[1] });
+      continue;
+    }
+    // Tenor: tenor.com/view/xxx-12345
+    const tenor = url.match(/https?:\/\/(?:www\.)?tenor\.com\/(?:[a-z]{2}\/)?view\/[\w-]+-(\d+)/);
+    if (tenor) {
+      embeds.push({ type: 'tenor', url, tenorId: tenor[1] });
+      continue;
+    }
+    // Direct tenor media
+    const tenorDirect = url.match(/https?:\/\/media1?\.tenor\.com\/[^\s]+\.(gif|mp4)/i);
+    if (tenorDirect) {
+      embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+  }
+  return embeds;
+}
+
+const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
+  const [imgError, setImgError] = useState(false);
+
+  if (embed.type === 'imgur-direct') {
+    if (imgError) return null;
+    if (embed.url.endsWith('.mp4')) {
+      return (
+        <div className="mb-2 rounded-lg overflow-hidden max-w-full">
+          <video src={embed.url} controls muted loop className="max-h-[300px] max-w-full rounded-lg" />
+        </div>
+      );
+    }
+    return (
+      <div className="mb-2 rounded-lg">
+        <img src={embed.url} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+      </div>
+    );
+  }
+
+  if (embed.type === 'imgur') {
+    if (imgError) return null;
+    return (
+      <div className="mb-2 rounded-lg">
+        <img src={`https://i.imgur.com/${embed.imageId}.${embed.ext}`} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+      </div>
+    );
+  }
+
+  if (embed.type === 'coub') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <div className="w-full aspect-video">
+          <iframe
+            src={`https://coub.com/embed/${embed.videoId}?muted=false&autostart=false&originalSize=false&startWithHD=true`}
+            className="w-full h-full"
+            allowFullScreen
+            allow="autoplay"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            title="Coub"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (embed.type === 'tenor') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <div className="w-full" style={{ paddingBottom: '75%', position: 'relative' }}>
+          <iframe
+            src={`https://tenor.com/embed/${embed.tenorId}`}
+            className="absolute inset-0 w-full h-full"
+            allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            title="Tenor GIF"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+/* ---------- Content rendering ---------- */
+
 function renderContent(text: string) {
   const tokens = text.split(/(\s+)/);
   return tokens.map((token, i) => {
@@ -65,10 +207,14 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const [isDeleting, setIsDeleting] = useState(false);
   const isOwner = user && user.id === comment.user.id;
 
+  // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
     setLikes(comment.likes);
+  }, [comment.likes]);
+
+  useEffect(() => {
     setIsLiked(user && comment.likedBy ? comment.likedBy.includes(user.id) : false);
-  }, [comment.likes, comment.likedBy, user]);
+  }, [comment.likedBy, user]);
 
   useEffect(() => {
     if (!lightboxOpen) return;
@@ -76,6 +222,9 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxOpen]);
+
+  // Scroll lock for lightbox
+  useScrollLock(lightboxOpen);
 
   const handleLike = async () => {
     if (!user) { openModal(); return; }
@@ -103,6 +252,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
       setConfirmDelete(false);
     } finally { setIsDeleting(false); }
   };
+
+  const embeds = comment.content ? extractEmbeds(comment.content) : [];
 
   return (
     <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
@@ -139,6 +290,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               {renderContent(comment.content)}
             </div>
           )}
+
+          {showMedia && embeds.map((embed, idx) => (
+            <EmbedCard key={`embed-${idx}`} embed={embed} />
+          ))}
 
           {showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
@@ -240,10 +395,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     user && shout.likedBy ? shout.likedBy.includes(user.id) : false
   );
 
+  // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
     setLikes(shout.likes);
+  }, [shout.likes]);
+
+  useEffect(() => {
     setIsLiked(user && shout.likedBy ? shout.likedBy.includes(user.id) : false);
-  }, [shout.likes, shout.likedBy, user]);
+  }, [shout.likedBy, user]);
 
   useEffect(() => {
     if (!lightboxOpen) return;
@@ -251,6 +410,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxOpen]);
+
+  // Scroll lock for lightbox
+  useScrollLock(lightboxOpen);
 
   const repliesOpen = isThreadOpen ?? false;
   const hasComments = shout.comments && shout.comments.length > 0;
@@ -392,8 +554,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const insertEmoji = (emoji: string) => setReplyContent(prev => prev + emoji);
 
+  const embeds = shout.content ? extractEmbeds(shout.content) : [];
+
   return (
-    <div className="flex flex-col mb-4">
+    <div className="flex flex-col">
       <div className="flex gap-4">
         <a href={`#/profile/${shout.user.id}`} className="shrink-0">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
@@ -427,6 +591,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                {renderContent(shout.content)}
             </div>
           )}
+
+          {showMedia && embeds.map((embed, idx) => (
+            <EmbedCard key={`embed-${idx}`} embed={embed} />
+          ))}
 
           {showMedia && shout.media?.type === 'image' && (
              <div className="mb-3 rounded-lg">
