@@ -273,7 +273,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       </a>
 
       {/* Profile Header */}
-      <div className="bg-th-card rounded-lg p-6 border border-th-border-2/50 mb-6">
+      <div className="bg-th-feed rounded-xl p-6 mb-6">
         <div className="flex items-start gap-5">
           {/* Avatar */}
           <div className="w-20 h-20 rounded-full overflow-hidden bg-th-input shrink-0">
@@ -466,10 +466,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       )}
 
       {/* Shouts list */}
-      <div className="flex flex-col">
-        {shouts.map((shout, index) => (
-          <React.Fragment key={shout.id}>
-            {index > 0 && <div className="border-t border-th-border-2 my-4" />}
+      <div className="flex flex-col gap-3">
+        {shouts.map((shout) => (
+          <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
             <ShoutCard
               shout={shout}
               showMedia={true}
@@ -479,7 +478,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               isThreadOpen={openThreadId === shout.id}
               onThreadToggle={handleThreadToggle}
             />
-          </React.Fragment>
+          </div>
         ))}
       </div>
 
