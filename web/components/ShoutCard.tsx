@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
+import Lightbox from './Lightbox';
 
 interface ShoutCardProps {
   shout: Shout;
@@ -29,30 +30,6 @@ function detectYouTubeId(text: string): string | null {
     if (m) return m[1];
   }
   return null;
-}
-
-/* ---------- Scroll lock helper ---------- */
-
-function useScrollLock(isLocked: boolean) {
-  useEffect(() => {
-    if (!isLocked) return;
-    const scrollY = window.scrollY;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = 'hidden';
-    document.body.style.paddingRight = `${scrollbarWidth}px`;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-
-    return () => {
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      window.scrollTo(0, scrollY);
-    };
-  }, [isLocked]);
 }
 
 /* ---------- Embed detection & rendering ---------- */
@@ -333,16 +310,6 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
     setIsLiked(user && comment.likedBy ? comment.likedBy.includes(user.id) : false);
   }, [comment.likedBy, user]);
 
-  useEffect(() => {
-    if (!lightboxOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxOpen]);
-
-  // Scroll lock for lightbox
-  useScrollLock(lightboxOpen);
-
   const handleLike = async () => {
     if (!user) { openModal(); return; }
     const newIsLiked = !isLiked;
@@ -423,12 +390,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           {lightboxOpen && comment.media?.type === 'image' && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
-              <div className="relative max-w-[90vw] max-h-[90vh]">
-                <img src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
-                <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
-              </div>
-            </div>
+            <Lightbox
+              src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full}
+              onClose={() => setLightboxOpen(false)}
+            />
           )}
 
           {showMedia && comment.media?.type === 'youtube' && (
@@ -520,16 +485,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   useEffect(() => {
     setIsLiked(user && shout.likedBy ? shout.likedBy.includes(user.id) : false);
   }, [shout.likedBy, user]);
-
-  useEffect(() => {
-    if (!lightboxOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxOpen]);
-
-  // Scroll lock for lightbox
-  useScrollLock(lightboxOpen);
 
   const repliesOpen = isThreadOpen ?? false;
   const hasComments = shout.comments && shout.comments.length > 0;
@@ -724,12 +679,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           )}
 
           {lightboxOpen && shout.media?.type === 'image' && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
-              <div className="relative max-w-[90vw] max-h-[90vh]">
-                <img src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
-                <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
-              </div>
-            </div>
+            <Lightbox
+              src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
+              onClose={() => setLightboxOpen(false)}
+            />
           )}
 
           {showMedia && shout.media?.type === 'youtube' && (
