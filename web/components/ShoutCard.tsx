@@ -36,6 +36,7 @@ function detectYouTubeId(text: string): string | null {
 
 type EmbedInfo =
   | { type: 'imgur'; imageId: string; ext: string }
+  | { type: 'imgur-album'; albumId: string }
   | { type: 'coub'; videoId: string }
   | { type: 'tenor'; url: string; tenorId: string }
   | { type: 'imgur-direct'; url: string }
@@ -61,7 +62,8 @@ function extractEmbeds(text: string): EmbedInfo[] {
     const imgurAlbum = url.match(/https?:\/\/(?:www\.)?imgur\.com\/(?:a|gallery)\/([\w-]+)/);
     if (imgurAlbum) {
       const parts = imgurAlbum[1].split('-');
-      embeds.push({ type: 'imgur', imageId: parts[parts.length - 1], ext: 'jpg' });
+      const albumId = parts[parts.length - 1];
+      embeds.push({ type: 'imgur-album', albumId });
       continue;
     }
     // Twitter/X: twitter.com/user/status/123 or x.com/user/status/123
@@ -221,6 +223,20 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
     return (
       <div className="mb-2 rounded-lg">
         <img src={`https://i.imgur.com/${embed.imageId}.${embed.ext}`} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+      </div>
+    );
+  }
+
+  if (embed.type === 'imgur-album') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <iframe
+          src={`https://imgur.com/a/${embed.albumId}/embed?pub=true&w=540`}
+          className="w-full border-0"
+          style={{ minHeight: 500 }}
+          sandbox="allow-scripts allow-same-origin allow-popups"
+          loading="lazy"
+        />
       </div>
     );
   }
