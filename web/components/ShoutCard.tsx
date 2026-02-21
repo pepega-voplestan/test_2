@@ -79,10 +79,11 @@ function extractEmbeds(text: string): EmbedInfo[] {
       embeds.push({ type: 'imgur', imageId: imgurPage[1], ext: 'jpg' });
       continue;
     }
-    // Imgur album: imgur.com/a/XXXX or imgur.com/gallery/XXXX
-    const imgurAlbum = url.match(/https?:\/\/(?:www\.)?imgur\.com\/(?:a|gallery)\/([a-zA-Z0-9]+)/);
+    // Imgur album/gallery: imgur.com/a/XXXX or imgur.com/gallery/slug-XXXX
+    const imgurAlbum = url.match(/https?:\/\/(?:www\.)?imgur\.com\/(?:a|gallery)\/([\w-]+)/);
     if (imgurAlbum) {
-      embeds.push({ type: 'imgur', imageId: imgurAlbum[1], ext: 'jpg' });
+      const parts = imgurAlbum[1].split('-');
+      embeds.push({ type: 'imgur', imageId: parts[parts.length - 1], ext: 'jpg' });
       continue;
     }
     // Coub: coub.com/view/XXXX
