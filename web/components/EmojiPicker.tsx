@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 
 const EMOJI_GROUPS = [
   { label: 'Часто', emojis: ['😂', '😍', '🔥', '👍', '👎', '❤️', '😢', '😡', '🤔', '🙏', '🎉', '💯'] },
@@ -120,9 +120,14 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
     });
   }, []);
 
-  useEffect(() => {
+  // Position before browser paint to avoid first-open jump
+  useLayoutEffect(() => {
     if (!isOpen) return;
     positionPopup();
+  }, [isOpen, positionPopup]);
+
+  useEffect(() => {
+    if (!isOpen) return;
     // Focus search input when opened
     setTimeout(() => searchRef.current?.focus(), 0);
 
