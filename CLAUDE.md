@@ -13,6 +13,7 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 ├── api/                    # Backend (Express.js)
 │   ├── src/
 │   │   ├── server.js       # Express app setup, session middleware, rate limiting, dotenv
+│   │   ├── swagger.js      # OpenAPI 3.0.3 spec for Swagger UI (dev only, blocked in prod)
 │   │   ├── routes/         # Domain-split route handlers
 │   │   │   ├── index.js        # Mounts all domain routers via mountRoutes(app)
 │   │   │   ├── auth.js         # Auth routes (register, login, logout, password reset)
@@ -49,7 +50,8 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
-│   │   └── EmojiPicker.tsx   # Emoji picker with grouped categories
+│   │   ├── EmojiPicker.tsx   # Emoji picker with grouped categories
+│   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss and scroll lock
 │   ├── context/
 │   │   ├── AuthContext.tsx   # Auth state via React Context + API helper
 │   │   └── ThemeContext.tsx  # Dark/light theme toggle with localStorage persistence
@@ -57,6 +59,8 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── useRoute.ts       # Hash-based client-side routing
 │   │   ├── useSSE.ts         # SSE client hook with auto-reconnect + exponential backoff
 │   │   └── useMentionUsers.ts # Module-level singleton cache for mention user list (lazy-loaded on first @)
+│   ├── public/
+│   │   └── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
 │   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider
 │   ├── index.tsx             # React entry point (StrictMode)
 │   ├── types.ts              # TypeScript type definitions
@@ -71,13 +75,14 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   └── restore.sh            # Restore Docker volumes from a timestamped backup
 ├── docker-compose.yml      # Production: 4 services on port 3005
 ├── docker-compose.dev.yml  # Development: 4 services on port 3006 (isolated volumes)
-├── nginx.conf              # Production reverse proxy
-├── nginx-dev.conf          # Development reverse proxy
+├── nginx.conf              # Production reverse proxy (blocks /api/docs)
+├── nginx-dev.conf          # Development reverse proxy (allows /api/docs for Swagger UI)
 ├── media-nginx.conf        # Security-hardened media file server (webp/jpg/jpeg/png/gif)
 ├── Makefile                # Shortcuts for docker-compose + backup/restore commands
-├── .env                    # Production environment variables
-├── .env.dev                # Development environment variables
+├── .env                    # Production environment variables (gitignored)
+├── .env.dev                # Development environment variables (gitignored)
 ├── .env.example            # Template with placeholder values
+├── RELEASE_NOTES_2026-02-18.md # Release notes for the Prisma migration release
 └── README.md
 ```
 
@@ -164,6 +169,15 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP variants; GIFs also store original) |
 | POST | `/upload/avatar` | Yes | Upload avatar (≤2MB JPG/PNG/WebP; generates 64/128/256px square WebP) |
 | GET | `/avatars/:userId/:size.webp` | No | Serve avatar with immutable cache headers |
+
+## API Documentation (Swagger UI)
+
+The API has an interactive OpenAPI 3.0.3 documentation UI powered by `swagger-ui-express`. The spec is defined in `api/src/swagger.js` and includes schemas for all DTOs (`ShoutDto`, `CommentDto`, `MediaDto`, `Profile`, `Announcement`, etc.).
+
+- **Development**: accessible at `/api/docs` (served by Express when `NODE_ENV !== "production"`)
+- **Production**: blocked by nginx (`location /api/docs { return 404; }`)
+
+The Swagger spec covers all endpoints and their request/response schemas, making it useful as a quick reference during development.
 
 ## SSE Real-Time Events
 
@@ -285,6 +299,9 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Image processing via **Sharp**: auto-rotate, strip EXIF, generate WebP variants, atomic move from tmp to permanent storage
 - Animated GIFs: original `.gif` is preserved alongside static WebP thumbnails generated from the first frame
 - Shout/comment character limit: 400 effective chars, where each newline costs 40 chars (`effectiveCharCount` helper)
+- API documentation via **swagger-ui-express** + OpenAPI 3.0.3 spec (`swagger.js`) — dev only, blocked by nginx in production
+- Graceful shutdown: `SIGTERM`/`SIGINT` handlers disconnect Prisma before exiting
+- Request logging: every request is logged as `[API] METHOD /path` to stdout
 
 ### Frontend (web/)
 
@@ -312,6 +329,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - YouTube URLs in shout content are auto-detected via regex and metadata is fetched from the oEmbed API (5s timeout, graceful fallback).
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
 - Animated GIFs skip re-encoding; the original GIF is stored as `original.gif` alongside WebP thumbnail variants. The `animated: true` flag and `gif` URL are included in the media DTO.
+- Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling.
 - The media nginx container serves files from the `/media` volume with a strict allowlist: `.webp`, `.jpg`, `.jpeg`, `.png`, `.gif` extensions only; no dotfiles or directory listing; immutable 1-year cache headers.
 - Popular sort: shouts from the last 7 days, ordered by like count.
 - Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation. Codes expire in 10 minutes, max 5 attempts.
@@ -319,6 +337,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
 - The `web/package.json` dev script runs both the API and Vite concurrently for local development.
 - `App.tsx` wraps the app in `<ThemeProvider>` (outer) then `<AuthProvider>` (inner).
+- Nginx CSP headers allow embeds from YouTube (nocookie), Coub, and Tenor; images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, and fxTwitter; and connect-src to fxTwitter API.
 
 ## Backup & Restore
 
@@ -350,7 +369,7 @@ Each defines four services:
 |---------|-------------|
 | `api` / `api-dev` | Express backend (internal port 3000). Runs `prisma migrate deploy` on startup via `scripts/start.sh`. Dev container mounts `./api/src` as read-only for hot-reload without rebuild. |
 | `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images and GIFs only) |
-| `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, SPA fallback |
+| `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, SPA fallback. Production blocks `/api/docs` (Swagger UI). SSE endpoint has buffering disabled and 24h timeout. |
 | `web-build` / `web-build-dev` | One-shot container that builds the React app and populates the `webdist` shared volume |
 
 Production volumes: `appdata`, `webdist`, `media`. Development volumes: `appdata-dev`, `webdist-dev`, `media-dev` (fully isolated).
