@@ -115,7 +115,7 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
     if (embed.url.endsWith('.mp4')) {
       return (
         <div className="mb-2 rounded-lg overflow-hidden max-w-full">
-          <video src={embed.url} controls loop className="max-h-[300px] max-w-full rounded-lg" />
+          <video src={embed.url} controls loop className="max-h-[300px] max-w-full rounded-lg" ref={el => { if (el) el.volume = 0.3; }} />
         </div>
       );
     }
