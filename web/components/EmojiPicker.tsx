@@ -128,8 +128,9 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
 
   useEffect(() => {
     if (!isOpen) return;
-    // Focus search input when opened
-    setTimeout(() => searchRef.current?.focus(), 0);
+    // Focus search input when opened (skip on mobile to avoid keyboard popup)
+    const isMobile = window.matchMedia('(pointer: coarse)').matches;
+    if (!isMobile) setTimeout(() => searchRef.current?.focus(), 0);
 
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node) &&
