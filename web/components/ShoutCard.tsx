@@ -130,6 +130,8 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
   const [tweet, setTweet] = useState<TweetData | null>(tweetCache.get(tweetId) ?? null);
   const [loading, setLoading] = useState(!tweetCache.has(tweetId));
   const [error, setError] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (tweetCache.has(tweetId)) return;
@@ -170,8 +172,6 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
   const photos = tweet.media?.photos || [];
   const videos = tweet.media?.videos || [];
 
-  const [avatarError, setAvatarError] = useState(false);
-  const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set());
   const initial = tweet.author.name.charAt(0).toUpperCase();
 
   // For photos/videos, use fxtwitter proxy URLs (pbs.twimg.com is blocked by referrer policy)
