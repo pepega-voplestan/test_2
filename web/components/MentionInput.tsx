@@ -357,7 +357,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
   const textSizeClass = size === 'sm' ? 'text-sm' : '';
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full overflow-hidden">
       {/* Simulated placeholder — contenteditable has no native placeholder support */}
       {isEmpty && (
         <div
