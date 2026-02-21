@@ -6,11 +6,21 @@ const Header: React.FC = () => {
   const { user, openModal, logout } = useAuth();
   const { theme, toggle } = useTheme();
 
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const hash = window.location.hash;
+    if (!hash || hash === '#/' || hash === '#') {
+      window.location.reload();
+    } else {
+      window.location.hash = '#/';
+    }
+  };
+
   return (
     <header className="bg-th-page h-[52px] border-b border-th-border-2 sticky top-0 z-50 flex items-center justify-center transition-colors">
       <div className="w-full max-w-[1100px] px-4 flex items-center justify-between">
         {/* Logo */}
-        <a href="#/" className="flex items-center">
+        <a href="#/" onClick={handleLogoClick} className="flex items-center">
           <div className="text-th-text font-bold text-2xl tracking-tighter">
             ВОПЛИ
           </div>

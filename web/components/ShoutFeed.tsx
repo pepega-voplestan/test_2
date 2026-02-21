@@ -277,10 +277,14 @@ const ShoutFeed: React.FC = () => {
           {isFeedTab && (
             <button
               onClick={() => setShowMedia(!showMedia)}
-              className={`p-1 transition-colors ${showMedia ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
+              className={`p-1.5 transition-colors ${showMedia ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
               title={showMedia ? 'Скрыть медиа' : 'Показать медиа'}
             >
-              {'\uD83D\uDC41'}
+              {showMedia ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+              )}
             </button>
           )}
         </div>
@@ -315,18 +319,20 @@ const ShoutFeed: React.FC = () => {
             </div>
           )}
 
-          <div className="flex flex-col gap-6">
-            {shouts.map((shout) => (
-              <ShoutCard
-                key={shout.id}
-                shout={shout}
-                showMedia={showMedia}
-                onCommentAdded={addCommentToShout}
-                onDelete={removeShout}
-                onCommentDeleted={removeComment}
-                isThreadOpen={openThreadId === shout.id}
-                onThreadToggle={handleThreadToggle}
-              />
+          <div className="flex flex-col">
+            {shouts.map((shout, index) => (
+              <React.Fragment key={shout.id}>
+                {index > 0 && <div className="border-t border-th-border-2 my-4" />}
+                <ShoutCard
+                  shout={shout}
+                  showMedia={showMedia}
+                  onCommentAdded={addCommentToShout}
+                  onDelete={removeShout}
+                  onCommentDeleted={removeComment}
+                  isThreadOpen={openThreadId === shout.id}
+                  onThreadToggle={handleThreadToggle}
+                />
+              </React.Fragment>
             ))}
           </div>
 
