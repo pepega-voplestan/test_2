@@ -201,6 +201,7 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
 
 const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   const [imgError, setImgError] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
 
   if (embed.type === 'imgur-direct') {
     if (imgError) return null;
@@ -213,16 +214,19 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
     }
     return (
       <div className="mb-2 rounded-lg">
-        <img src={embed.url} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+        <img src={embed.url} alt="Imgur" loading="lazy" onError={() => setImgError(true)} onClick={() => setLightbox(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity" />
+        {lightbox && <Lightbox src={embed.url} onClose={() => setLightbox(false)} />}
       </div>
     );
   }
 
   if (embed.type === 'imgur') {
     if (imgError) return null;
+    const src = `https://i.imgur.com/${embed.imageId}.${embed.ext}`;
     return (
       <div className="mb-2 rounded-lg">
-        <img src={`https://i.imgur.com/${embed.imageId}.${embed.ext}`} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+        <img src={src} alt="Imgur" loading="lazy" onError={() => setImgError(true)} onClick={() => setLightbox(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity" />
+        {lightbox && <Lightbox src={src} onClose={() => setLightbox(false)} />}
       </div>
     );
   }
@@ -784,7 +788,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                  </div>
                   <form className="w-full flex flex-col gap-2" onSubmit={handleReplySubmit}>
                       <textarea ref={replyTextareaRef} placeholder="Напишите ответ..."
-                          className="bg-transparent border-none outline-none text-th-text text-sm w-full placeholder-th-text-4 resize-none overflow-hidden"
+                          className="bg-transparent border-none outline-none text-th-text text-sm w-full placeholder-th-text-4 resize-none overflow-hidden break-all"
                           rows={1}
                           value={replyContent} onChange={(e) => { setReplyContent(e.target.value); setReplyError(null); }}
                           onPaste={handleReplyPaste}

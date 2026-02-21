@@ -272,7 +272,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                         <textarea
                             ref={textareaRef}
                             placeholder="Расскажите, что нового?"
-                            className="bg-transparent w-full border-none outline-none text-th-text placeholder-th-text-4 resize-none overflow-hidden"
+                            className="bg-transparent w-full border-none outline-none text-th-text placeholder-th-text-4 resize-none overflow-hidden break-all"
                             rows={1}
                             value={content}
                             onChange={(e) => { setContent(e.target.value); setError(null); }}
