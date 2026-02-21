@@ -202,6 +202,7 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
 
 const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   const [imgError, setImgError] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   if (embed.type === 'imgur-direct') {
     if (imgError) return null;
@@ -214,16 +215,19 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
     }
     return (
       <div className="mb-2 rounded-lg">
-        <img src={embed.url} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+        <img src={embed.url} alt="Imgur" loading="lazy" onError={() => setImgError(true)} onClick={() => setLightboxOpen(true)} className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg" />
+        {lightboxOpen && <Lightbox src={embed.url} onClose={() => setLightboxOpen(false)} />}
       </div>
     );
   }
 
   if (embed.type === 'imgur') {
     if (imgError) return null;
+    const imgSrc = `https://i.imgur.com/${embed.imageId}.${embed.ext}`;
     return (
       <div className="mb-2 rounded-lg">
-        <img src={`https://i.imgur.com/${embed.imageId}.${embed.ext}`} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+        <img src={imgSrc} alt="Imgur" loading="lazy" onError={() => setImgError(true)} onClick={() => setLightboxOpen(true)} className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg" />
+        {lightboxOpen && <Lightbox src={imgSrc} onClose={() => setLightboxOpen(false)} />}
       </div>
     );
   }
@@ -775,7 +779,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                         </svg>
                       )}
                  </div>
-                  <form className="w-full flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); submitReply(); }}>
+                  <form className="w-full flex flex-col gap-2 min-w-0" onSubmit={(e) => { e.preventDefault(); submitReply(); }}>
                       <MentionInput
                           ref={mentionInputRef}
                           placeholder="Напишите ответ..."
