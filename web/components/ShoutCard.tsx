@@ -36,7 +36,7 @@ function detectYouTubeId(text: string): string | null {
 
 type EmbedInfo =
   | { type: 'imgur'; imageId: string; ext: string }
-  | { type: 'imgur-album'; albumId: string }
+  | { type: 'imgur-album'; albumId: string; url: string }
   | { type: 'coub'; videoId: string }
   | { type: 'tenor'; url: string; tenorId: string }
   | { type: 'imgur-direct'; url: string }
@@ -63,7 +63,7 @@ function extractEmbeds(text: string): EmbedInfo[] {
     if (imgurAlbum) {
       const parts = imgurAlbum[1].split('-');
       const albumId = parts[parts.length - 1];
-      embeds.push({ type: 'imgur-album', albumId });
+      embeds.push({ type: 'imgur-album', albumId, url });
       continue;
     }
     // Twitter/X: twitter.com/user/status/123 or x.com/user/status/123
@@ -228,16 +228,25 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   }
 
   if (embed.type === 'imgur-album') {
+    if (imgError) return null;
     return (
-      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
-        <iframe
-          src={`https://imgur.com/a/${embed.albumId}/embed?pub=true&w=540`}
-          className="w-full border-0"
-          style={{ minHeight: 500 }}
-          sandbox="allow-scripts allow-same-origin allow-popups"
-          loading="lazy"
-        />
-      </div>
+      <a href={embed.url} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-lg overflow-hidden border border-th-border/50 hover:border-th-text-4 transition-colors group">
+        <div className="relative">
+          <img
+            src={`https://i.imgur.com/${embed.albumId}h.jpg`}
+            alt="Imgur album"
+            loading="lazy"
+            onError={() => setImgError(true)}
+            className="w-full max-h-[300px] object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-3 flex items-center gap-2">
+            <svg viewBox="0 0 24 24" className="w-5 h-5 text-green-400 shrink-0" fill="currentColor"><path d="M2 6h6v6H2V6zm8 0h6v6h-6V6zm8 0h6v6h-6V6zM2 14h6v6H2v-6zm8 0h6v6h-6v-6z"/></svg>
+            <span className="text-white text-sm font-medium truncate">Imgur альбом</span>
+            <svg viewBox="0 0 20 20" className="w-4 h-4 text-white/70 ml-auto shrink-0 group-hover:text-white transition-colors" fill="currentColor"><path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5zm7.25-.75a.75.75 0 01.75-.75h3.5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0V6.31l-5.47 5.47a.75.75 0 01-1.06-1.06l5.47-5.47H12.25a.75.75 0 01-.75-.75z" clipRule="evenodd"/></svg>
+          </div>
+        </div>
+      </a>
     );
   }
 
