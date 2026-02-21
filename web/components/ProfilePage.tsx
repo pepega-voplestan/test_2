@@ -39,6 +39,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [pendingAvatarPreview, setPendingAvatarPreview] = useState<string | null>(null);
 
+  // Password visibility toggles
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
   // Fetch profile
   useEffect(() => {
     setIsLoadingProfile(true);
@@ -269,7 +273,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       </a>
 
       {/* Profile Header */}
-      <div className="bg-th-card rounded-lg p-6 border border-th-border-2/50 mb-6">
+      <div className="bg-th-feed rounded-xl p-6 mb-6">
         <div className="flex items-start gap-5">
           {/* Avatar */}
           <div className="w-20 h-20 rounded-full overflow-hidden bg-th-input shrink-0">
@@ -368,25 +372,43 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
                   <div className="text-xs text-th-text-4 mb-1">Текущий пароль</div>
-                  <input
-                    type="password"
-                    value={editForm.currentPassword}
-                    onChange={(e) => setEditForm(f => ({ ...f, currentPassword: e.target.value }))}
-                    className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
-                    disabled={isSaving}
-                    autoComplete="current-password"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={editForm.currentPassword}
+                      onChange={(e) => setEditForm(f => ({ ...f, currentPassword: e.target.value }))}
+                      className="w-full bg-th-ring/5 rounded-lg px-3 py-2 pr-10 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
+                      disabled={isSaving}
+                      autoComplete="current-password"
+                    />
+                    <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-th-text-4 hover:text-th-text-2 transition-colors" aria-label={showCurrentPassword ? "Скрыть пароль" : "Показать пароль"}>
+                      {showCurrentPassword ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      )}
+                    </button>
+                  </div>
                 </label>
                 <label className="block">
                   <div className="text-xs text-th-text-4 mb-1">Новый пароль</div>
-                  <input
-                    type="password"
-                    value={editForm.newPassword}
-                    onChange={(e) => setEditForm(f => ({ ...f, newPassword: e.target.value }))}
-                    className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
-                    disabled={isSaving}
-                    autoComplete="new-password"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={editForm.newPassword}
+                      onChange={(e) => setEditForm(f => ({ ...f, newPassword: e.target.value }))}
+                      className="w-full bg-th-ring/5 rounded-lg px-3 py-2 pr-10 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
+                      disabled={isSaving}
+                      autoComplete="new-password"
+                    />
+                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-th-text-4 hover:text-th-text-2 transition-colors" aria-label={showNewPassword ? "Скрыть пароль" : "Показать пароль"}>
+                      {showNewPassword ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      )}
+                    </button>
+                  </div>
                 </label>
               </div>
             </div>
@@ -444,18 +466,19 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       )}
 
       {/* Shouts list */}
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
         {shouts.map((shout) => (
-          <ShoutCard
-            key={shout.id}
-            shout={shout}
-            showMedia={true}
-            onCommentAdded={addCommentToShout}
-            onDelete={removeShout}
-            onCommentDeleted={removeComment}
-            isThreadOpen={openThreadId === shout.id}
-            onThreadToggle={handleThreadToggle}
-          />
+          <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
+            <ShoutCard
+              shout={shout}
+              showMedia={true}
+              onCommentAdded={addCommentToShout}
+              onDelete={removeShout}
+              onCommentDeleted={removeComment}
+              isThreadOpen={openThreadId === shout.id}
+              onThreadToggle={handleThreadToggle}
+            />
+          </div>
         ))}
       </div>
 

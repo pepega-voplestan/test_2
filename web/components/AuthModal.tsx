@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 type Mode = "login" | "register" | "register-verify" | "forgot" | "forgot-verify" | "forgot-newpass";
@@ -24,6 +24,22 @@ export default function AuthModal() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const isVerifyMode = mode === "register-verify" || mode === "forgot-verify";
+
+  // Block ESC key during verify modes
+  useEffect(() => {
+    if (!isAuthModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isVerifyMode) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [isAuthModalOpen, isVerifyMode]);
 
   const title = useMemo(() => {
     switch (mode) {
@@ -46,6 +62,7 @@ export default function AuthModal() {
     setNewPassword("");
     setError(null);
     setInfo(null);
+    setShowPassword(false);
   }
 
   function switchMode(newMode: Mode) {
@@ -141,13 +158,14 @@ export default function AuthModal() {
       <button
         aria-label="Close"
         className="absolute inset-0 bg-black/60"
-        onClick={onClose}
+        onClick={isVerifyMode ? undefined : onClose}
+        style={isVerifyMode ? { cursor: "default" } : undefined}
       />
 
       <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-th-card text-th-text shadow-2xl ring-1 ring-th-ring/10">
         <div className="flex items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2">
-            {!isLoginOrRegisterTab && (
+            {!isLoginOrRegisterTab && !isVerifyMode && (
               <button
                 onClick={() => switchMode("login")}
                 className="rounded-lg px-2 py-1 text-th-text-3 hover:bg-th-ring/10 hover:text-th-text-2"
@@ -232,15 +250,24 @@ export default function AuthModal() {
                 <div className="mb-1 text-xs font-medium text-th-text-3">
                   Пароль
                 </div>
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  type="password"
-                  autoComplete="current-password"
-                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
-                  placeholder="••••••••"
-                  disabled={submitting}
-                />
+                <div className="relative">
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    placeholder="••••••••"
+                    disabled={submitting}
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-th-text-4 hover:text-th-text-2 transition-colors" aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}>
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
               </label>
 
               <div className="mt-2 text-right">
@@ -291,15 +318,24 @@ export default function AuthModal() {
                 <div className="mb-1 text-xs font-medium text-th-text-3">
                   Пароль
                 </div>
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  type="password"
-                  autoComplete="new-password"
-                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
-                  placeholder="••••••••"
-                  disabled={submitting}
-                />
+                <div className="relative">
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    placeholder="••••••••"
+                    disabled={submitting}
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-th-text-4 hover:text-th-text-2 transition-colors" aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}>
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
               </label>
             </>
           )}
@@ -388,16 +424,25 @@ export default function AuthModal() {
                 <div className="mb-1 text-xs font-medium text-th-text-3">
                   Новый пароль
                 </div>
-                <input
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  type="password"
-                  autoComplete="new-password"
-                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
-                  placeholder="••••••••"
-                  disabled={submitting}
-                  autoFocus
-                />
+                <div className="relative">
+                  <input
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    placeholder="••••••••"
+                    disabled={submitting}
+                    autoFocus
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-th-text-4 hover:text-th-text-2 transition-colors" aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}>
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
               </label>
             </>
           )}
@@ -449,16 +494,16 @@ export default function AuthModal() {
                 </button>
               </>
             )}
-            {mode === "register-verify" && (
+            {mode === "forgot" && (
               <button
                 type="button"
-                onClick={() => switchMode("register")}
+                onClick={() => switchMode("login")}
                 className="text-th-text-2 hover:underline"
               >
-                Изменить данные
+                Вернуться ко входу
               </button>
             )}
-            {(mode === "forgot" || mode === "forgot-verify" || mode === "forgot-newpass") && (
+            {mode === "forgot-newpass" && (
               <button
                 type="button"
                 onClick={() => switchMode("login")}
