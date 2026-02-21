@@ -114,6 +114,54 @@ function getCaretRect(): DOMRect | null {
   return rect;
 }
 
+// Inserts plain text at the current caret position inside a contenteditable element.
+// Handles multi-line text (splits on \n → <br>). Dispatches a synthetic 'input' event
+// so the React onInput handler picks up the change for serialization.
+function insertAtCursor(el: HTMLElement, text: string): void {
+  el.focus();
+  const sel = window.getSelection();
+  if (!sel) return;
+
+  // If focus didn't produce a caret (e.g. empty element), place cursor at end
+  if (sel.rangeCount === 0) {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    r.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+
+  // Build a fragment: split on newlines, insert <br> between lines
+  const lines = text.split('\n');
+  const frag = document.createDocumentFragment();
+  lines.forEach((line, i) => {
+    if (i > 0) frag.appendChild(document.createElement('br'));
+    if (line) frag.appendChild(document.createTextNode(line));
+  });
+
+  const lastNode = frag.lastChild;
+  range.insertNode(frag);
+
+  // Move caret to after the inserted content
+  if (lastNode) {
+    const newRange = document.createRange();
+    if (lastNode.nodeType === Node.TEXT_NODE) {
+      newRange.setStart(lastNode, (lastNode as Text).length);
+    } else {
+      newRange.setStartAfter(lastNode);
+    }
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+  }
+
+  // Trigger React's onInput handler so serializeContent runs
+  el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+}
+
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
   const { placeholder, disabled, onContentChange, onSubmit, onImagePaste, className, size = 'md' } = props;
 
@@ -138,7 +186,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     return users
       .filter(u => u.id !== currentUser?.id)
       .filter(u => q === '' || u.name.toLowerCase().startsWith(q))
-      .slice(0, 8);
+      .slice(0, 5);
   }, [users, mentionQuery, currentUser?.id]);
 
   // Reset selection when the filtered list changes
@@ -193,8 +241,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertText(text: string) {
       const el = editorRef.current;
       if (!el) return;
-      el.focus();
-      document.execCommand('insertText', false, text);
+      insertAtCursor(el, text);
     },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -302,8 +349,8 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
     // Insert plain text at caret, stripping any HTML from the clipboard
     const text = e.clipboardData.getData('text/plain');
-    if (text) {
-      document.execCommand('insertText', false, text);
+    if (text && editorRef.current) {
+      insertAtCursor(editorRef.current, text);
     }
   };
 
@@ -338,7 +385,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         <div
           ref={dropdownRef}
           style={dropdownStyle}
-          className="bg-th-card border border-th-border rounded-lg shadow-xl overflow-y-auto max-h-60"
+          className="bg-th-card border border-th-border rounded-lg shadow-xl overflow-hidden"
         >
           {loading && users.length === 0 && (
             <div className="px-3 py-2 text-sm text-th-text-4">Загрузка...</div>
