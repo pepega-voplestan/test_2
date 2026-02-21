@@ -78,10 +78,22 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
     applyTransform(0, true);
   }, [applyTransform]);
 
+  // Block the ghost click that fires after pointerUp when the overlay unmounts
+  const blockNextClick = useCallback(() => {
+    const blocker = (e: Event) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      document.removeEventListener('click', blocker, true);
+    };
+    document.addEventListener('click', blocker, true);
+    setTimeout(() => document.removeEventListener('click', blocker, true), 400);
+  }, []);
+
   // --- Pointer handlers (work for both mouse and touch) ---
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    // Only respond to primary button / single touch
     if (e.button !== 0) return;
+    e.preventDefault(); // prevent browser from synthesizing click from touch
     dragging.current = true;
     startY.current = e.clientY;
     startTime.current = Date.now();
@@ -104,20 +116,22 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
     const velocity = Math.abs(dy) / Math.max(elapsed, 1);
 
     if (Math.abs(dy) > DISMISS_THRESHOLD || velocity > VELOCITY_THRESHOLD) {
+      blockNextClick();
       dismiss(dy);
     } else if (Math.abs(dy) < 4) {
-      // Tap — close
+      blockNextClick();
       onClose();
     } else {
       snapBack();
     }
-  }, [dismiss, snapBack, onClose]);
+  }, [dismiss, snapBack, onClose, blockNextClick]);
 
   return (
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm cursor-pointer select-none"
       style={{ background: 'rgba(0,0,0,0.8)', touchAction: 'none' }}
+      onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
