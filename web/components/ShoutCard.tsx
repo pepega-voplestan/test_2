@@ -61,7 +61,8 @@ type EmbedInfo =
   | { type: 'imgur'; imageId: string; ext: string }
   | { type: 'coub'; videoId: string }
   | { type: 'tenor'; url: string; tenorId: string }
-  | { type: 'imgur-direct'; url: string };
+  | { type: 'imgur-direct'; url: string }
+  | { type: 'twitter'; tweetId: string; url: string };
 
 function extractEmbeds(text: string): EmbedInfo[] {
   const embeds: EmbedInfo[] = [];
@@ -86,6 +87,12 @@ function extractEmbeds(text: string): EmbedInfo[] {
       embeds.push({ type: 'imgur', imageId: parts[parts.length - 1], ext: 'jpg' });
       continue;
     }
+    // Twitter/X: twitter.com/user/status/123 or x.com/user/status/123
+    const tweet = url.match(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
+    if (tweet) {
+      embeds.push({ type: 'twitter', tweetId: tweet[1], url });
+      continue;
+    }
     // Coub: coub.com/view/XXXX
     const coub = url.match(/https?:\/\/(?:www\.)?coub\.com\/view\/([a-zA-Z0-9_-]+)/);
     if (coub) {
@@ -107,6 +114,95 @@ function extractEmbeds(text: string): EmbedInfo[] {
   }
   return embeds;
 }
+
+interface TweetData {
+  text: string;
+  author: { name: string; screen_name: string; avatar_url: string };
+  created_at: string;
+  likes: number;
+  retweets: number;
+  media?: { photos?: { url: string; width: number; height: number }[]; videos?: { thumbnail_url: string; url: string }[] };
+}
+
+const tweetCache = new Map<string, TweetData | null>();
+
+const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId, url }) => {
+  const [tweet, setTweet] = useState<TweetData | null>(tweetCache.get(tweetId) ?? null);
+  const [loading, setLoading] = useState(!tweetCache.has(tweetId));
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (tweetCache.has(tweetId)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`https://api.fxtwitter.com/status/${tweetId}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const t = data.tweet as TweetData;
+        tweetCache.set(tweetId, t);
+        if (!cancelled) setTweet(t);
+      } catch {
+        tweetCache.set(tweetId, null);
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tweetId]);
+
+  if (loading) {
+    return (
+      <div className="mb-2 rounded-lg border border-th-border/50 bg-th-card p-4">
+        <div className="flex items-center gap-2 text-th-text-4 text-sm">
+          <div className="w-4 h-4 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+          Загрузка твита…
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !tweet) return null;
+
+  const date = new Date(tweet.created_at);
+  const formatted = date.toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const photos = tweet.media?.photos || [];
+  const videos = tweet.media?.videos || [];
+
+  return (
+    <div className="mb-2 rounded-lg border-l-4 border-[#1d9bf0] bg-th-card overflow-hidden">
+      <div className="p-3">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mb-2 group">
+          <img src={tweet.author.avatar_url} alt="" className="w-8 h-8 rounded-full" />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-th-text group-hover:underline truncate">{tweet.author.name}</div>
+            <div className="text-xs text-th-text-4">@{tweet.author.screen_name}</div>
+          </div>
+          <svg className="w-4 h-4 ml-auto text-[#1d9bf0] shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <div className="text-sm text-th-text whitespace-pre-wrap break-words mb-2">{tweet.text}</div>
+        {photos.length > 0 && (
+          <div className={`rounded-lg overflow-hidden mb-2 ${photos.length > 1 ? 'grid grid-cols-2 gap-0.5' : ''}`}>
+            {photos.map((p, i) => (
+              <img key={i} src={p.url} alt="" loading="lazy" className="w-full h-auto object-cover max-h-[300px]" />
+            ))}
+          </div>
+        )}
+        {videos.length > 0 && videos.map((v, i) => (
+          <div key={i} className="rounded-lg overflow-hidden mb-2">
+            <video src={v.url} poster={v.thumbnail_url} controls className="w-full max-h-[300px]" ref={el => { if (el) el.volume = 0.3; }} />
+          </div>
+        ))}
+        <div className="flex items-center gap-4 text-xs text-th-text-4">
+          <span>{formatted}</span>
+          {tweet.likes > 0 && <span className="flex items-center gap-1"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M20.884 13.19c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.45-4.92-.334-6.98C3.907 3.96 5.944 3 8.26 3c1.876 0 3.378.79 4.24 1.58.86-.79 2.362-1.58 4.24-1.58 2.314 0 4.352.96 5.48 3.21 1.117 2.06 1.028 4.48-.336 6.98z"/></svg>{tweet.likes.toLocaleString()}</span>}
+          {tweet.retweets > 0 && <span className="flex items-center gap-1"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/></svg>{tweet.retweets.toLocaleString()}</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   const [imgError, setImgError] = useState(false);
@@ -167,6 +263,10 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
         </div>
       </div>
     );
+  }
+
+  if (embed.type === 'twitter') {
+    return <TwitterEmbedCard tweetId={embed.tweetId} url={embed.url} />;
   }
 
   return null;
