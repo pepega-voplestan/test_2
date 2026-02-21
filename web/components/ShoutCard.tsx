@@ -170,11 +170,22 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
   const photos = tweet.media?.photos || [];
   const videos = tweet.media?.videos || [];
 
+  const [avatarError, setAvatarError] = useState(false);
+  const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set());
+  const initial = tweet.author.name.charAt(0).toUpperCase();
+
+  // For photos/videos, use fxtwitter proxy URLs (pbs.twimg.com is blocked by referrer policy)
+  const proxyImg = (u: string) => u.replace('https://pbs.twimg.com/', 'https://pbs.fxtwitter.com/');
+
   return (
     <div className="mb-2 rounded-lg border-l-4 border-[#1d9bf0] bg-th-card overflow-hidden">
       <div className="p-3">
         <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mb-2 group">
-          <img src={tweet.author.avatar_url} alt="" className="w-8 h-8 rounded-full" />
+          {avatarError ? (
+            <div className="w-8 h-8 rounded-full bg-[#1d9bf0] flex items-center justify-center text-white text-sm font-bold shrink-0">{initial}</div>
+          ) : (
+            <img src={proxyImg(tweet.author.avatar_url)} alt="" className="w-8 h-8 rounded-full shrink-0" referrerPolicy="no-referrer" onError={() => setAvatarError(true)} />
+          )}
           <div className="min-w-0">
             <div className="text-sm font-semibold text-th-text group-hover:underline truncate">{tweet.author.name}</div>
             <div className="text-xs text-th-text-4">@{tweet.author.screen_name}</div>
@@ -184,15 +195,20 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
         <div className="text-sm text-th-text whitespace-pre-wrap break-words mb-2">{tweet.text}</div>
         {photos.length > 0 && (
           <div className={`rounded-lg overflow-hidden mb-2 ${photos.length > 1 ? 'grid grid-cols-2 gap-0.5' : ''}`}>
-            {photos.map((p, i) => (
-              <img key={i} src={p.url} alt="" loading="lazy" className="w-full h-auto object-cover max-h-[300px]" />
-            ))}
+            {photos.map((p, i) => !photoErrors.has(i) ? (
+              <img key={i} src={proxyImg(p.url)} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-auto object-cover max-h-[300px]" onError={() => setPhotoErrors(prev => new Set(prev).add(i))} />
+            ) : null)}
           </div>
         )}
         {videos.length > 0 && videos.map((v, i) => (
-          <div key={i} className="rounded-lg overflow-hidden mb-2">
-            <video src={v.url} poster={v.thumbnail_url} controls className="w-full max-h-[300px]" ref={el => { if (el) el.volume = 0.3; }} />
-          </div>
+          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden mb-2 relative group/vid">
+            <img src={proxyImg(v.thumbnail_url)} alt="" referrerPolicy="no-referrer" className="w-full max-h-[300px] object-cover" />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/vid:bg-black/30 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-[#1d9bf0] flex items-center justify-center">
+                <svg className="w-5 h-5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </a>
         ))}
         <div className="flex items-center gap-4 text-xs text-th-text-4">
           <span>{formatted}</span>
