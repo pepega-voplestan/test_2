@@ -1,40 +1,181 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 
 const EMOJI_GROUPS = [
-  { label: 'Часто', emojis: ['\uD83D\uDE02', '\uD83D\uDE0D', '\uD83D\uDD25', '\uD83D\uDC4D', '\uD83D\uDC4E', '\u2764\uFE0F', '\uD83D\uDE22', '\uD83D\uDE21', '\uD83E\uDD14', '\uD83D\uDE4F', '\uD83C\uDF89', '\uD83D\uDCAF'] },
-  { label: 'Лица', emojis: ['\uD83D\uDE00', '\uD83D\uDE03', '\uD83D\uDE04', '\uD83D\uDE01', '\uD83D\uDE05', '\uD83E\uDD23', '\uD83D\uDE0A', '\uD83D\uDE07', '\uD83D\uDE09', '\uD83D\uDE0B', '\uD83D\uDE0E', '\uD83E\uDD29', '\uD83D\uDE0F', '\uD83D\uDE12', '\uD83D\uDE14', '\uD83E\uDD71', '\uD83D\uDE34', '\uD83E\uDD75', '\uD83E\uDD76', '\uD83E\uDD2F', '\uD83E\uDD2E', '\uD83E\uDD2C', '\uD83D\uDE31', '\uD83D\uDE28', '\uD83D\uDE30', '\uD83D\uDE25', '\uD83D\uDE2D', '\uD83D\uDE24', '\uD83D\uDE20', '\uD83D\uDE08'] },
-  { label: 'Жесты', emojis: ['\uD83D\uDC4D', '\uD83D\uDC4E', '\u270C\uFE0F', '\uD83E\uDD1E', '\uD83E\uDD18', '\uD83D\uDC4C', '\uD83D\uDC4F', '\uD83D\uDE4C', '\uD83D\uDE4F', '\uD83D\uDCAA', '\uD83D\uDC40', '\uD83E\uDDE0'] },
-  { label: 'Разное', emojis: ['\uD83D\uDD25', '\u2764\uFE0F', '\uD83D\uDC94', '\uD83C\uDFAE', '\uD83C\uDFB5', '\uD83C\uDFAC', '\uD83D\uDCBB', '\uD83D\uDE80', '\uD83C\uDF1F', '\uD83C\uDF08', '\u2705', '\u274C', '\u26A0\uFE0F', '\uD83D\uDCA9'] },
+  { label: 'Часто', emojis: ['😂', '😍', '🔥', '👍', '👎', '❤️', '😢', '😡', '🤔', '🙏', '🎉', '💯'] },
+  { label: 'Лица', emojis: ['😀', '😃', '😄', '😁', '😅', '🤣', '😊', '😇', '😉', '😋', '😎', '🤩', '😏', '😒', '😔', '🥱', '😴', '🥵', '🥶', '🤯', '🤮', '🤬', '😱', '😨', '😰', '😥', '😭', '😤', '😠', '😈'] },
+  { label: 'Жесты', emojis: ['👍', '👎', '✌️', '🤞', '🤘', '👌', '👏', '🙌', '🙏', '💪', '👀', '🧠'] },
+  { label: 'Разное', emojis: ['🔥', '❤️', '💔', '🎮', '🎵', '🎬', '💻', '🚀', '🌟', '🌈', '✅', '❌', '⚠️', '💩'] },
 ];
+
+// Search keywords for emojis (Russian)
+const EMOJI_KEYWORDS: Record<string, string[]> = {
+  '😂': ['смех', 'слезы', 'ржу', 'лол', 'хаха', 'laugh'],
+  '😍': ['любовь', 'влюблен', 'сердечки', 'love', 'heart eyes'],
+  '🔥': ['огонь', 'fire', 'жара', 'круто', 'горячо'],
+  '👍': ['лайк', 'класс', 'палец', 'хорошо', 'like', 'ок'],
+  '👎': ['дизлайк', 'плохо', 'палец вниз', 'dislike'],
+  '❤️': ['сердце', 'любовь', 'heart', 'love'],
+  '😢': ['грусть', 'слеза', 'печаль', 'sad', 'cry'],
+  '😡': ['злость', 'злой', 'бесит', 'angry'],
+  '🤔': ['думаю', 'хмм', 'думать', 'think', 'hmm'],
+  '🙏': ['пожалуйста', 'спасибо', 'молитва', 'please', 'thanks', 'pray'],
+  '🎉': ['праздник', 'вечеринка', 'ура', 'party'],
+  '💯': ['сто', 'точно', 'отлично', 'идеально', 'hundred'],
+  '😀': ['улыбка', 'радость', 'smile', 'happy'],
+  '😃': ['улыбка', 'радость', 'smile'],
+  '😄': ['улыбка', 'радость', 'смех', 'smile'],
+  '😁': ['улыбка', 'ухмылка', 'grin'],
+  '😅': ['пот', 'неловко', 'sweat'],
+  '🤣': ['ржу', 'катаюсь', 'смех', 'rofl'],
+  '😊': ['мило', 'стесняюсь', 'blush'],
+  '😇': ['ангел', 'святой', 'angel'],
+  '😉': ['подмигивание', 'wink'],
+  '😋': ['вкусно', 'еда', 'yum'],
+  '😎': ['крутой', 'очки', 'cool'],
+  '🤩': ['вау', 'звезды', 'wow', 'star'],
+  '😏': ['ухмылка', 'smirk'],
+  '😒': ['скука', 'недовольный', 'unamused'],
+  '😔': ['грусть', 'печаль', 'sad'],
+  '🥱': ['зевок', 'скучно', 'yawn'],
+  '😴': ['сон', 'спать', 'sleep'],
+  '🥵': ['жарко', 'горячо', 'hot'],
+  '🥶': ['холодно', 'мерзну', 'cold'],
+  '🤯': ['взрыв', 'мозг', 'шок', 'mind blown'],
+  '🤮': ['тошнит', 'фу', 'vomit'],
+  '🤬': ['ругается', 'мат', 'swear'],
+  '😱': ['шок', 'ужас', 'страх', 'scream'],
+  '😨': ['испуг', 'страх', 'fear'],
+  '😰': ['тревога', 'нервы', 'anxious'],
+  '😥': ['грусть', 'разочарование', 'disappointed'],
+  '😭': ['плачу', 'рыдаю', 'слезы', 'cry', 'sob'],
+  '😤': ['злой', 'пар', 'huff'],
+  '😠': ['злой', 'angry'],
+  '😈': ['дьявол', 'злой', 'devil'],
+  '✌️': ['мир', 'победа', 'peace', 'victory'],
+  '🤞': ['удачи', 'скрещены', 'crossed fingers'],
+  '🤘': ['рок', 'rock', 'метал'],
+  '👌': ['ок', 'отлично', 'ok'],
+  '👏': ['аплодисменты', 'браво', 'clap'],
+  '🙌': ['ура', 'руки', 'yay'],
+  '💪': ['сила', 'мускул', 'strong', 'muscle'],
+  '👀': ['глаза', 'смотрю', 'eyes', 'look'],
+  '🧠': ['мозг', 'умный', 'brain'],
+  '💔': ['разбитое сердце', 'broken heart'],
+  '🎮': ['игра', 'геймер', 'game', 'gamer'],
+  '🎵': ['музыка', 'music', 'нота'],
+  '🎬': ['кино', 'фильм', 'movie'],
+  '💻': ['компьютер', 'ноутбук', 'computer', 'laptop'],
+  '🚀': ['ракета', 'запуск', 'rocket', 'launch'],
+  '🌟': ['звезда', 'star', 'блеск'],
+  '🌈': ['радуга', 'rainbow'],
+  '✅': ['да', 'готово', 'галочка', 'yes', 'done', 'check'],
+  '❌': ['нет', 'крест', 'no', 'cross'],
+  '⚠️': ['внимание', 'warning', 'осторожно'],
+  '💩': ['какашка', 'фигня', 'poop'],
+};
+
+// Collect all unique emojis for search
+const ALL_EMOJIS = Array.from(new Set(EMOJI_GROUPS.flatMap(g => g.emojis)));
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
   size?: 'sm' | 'md';
 }
 
+const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+
 const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [mobileReadOnly, setMobileReadOnly] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties | null>(null);
+
+  const positionPopup = useCallback(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const popupW = 272; // w-68 = 17rem = 272px
+    const popupH = 320;
+    const pad = 8;
+
+    // Vertical: prefer above the button, fall back to below
+    let top: number;
+    if (rect.top - popupH - pad > 0) {
+      top = rect.top - popupH - 4;
+    } else {
+      top = rect.bottom + 4;
+    }
+
+    // Horizontal: prefer right-aligned with button, clamp to viewport
+    let left = rect.right - popupW;
+    if (left < pad) left = pad;
+    if (left + popupW > window.innerWidth - pad) left = window.innerWidth - pad - popupW;
+
+    setPopupStyle({
+      position: 'fixed',
+      top,
+      left,
+      width: popupW,
+    });
+  }, []);
+
+  // Position before browser paint to avoid first-open jump
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    positionPopup();
+  }, [isOpen, positionPopup]);
 
   useEffect(() => {
     if (!isOpen) return;
+    // On mobile: make input readOnly to prevent keyboard on tap; on desktop: autofocus
+    if (isTouchDevice()) {
+      setMobileReadOnly(true);
+    } else {
+      setMobileReadOnly(false);
+      setTimeout(() => searchRef.current?.focus(), 0);
+    }
+
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (ref.current && !ref.current.contains(e.target as Node) &&
+          popupRef.current && !popupRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        setSearch('');
+        setPopupStyle(null);
+        setMobileReadOnly(false);
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [isOpen]);
+    window.addEventListener('resize', positionPopup);
+    window.addEventListener('scroll', positionPopup, true);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('resize', positionPopup);
+      window.removeEventListener('scroll', positionPopup, true);
+    };
+  }, [isOpen, positionPopup]);
 
   const btnSize = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
   const btnPad = size === 'sm' ? 'p-0.5' : 'p-1';
 
+  const query = search.trim().toLowerCase();
+  const filteredEmojis = query
+    ? ALL_EMOJIS.filter(emoji => {
+        const kws = EMOJI_KEYWORDS[emoji];
+        if (!kws) return false;
+        return kws.some(kw => kw.toLowerCase().includes(query));
+      })
+    : null;
+
   return (
     <div className="relative" ref={ref}>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { setIsOpen(!isOpen); if (isOpen) { setSearch(''); setPopupStyle(null); } }}
         className={`${btnPad} text-th-text-4 hover:text-th-text-2 transition-colors shrink-0`}
         title="Эмодзи"
       >
@@ -44,24 +185,64 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-1 w-64 bg-th-card border border-th-border rounded-lg shadow-xl z-50 p-2 max-h-52 overflow-y-auto">
-          {EMOJI_GROUPS.map((group) => (
-            <div key={group.label} className="mb-2 last:mb-0">
-              <div className="text-[10px] text-th-text-4 font-medium px-1 mb-1">{group.label}</div>
-              <div className="flex flex-wrap gap-0.5">
-                {group.emojis.map((emoji, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => { onSelect(emoji); setIsOpen(false); }}
-                    className="w-7 h-7 flex items-center justify-center text-base hover:bg-th-elevated rounded transition-colors"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div
+          ref={popupRef}
+          style={popupStyle ? popupStyle : { position: 'fixed', top: -9999, left: -9999, width: 272 }}
+          className="bg-th-card border border-th-border rounded-lg shadow-xl z-[9999] flex flex-col max-h-80"
+        >
+          {/* Search input */}
+          <div className="p-2 pb-1 border-b border-th-border/50">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              readOnly={mobileReadOnly}
+              onTouchEnd={() => { if (mobileReadOnly) { setMobileReadOnly(false); setTimeout(() => searchRef.current?.focus(), 0); } }}
+              placeholder="Поиск эмодзи..."
+              className="w-full bg-th-input text-th-text text-xs rounded-md px-2.5 py-1.5 outline-none border border-th-border/50 focus:border-th-text-4 placeholder-th-text-4 transition-colors"
+            />
+          </div>
+
+          {/* Emoji grid */}
+          <div className="p-2 overflow-y-auto flex-1">
+            {filteredEmojis !== null ? (
+              filteredEmojis.length > 0 ? (
+                <div className="flex flex-wrap gap-0.5">
+                  {filteredEmojis.map((emoji, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => { onSelect(emoji); setIsOpen(false); setSearch(''); }}
+                      className="w-8 h-8 flex items-center justify-center text-lg hover:bg-th-elevated rounded transition-colors"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-th-text-4 text-center py-4">Ничего не найдено</div>
+              )
+            ) : (
+              EMOJI_GROUPS.map((group) => (
+                <div key={group.label} className="mb-2 last:mb-0">
+                  <div className="text-[10px] text-th-text-4 font-medium px-1 mb-1">{group.label}</div>
+                  <div className="flex flex-wrap gap-0.5">
+                    {group.emojis.map((emoji, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => { onSelect(emoji); setIsOpen(false); setSearch(''); }}
+                        className="w-8 h-8 flex items-center justify-center text-lg hover:bg-th-elevated rounded transition-colors"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>

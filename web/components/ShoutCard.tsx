@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
+import Lightbox from './Lightbox';
 
 interface ShoutCardProps {
   shout: Shout;
@@ -30,6 +31,257 @@ function detectYouTubeId(text: string): string | null {
   }
   return null;
 }
+
+/* ---------- Embed detection & rendering ---------- */
+
+type EmbedInfo =
+  | { type: 'imgur'; imageId: string; ext: string }
+  | { type: 'imgur-album'; albumId: string }
+  | { type: 'coub'; videoId: string }
+  | { type: 'tenor'; url: string; tenorId: string }
+  | { type: 'imgur-direct'; url: string }
+  | { type: 'twitter'; tweetId: string; url: string };
+
+function extractEmbeds(text: string): EmbedInfo[] {
+  const embeds: EmbedInfo[] = [];
+  const urls = text.match(/https?:\/\/[^\s]+/g) || [];
+  for (const url of urls) {
+    // Direct imgur image: i.imgur.com/XXXX.ext
+    const imgurDirect = url.match(/https?:\/\/i\.imgur\.com\/([a-zA-Z0-9]+)\.(jpg|jpeg|png|gif|webp|mp4)/i);
+    if (imgurDirect) {
+      embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+    // Imgur page: imgur.com/XXXX (not album, not gallery)
+    const imgurPage = url.match(/https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]{5,10})(?:[?#]|$)/);
+    if (imgurPage) {
+      embeds.push({ type: 'imgur', imageId: imgurPage[1], ext: 'jpg' });
+      continue;
+    }
+    // Imgur album/gallery: imgur.com/a/XXXX or imgur.com/gallery/slug-XXXX
+    const imgurAlbum = url.match(/https?:\/\/(?:www\.)?imgur\.com\/(?:a|gallery)\/([\w-]+)/);
+    if (imgurAlbum) {
+      const parts = imgurAlbum[1].split('-');
+      const albumId = parts[parts.length - 1];
+      embeds.push({ type: 'imgur-album', albumId });
+      continue;
+    }
+    // Twitter/X: twitter.com/user/status/123 or x.com/user/status/123
+    const tweet = url.match(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
+    if (tweet) {
+      embeds.push({ type: 'twitter', tweetId: tweet[1], url });
+      continue;
+    }
+    // Coub: coub.com/view/XXXX
+    const coub = url.match(/https?:\/\/(?:www\.)?coub\.com\/view\/([a-zA-Z0-9_-]+)/);
+    if (coub) {
+      embeds.push({ type: 'coub', videoId: coub[1] });
+      continue;
+    }
+    // Tenor: tenor.com/view/xxx-12345
+    const tenor = url.match(/https?:\/\/(?:www\.)?tenor\.com\/(?:[a-z]{2}\/)?view\/[\w-]+-(\d+)/);
+    if (tenor) {
+      embeds.push({ type: 'tenor', url, tenorId: tenor[1] });
+      continue;
+    }
+    // Direct tenor media
+    const tenorDirect = url.match(/https?:\/\/media1?\.tenor\.com\/[^\s]+\.(gif|mp4)/i);
+    if (tenorDirect) {
+      embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+  }
+  return embeds;
+}
+
+interface TweetData {
+  text: string;
+  author: { name: string; screen_name: string; avatar_url: string };
+  created_at: string;
+  likes: number;
+  retweets: number;
+  media?: { photos?: { url: string; width: number; height: number }[]; videos?: { thumbnail_url: string; url: string }[] };
+}
+
+const tweetCache = new Map<string, TweetData | null>();
+
+const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId, url }) => {
+  const [tweet, setTweet] = useState<TweetData | null>(tweetCache.get(tweetId) ?? null);
+  const [loading, setLoading] = useState(!tweetCache.has(tweetId));
+  const [error, setError] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (tweetCache.has(tweetId)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`https://api.fxtwitter.com/status/${tweetId}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const t = data.tweet as TweetData;
+        tweetCache.set(tweetId, t);
+        if (!cancelled) setTweet(t);
+      } catch {
+        tweetCache.set(tweetId, null);
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tweetId]);
+
+  if (loading) {
+    return (
+      <div className="mb-2 rounded-lg border border-th-border/50 bg-th-card p-4">
+        <div className="flex items-center gap-2 text-th-text-4 text-sm">
+          <div className="w-4 h-4 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+          Загрузка твита…
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !tweet) return null;
+
+  const date = new Date(tweet.created_at);
+  const formatted = date.toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const photos = tweet.media?.photos || [];
+  const videos = tweet.media?.videos || [];
+
+  const initial = tweet.author.name.charAt(0).toUpperCase();
+
+  // For photos/videos, use fxtwitter proxy URLs (pbs.twimg.com is blocked by referrer policy)
+  const proxyImg = (u: string) => u.replace('https://pbs.twimg.com/', 'https://pbs.fxtwitter.com/');
+
+  return (
+    <div className="mb-2 rounded-lg border-l-4 border-[#1d9bf0] bg-th-card overflow-hidden">
+      <div className="p-3">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mb-2 group">
+          {avatarError ? (
+            <div className="w-8 h-8 rounded-full bg-[#1d9bf0] flex items-center justify-center text-white text-sm font-bold shrink-0">{initial}</div>
+          ) : (
+            <img src={proxyImg(tweet.author.avatar_url)} alt="" className="w-8 h-8 rounded-full shrink-0" referrerPolicy="no-referrer" onError={() => setAvatarError(true)} />
+          )}
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-th-text group-hover:underline truncate">{tweet.author.name}</div>
+            <div className="text-xs text-th-text-4">@{tweet.author.screen_name}</div>
+          </div>
+          <svg className="w-4 h-4 ml-auto text-[#1d9bf0] shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <div className="text-sm text-th-text whitespace-pre-wrap break-words mb-2">{tweet.text}</div>
+        {photos.length > 0 && (
+          <div className={`rounded-lg overflow-hidden mb-2 ${photos.length > 1 ? 'grid grid-cols-2 gap-0.5' : ''}`}>
+            {photos.map((p, i) => !photoErrors.has(i) ? (
+              <img key={i} src={proxyImg(p.url)} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-auto object-cover max-h-[300px]" onError={() => setPhotoErrors(prev => new Set(prev).add(i))} />
+            ) : null)}
+          </div>
+        )}
+        {videos.length > 0 && videos.map((v, i) => (
+          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden mb-2 relative group/vid">
+            <img src={proxyImg(v.thumbnail_url)} alt="" referrerPolicy="no-referrer" className="w-full max-h-[300px] object-cover" />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/vid:bg-black/30 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-[#1d9bf0] flex items-center justify-center">
+                <svg className="w-5 h-5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </a>
+        ))}
+        <div className="flex items-center gap-4 text-xs text-th-text-4">
+          <span>{formatted}</span>
+          {tweet.likes > 0 && <span className="flex items-center gap-1"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M20.884 13.19c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.45-4.92-.334-6.98C3.907 3.96 5.944 3 8.26 3c1.876 0 3.378.79 4.24 1.58.86-.79 2.362-1.58 4.24-1.58 2.314 0 4.352.96 5.48 3.21 1.117 2.06 1.028 4.48-.336 6.98z"/></svg>{tweet.likes.toLocaleString()}</span>}
+          {tweet.retweets > 0 && <span className="flex items-center gap-1"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/></svg>{tweet.retweets.toLocaleString()}</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
+  const [imgError, setImgError] = useState(false);
+
+  if (embed.type === 'imgur-direct') {
+    if (imgError) return null;
+    if (embed.url.endsWith('.mp4')) {
+      return (
+        <div className="mb-2 rounded-lg overflow-hidden max-w-full">
+          <video src={embed.url} controls loop className="max-h-[300px] max-w-full rounded-lg" ref={el => { if (el) el.volume = 0.3; }} />
+        </div>
+      );
+    }
+    return (
+      <div className="mb-2 rounded-lg">
+        <img src={embed.url} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+      </div>
+    );
+  }
+
+  if (embed.type === 'imgur') {
+    if (imgError) return null;
+    return (
+      <div className="mb-2 rounded-lg">
+        <img src={`https://i.imgur.com/${embed.imageId}.${embed.ext}`} alt="Imgur" loading="lazy" onError={() => setImgError(true)} className="max-h-[300px] max-w-full h-auto object-contain rounded-lg" />
+      </div>
+    );
+  }
+
+  if (embed.type === 'imgur-album') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <iframe
+          src={`https://imgur.com/a/${embed.albumId}/embed?pub=true&w=540`}
+          className="w-full border-0"
+          style={{ minHeight: 500 }}
+          sandbox="allow-scripts allow-same-origin allow-popups"
+          loading="lazy"
+        />
+      </div>
+    );
+  }
+
+  if (embed.type === 'coub') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <div className="w-full aspect-video">
+          <iframe
+            src={`https://coub.com/embed/${embed.videoId}?muted=false&autostart=false&originalSize=false&startWithHD=true`}
+            className="w-full h-full"
+            allowFullScreen
+            allow="autoplay"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            title="Coub"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (embed.type === 'tenor') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <div className="w-full" style={{ paddingBottom: '75%', position: 'relative' }}>
+          <iframe
+            src={`https://tenor.com/embed/${embed.tenorId}`}
+            className="absolute inset-0 w-full h-full"
+            allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            title="Tenor GIF"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (embed.type === 'twitter') {
+    return <TwitterEmbedCard tweetId={embed.tweetId} url={embed.url} />;
+  }
+
+  return null;
+};
+
+/* ---------- Content rendering ---------- */
 
 function renderContent(text: string) {
   const tokens = text.split(/(\s+)/);
@@ -65,17 +317,14 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const [isDeleting, setIsDeleting] = useState(false);
   const isOwner = user && user.id === comment.user.id;
 
+  // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
     setLikes(comment.likes);
-    setIsLiked(user && comment.likedBy ? comment.likedBy.includes(user.id) : false);
-  }, [comment.likes, comment.likedBy, user]);
+  }, [comment.likes]);
 
   useEffect(() => {
-    if (!lightboxOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxOpen]);
+    setIsLiked(user && comment.likedBy ? comment.likedBy.includes(user.id) : false);
+  }, [comment.likedBy, user]);
 
   const handleLike = async () => {
     if (!user) { openModal(); return; }
@@ -103,6 +352,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
       setConfirmDelete(false);
     } finally { setIsDeleting(false); }
   };
+
+  const embeds = comment.content ? extractEmbeds(comment.content) : [];
 
   return (
     <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
@@ -140,6 +391,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             </div>
           )}
 
+          {showMedia && embeds.map((embed, idx) => (
+            <EmbedCard key={`embed-${idx}`} embed={embed} />
+          ))}
+
           {showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
               <img
@@ -151,12 +406,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           {lightboxOpen && comment.media?.type === 'image' && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
-              <div className="relative max-w-[90vw] max-h-[90vh]">
-                <img src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
-                <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
-              </div>
-            </div>
+            <Lightbox
+              src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full}
+              onClose={() => setLightboxOpen(false)}
+            />
           )}
 
           {showMedia && comment.media?.type === 'youtube' && (
@@ -187,7 +440,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           <div className="flex items-center justify-end text-xs font-medium text-th-text-4 select-none mt-1">
-            <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+            <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
               <span className="text-[10px] font-bold">{likes}</span>
               <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
             </button>
@@ -240,17 +493,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     user && shout.likedBy ? shout.likedBy.includes(user.id) : false
   );
 
+  // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
     setLikes(shout.likes);
-    setIsLiked(user && shout.likedBy ? shout.likedBy.includes(user.id) : false);
-  }, [shout.likes, shout.likedBy, user]);
+  }, [shout.likes]);
 
   useEffect(() => {
-    if (!lightboxOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxOpen]);
+    setIsLiked(user && shout.likedBy ? shout.likedBy.includes(user.id) : false);
+  }, [shout.likedBy, user]);
 
   const repliesOpen = isThreadOpen ?? false;
   const hasComments = shout.comments && shout.comments.length > 0;
@@ -283,7 +533,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const uploadReplyFile = async (file: File) => {
     if (file.size > MEDIA_MAX_MB * 1024 * 1024) { setReplyError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`); return; }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP'); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP, GIF'); return; }
     setReplyError(null);
     setIsReplyUploading(true);
     const localUrl = URL.createObjectURL(file);
@@ -392,8 +642,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const insertEmoji = (emoji: string) => setReplyContent(prev => prev + emoji);
 
+  const embeds = shout.content ? extractEmbeds(shout.content) : [];
+
   return (
-    <div className="flex flex-col mb-4">
+    <div className="flex flex-col">
       <div className="flex gap-4">
         <a href={`#/profile/${shout.user.id}`} className="shrink-0">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
@@ -428,6 +680,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
             </div>
           )}
 
+          {showMedia && embeds.map((embed, idx) => (
+            <EmbedCard key={`embed-${idx}`} embed={embed} />
+          ))}
+
           {showMedia && shout.media?.type === 'image' && (
              <div className="mb-3 rounded-lg">
                  <img
@@ -439,12 +695,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           )}
 
           {lightboxOpen && shout.media?.type === 'image' && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer" onClick={() => setLightboxOpen(false)}>
-              <div className="relative max-w-[90vw] max-h-[90vh]">
-                <img src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full} alt="attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg cursor-pointer" />
-                <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }} className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold">X</button>
-              </div>
-            </div>
+            <Lightbox
+              src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
+              onClose={() => setLightboxOpen(false)}
+            />
           )}
 
           {showMedia && shout.media?.type === 'youtube' && (
@@ -486,7 +740,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               )}
             </div>
             <div className="flex items-center">
-                <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+                <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
                     <span className="text-xs font-bold">{likes}</span>
                     <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
                 </button>
@@ -546,7 +800,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                             </svg>
                           </button>
                         </div>
-                        <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleReplyFileSelect} />
+                        <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleReplyFileSelect} />
                         {(replyContent.trim() || replyHasMedia) && (
                           <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
                             {replyCharCount}/{SHOUT_MAX_LENGTH}
