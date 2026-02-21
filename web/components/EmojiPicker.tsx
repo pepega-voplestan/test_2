@@ -82,9 +82,12 @@ interface EmojiPickerProps {
   size?: 'sm' | 'md';
 }
 
+const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+
 const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [mobileReadOnly, setMobileReadOnly] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -128,9 +131,13 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
 
   useEffect(() => {
     if (!isOpen) return;
-    // Focus search input when opened (skip on mobile to avoid keyboard popup)
-    const isMobile = window.matchMedia('(pointer: coarse)').matches;
-    if (!isMobile) setTimeout(() => searchRef.current?.focus(), 0);
+    // On mobile: make input readOnly to prevent keyboard on tap; on desktop: autofocus
+    if (isTouchDevice()) {
+      setMobileReadOnly(true);
+    } else {
+      setMobileReadOnly(false);
+      setTimeout(() => searchRef.current?.focus(), 0);
+    }
 
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node) &&
@@ -138,6 +145,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
         setIsOpen(false);
         setSearch('');
         setPopupStyle(null);
+        setMobileReadOnly(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -189,6 +197,8 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              readOnly={mobileReadOnly}
+              onTouchEnd={() => { if (mobileReadOnly) { setMobileReadOnly(false); setTimeout(() => searchRef.current?.focus(), 0); } }}
               placeholder="Поиск эмодзи..."
               className="w-full bg-th-input text-th-text text-xs rounded-md px-2.5 py-1.5 outline-none border border-th-border/50 focus:border-th-text-4 placeholder-th-text-4 transition-colors"
             />
