@@ -342,7 +342,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           <div className="flex items-center justify-end text-xs font-medium text-th-text-4 select-none mt-1">
-            <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+            <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
               <span className="text-[10px] font-bold">{likes}</span>
               <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
             </button>
@@ -654,7 +654,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               )}
             </div>
             <div className="flex items-center">
-                <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#ffdd00]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+                <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
                     <span className="text-xs font-bold">{likes}</span>
                     <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
                 </button>
