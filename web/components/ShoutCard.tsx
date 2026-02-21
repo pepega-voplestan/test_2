@@ -446,7 +446,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const uploadReplyFile = async (file: File) => {
     if (file.size > MEDIA_MAX_MB * 1024 * 1024) { setReplyError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`); return; }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP'); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP, GIF'); return; }
     setReplyError(null);
     setIsReplyUploading(true);
     const localUrl = URL.createObjectURL(file);
@@ -715,7 +715,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                             </svg>
                           </button>
                         </div>
-                        <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleReplyFileSelect} />
+                        <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleReplyFileSelect} />
                         {(replyContent.trim() || replyHasMedia) && (
                           <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
                             {replyCharCount}/{SHOUT_MAX_LENGTH}
