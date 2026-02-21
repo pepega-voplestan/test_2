@@ -12,6 +12,7 @@ router.get("/users/mentions", asyncHandler(async (_req, res) => {
   const users = await prisma.user.findMany({
     where: { is_banned: 0 },
     select: { id: true, username: true, avatar: true },
+    orderBy: { username: "asc" },
   });
   res.json({ users: users.map(u => ({ id: u.id, name: u.username, avatar: u.avatar })) });
 }));
