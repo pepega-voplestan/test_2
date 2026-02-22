@@ -14,7 +14,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   const parsed = commentSchema.safeParse(req.body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    if (issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
+    if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
     return res.status(400).json({ error: "Ответ не может быть пустым" });
   }
 
