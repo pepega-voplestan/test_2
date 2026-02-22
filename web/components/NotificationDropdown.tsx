@@ -20,6 +20,7 @@ function formatRelativeTime(isoTimestamp: string): string {
 
 function notificationText(n: Notification): string {
   const name = n.actor.name;
+  if (n.type === 'reply') return `${name} ответил на вашу запись`;
   if (n.commentId) return `${name} упомянул вас в комментарии`;
   return `${name} упомянул вас в записи`;
 }
@@ -29,11 +30,23 @@ interface NotificationItemProps {
   onClose: () => void;
 }
 
+const MARK_READ_DELAY_MS = 800;
+
 const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, onClose }) => {
   const { markAsRead } = useNotifications();
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleMouseEnter() {
-    if (!n.isRead) markAsRead(n.id);
+    if (!n.isRead) {
+      hoverTimer.current = setTimeout(() => markAsRead(n.id), MARK_READ_DELAY_MS);
+    }
+  }
+
+  function handleMouseLeave() {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
   }
 
   function handleClick() {
@@ -44,6 +57,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
   return (
     <div
       onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onClick={handleClick}
       className={[
         'flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors duration-200',
@@ -59,20 +73,27 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
       />
       <div className="flex-1 min-w-0">
         <p className="text-sm text-th-text leading-snug">{notificationText(n)}</p>
+        {n.snippet && (
+          <p className="text-xs text-th-text-3 mt-1 truncate">«{n.snippet}»</p>
+        )}
         <p className="text-xs text-th-text-3 mt-0.5">{formatRelativeTime(n.timestamp)}</p>
       </div>
-      {!n.isRead && (
-        <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />
-      )}
+      {/* Always rendered to avoid layout shift; invisible when read */}
+      <div className={`w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5 transition-opacity ${n.isRead ? 'opacity-0' : 'opacity-100'}`} />
     </div>
   );
 };
 
 const NotificationDropdown: React.FC = () => {
-  const { notifications, unreadCount } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, flushReads } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Flush buffered reads when dropdown closes — batches everything from the session
+  useEffect(() => {
+    if (!isOpen) flushReads();
+  }, [isOpen]);
 
   // Close on outside click
   useEffect(() => {
@@ -116,8 +137,16 @@ const NotificationDropdown: React.FC = () => {
           ref={dropdownRef}
           className="absolute right-0 top-full mt-2 w-80 bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
         >
-          <div className="px-4 py-2.5 border-b border-th-border">
+          <div className="px-4 py-2.5 border-b border-th-border flex items-center justify-between">
             <span className="text-sm font-semibold text-th-text">Уведомления</span>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+              >
+                Отметить все
+              </button>
+            )}
           </div>
 
           {notifications.length === 0 ? (

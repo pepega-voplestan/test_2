@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useMemo, ReactNode } from "react";
 import { Notification } from "../types";
 import { useAuth } from "./AuthContext";
 
@@ -6,13 +6,50 @@ type NotificationsContextType = {
   notifications: Notification[];
   unreadCount: number;
   markAsRead: (id: string) => void;
+  markAllAsRead: () => void;
+  flushReads: () => void;
 };
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
+// Safety flush: if the dropdown stays open for a long time, don't hold reads indefinitely
+const SAFETY_FLUSH_MS = 5000;
+
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const pendingReadIds = useRef<Set<string>>(new Set());
+  const safetyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function sendBatch(ids: string[]) {
+    if (ids.length === 0) return;
+    fetch("/api/v1/notifications/read-batch", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }).catch((err) => console.error("[Notifications] Failed to batch mark read:", err));
+  }
+
+  // Called when the dropdown closes — flushes everything accumulated during the session
+  function flushReads() {
+    if (safetyTimer.current) {
+      clearTimeout(safetyTimer.current);
+      safetyTimer.current = null;
+    }
+    const ids = [...pendingReadIds.current];
+    pendingReadIds.current.clear();
+    sendBatch(ids);
+  }
+
+  // Flush on unmount (e.g. user navigates away with dropdown open)
+  useEffect(() => {
+    return () => {
+      if (safetyTimer.current) clearTimeout(safetyTimer.current);
+      sendBatch([...pendingReadIds.current]);
+    };
+  }, []);
 
   // Fetch unread notifications when user logs in
   useEffect(() => {
@@ -79,17 +116,32 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
-    // Persist in background
-    fetch(`/api/v1/notifications/${id}/read`, {
+    // Buffer for flush-on-close; also arm safety timer in case dropdown stays open
+    pendingReadIds.current.add(id);
+    if (!safetyTimer.current) {
+      safetyTimer.current = setTimeout(flushReads, SAFETY_FLUSH_MS);
+    }
+  }
+
+  function markAllAsRead() {
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    // Discard buffered individual reads — read-all covers them
+    if (safetyTimer.current) {
+      clearTimeout(safetyTimer.current);
+      safetyTimer.current = null;
+    }
+    pendingReadIds.current.clear();
+    fetch("/api/v1/notifications/read-all", {
       method: "PATCH",
       credentials: "include",
-    }).catch((err) => console.error("[Notifications] Failed to mark read:", err));
+    }).catch((err) => console.error("[Notifications] Failed to mark all read:", err));
   }
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const value = useMemo<NotificationsContextType>(
-    () => ({ notifications, unreadCount, markAsRead }),
+    () => ({ notifications, unreadCount, markAsRead, markAllAsRead, flushReads }),
     [notifications, unreadCount]
   );
 
