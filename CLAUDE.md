@@ -12,21 +12,23 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 .
 ├── api/                    # Backend (Express.js)
 │   ├── src/
-│   │   ├── server.js       # Express app setup, session middleware, rate limiting, dotenv
+│   │   ├── server.js       # Express app setup, session middleware, rate limiting, dotenv, notification cleanup task
 │   │   ├── swagger.js      # OpenAPI 3.0.3 spec for Swagger UI (dev only, blocked in prod)
 │   │   ├── routes/         # Domain-split route handlers
 │   │   │   ├── index.js        # Mounts all domain routers via mountRoutes(app)
 │   │   │   ├── auth.js         # Auth routes (register, login, logout, password reset)
-│   │   │   ├── shouts.js       # Shout CRUD + replies
-│   │   │   ├── comments.js     # Comment CRUD
+│   │   │   ├── shouts.js       # Shout CRUD + replies + single shout fetch
+│   │   │   ├── comments.js     # Comment CRUD + reply/mention notifications
 │   │   │   ├── likes.js        # Shout and comment like toggles
 │   │   │   ├── users.js        # User profile + mentions autocomplete
 │   │   │   ├── upload.js       # Media and avatar upload
-│   │   │   └── announcements.js # Announcement read/write
+│   │   │   ├── announcements.js # Announcement read/write
+│   │   │   └── notifications.js # Notification fetch + mark-read endpoints
 │   │   ├── helpers/        # Shared utilities
 │   │   │   ├── common.js       # asyncHandler, requireAuth, and other shared middleware
 │   │   │   ├── feed.js         # enrichFeed: joins users/media/likes onto shout/comment rows
 │   │   │   ├── media.js        # Sharp image processing, GIF handling, avatar generation
+│   │   │   ├── mentions.js     # extractMentionedUserIds, buildSnippet for notification system
 │   │   │   └── validation.js   # Zod schemas shared across routes
 │   │   ├── db.js           # Prisma client init (WAL mode, foreign keys)
 │   │   ├── auth.js         # Password hashing, session auth utilities
@@ -42,28 +44,31 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   └── .dockerignore
 ├── web/                    # Frontend (React + TypeScript)
 │   ├── components/
-│   │   ├── Header.tsx        # App header with auth, navigation, theme toggle
+│   │   ├── Header.tsx        # App header with auth, navigation, theme toggle, notification dropdown
 │   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step with email verification)
 │   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates
 │   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit
 │   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete
+│   │   ├── ShoutPage.tsx     # Single shout detail view (route: #/shout/:id)
 │   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
+│   │   ├── NotificationDropdown.tsx # Bell icon + unread badge + hover-to-read notification list
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
 │   │   ├── EmojiPicker.tsx   # Emoji picker with grouped categories
 │   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss and scroll lock
 │   ├── context/
-│   │   ├── AuthContext.tsx   # Auth state via React Context + API helper
-│   │   └── ThemeContext.tsx  # Dark/light theme toggle with localStorage persistence
+│   │   ├── AuthContext.tsx          # Auth state via React Context + API helper
+│   │   ├── ThemeContext.tsx         # Dark/light theme toggle with localStorage persistence
+│   │   └── NotificationsContext.tsx # Notification state, batched read marking, SSE subscription
 │   ├── hooks/
 │   │   ├── useRoute.ts       # Hash-based client-side routing
 │   │   ├── useSSE.ts         # SSE client hook with auto-reconnect + exponential backoff
 │   │   └── useMentionUsers.ts # Module-level singleton cache for mention user list (lazy-loaded on first @)
 │   ├── public/
 │   │   └── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
-│   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider
+│   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider + NotificationsProvider
 │   ├── index.tsx             # React entry point (StrictMode)
-│   ├── types.ts              # TypeScript type definitions
+│   ├── types.ts              # TypeScript type definitions (includes Notification interface)
 │   ├── index.html            # HTML template (Tailwind CDN, CSS custom properties for theming)
 │   ├── tsconfig.json
 │   ├── vite.config.ts        # Dev proxy: /api and /media → localhost:3000
@@ -154,6 +159,7 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/auth/forgot-password/send-code` | No | Send password reset code (rate limited 5/min) |
 | POST | `/auth/forgot-password/reset` | No | Verify code + set new password, auto-login (rate limited 20/min) |
 | GET | `/shouts?limit=&offset=&sortBy=` | No | List shouts with pagination (max 50). `sortBy=new\|popular` |
+| GET | `/shouts/:id` | No | Get a single shout by ID (used by ShoutPage) |
 | POST | `/shouts` | Yes | Create a shout (text, mediaId, or youtubeUrl) |
 | DELETE | `/shouts/:id` | Yes | Soft-delete own shout |
 | POST | `/shouts/:id/replies` | Yes | Add a comment to a shout |
@@ -169,6 +175,9 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP variants; GIFs also store original) |
 | POST | `/upload/avatar` | Yes | Upload avatar (≤2MB JPG/PNG/WebP; generates 64/128/256px square WebP) |
 | GET | `/avatars/:userId/:size.webp` | No | Serve avatar with immutable cache headers |
+| GET | `/notifications` | Yes | Fetch unread notifications from the past 7 days |
+| PATCH | `/notifications/read-batch` | Yes | Mark a batch of notifications as read (max 50 at once) |
+| PATCH | `/notifications/read-all` | Yes | Mark all unread notifications as read |
 
 ## API Documentation (Swagger UI)
 
@@ -183,7 +192,7 @@ The Swagger spec covers all endpoints and their request/response schemas, making
 
 The `/api/v1/events` endpoint streams Server-Sent Events to all connected clients. The backend broadcasts on all write operations. The frontend subscribes via `useSSE` hook in `ShoutFeed`.
 
-**Events emitted:**
+**Events emitted (broadcast to all clients):**
 
 | Event | Payload | Trigger |
 |-------|---------|---------|
@@ -194,9 +203,40 @@ The `/api/v1/events` endpoint streams Server-Sent Events to all connected client
 | `shout_like` | `{ id, likes }` | Shout like toggled |
 | `comment_like` | `{ id, likes }` | Comment like toggled |
 
-The SSE module (`api/src/sse.js`) also exports `broadcastToUser(userId, event, data)` for targeted delivery. A heartbeat ping is sent every 30 seconds to keep connections alive through proxies. The `useSSE` hook reconnects with exponential backoff (1s → 30s max) on error.
+**Events emitted (targeted delivery via `broadcastToUser`):**
+
+| Event | Payload | Trigger |
+|-------|---------|---------|
+| `notification` | `{ id, type, actor, shoutId, commentId, isRead, timestamp, snippet }` | @mention or reply to a shout the user authored |
+
+The SSE module (`api/src/sse.js`) exports both `broadcast(event, data)` (all clients) and `broadcastToUser(userId, event, data)` (targeted). A heartbeat ping is sent every 30 seconds to keep connections alive through proxies. The `useSSE` hook reconnects with exponential backoff (1s → 30s max) on error.
+
+`NotificationsContext.tsx` maintains its own SSE connection to receive `notification` events in real-time and appends them to the client-side notification list.
 
 **Important**: SSE real-time updates only apply to the `new` (newest) tab. The `popular` and `announcements` tabs load on demand and do not react to live events.
+
+## Notification System
+
+Notifications are triggered server-side and delivered in real-time via targeted SSE, with persistence in the database.
+
+**Notification types:**
+
+| Type | Trigger |
+|------|---------|
+| `mention` | A user is @mentioned in a shout or comment |
+| `reply` | A comment is posted on a user's shout (if the commenter is not the shout author, and not already covered by a mention notification) |
+
+**Lifecycle:**
+- Created in `routes/shouts.js` (for mention notifications in new shouts) and `routes/comments.js` (for mention and reply notifications).
+- `helpers/mentions.js` provides `extractMentionedUserIds(content, actorId)` to parse `@[username:userId]` tokens and `buildSnippet(content, maxLen=60)` to generate truncated previews for notification text.
+- Self-mentions are excluded — the actor never receives their own notification.
+- Server-side cleanup: `server.js` runs a task every 24 hours that hard-deletes notifications older than 14 days.
+- Frontend: `NotificationsContext.tsx` fetches unread notifications on login (past 7 days only), listens for real-time `notification` SSE events, and batches mark-as-read requests.
+- Read marking: hovering a notification item for 800ms queues it for batch-read. When the dropdown closes (or after a 5-second safety flush), the batch is sent via `PATCH /notifications/read-batch`.
+
+**Frontend components:**
+- `NotificationsContext.tsx` — state management, SSE subscription, batched read marking logic
+- `NotificationDropdown.tsx` — bell icon with unread badge in `Header.tsx`; dropdown lists notifications with actor avatar, text, snippet, and relative timestamp; "mark all read" button; clicking a notification navigates to the associated shout
 
 ## Database
 
@@ -214,6 +254,7 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `email` (String?, UNIQUE)
 - `is_banned` (Int, default 0)
 - `created_at` (String, ISO datetime)
+- Relations: `receivedNotifications`, `sentNotifications`
 
 **Shout** (`shouts`)
 - `id` (String, UUID, PK)
@@ -265,6 +306,18 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `email`, `code`, `purpose` (`"register"` or `"reset"`), `payload` (JSON?), `expires_at`, `used`, `attempts`, `created_at`
 - Index: `(email, purpose, used)`
 
+**Notification** (`notifications`)
+- `id` (String, UUID, PK)
+- `user_id` (String, FK → users, CASCADE) — recipient
+- `actor_id` (String, FK → users, CASCADE) — who triggered it
+- `type` (String): `"mention"` or `"reply"`
+- `shout_id` (String?, FK → shouts, SET NULL on delete)
+- `comment_id` (String?, FK → comments, SET NULL on delete)
+- `is_read` (Int, default 0)
+- `created_at` (String, ISO datetime)
+- Index: `(user_id, is_read, created_at)` for efficient unread fetching
+- Hard-deleted after 14 days by server cleanup task
+
 Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/app.db`). Sessions stored separately at `/data/sessions.sqlite`.
 
 ## Environment Variables
@@ -309,8 +362,9 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Source files live directly under `web/` (no `src/` subdirectory)
 - React Context for auth state — use `useAuth()` hook from `AuthContext.tsx`
 - React Context for theme — use `useTheme()` hook from `ThemeContext.tsx`; theme stored in `localStorage`
+- React Context for notifications — use `useNotifications()` hook from `NotificationsContext.tsx`
 - Auth flow: 2-step registration (send code → verify), password reset (send code → verify → new password)
-- Hash-based routing via `useRoute.ts` — routes: `#/` (feed), `#/profile/{userId}`
+- Hash-based routing via `useRoute.ts` — routes: `#/` (feed), `#/profile/{userId}`, `#/shout/{shoutId}`
 - Styling with **Tailwind CSS** utility classes (loaded via CDN in `index.html`) and CSS custom properties
 - Theme tokens: all colors use `th-*` Tailwind classes (e.g. `bg-th-card`, `text-th-text-3`) backed by CSS variables `--th-*`. Dark mode is toggled via the `.dark` class on `<html>`.
 - Fetch API with `credentials: "include"` for all requests
@@ -325,6 +379,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Comments are stored in a separate `comments` table (not as shouts) — single level of threading, no deep nesting.
 - Shout and comment deletion is a soft-delete: the `is_deleted` flag is set but the row is retained.
 - @mentions are supported in shouts and comments. The composer (`MentionInput.tsx`) is a `contenteditable` div. Typing `@` opens a dropdown of up to 5 matching users (filtered client-side from a module-level cached list). Selected mentions are serialized as `@[username:userId]` tokens in the stored content string. `renderContent` in `ShoutCard.tsx` parses these tokens and renders them as `#/profile/:id` links. Character counting normalizes `@[name:id]` back to `@name` before applying the 400-char limit. The user list is fetched lazily (only on first `@` trigger) via `GET /users/mentions` and cached for the browser session.
+- Mentions automatically trigger `mention` notifications to the mentioned users. Comments also trigger a `reply` notification to the shout author (unless they are the commenter, or already received a mention notification for that comment). Both are handled in `routes/shouts.js` and `routes/comments.js` using `helpers/mentions.js`.
 - Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
 - YouTube URLs in shout content are auto-detected via regex and metadata is fetched from the oEmbed API (5s timeout, graceful fallback).
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
@@ -336,7 +391,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Password reset follows the same email verification pattern.
 - Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
 - The `web/package.json` dev script runs both the API and Vite concurrently for local development.
-- `App.tsx` wraps the app in `<ThemeProvider>` (outer) then `<AuthProvider>` (inner).
+- `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<NotificationsProvider>` (inner).
 - Nginx CSP headers allow embeds from YouTube (nocookie), Coub, and Tenor; images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, and fxTwitter; and connect-src to fxTwitter API.
 
 ## Backup & Restore
@@ -382,3 +437,4 @@ Production volumes: `appdata`, `webdist`, `media`. Development volumes: `appdata
 - No error boundary components in the React frontend
 - Tailwind is loaded via CDN rather than built into the bundle
 - Legacy inline media columns on `shouts` table to be removed in a follow-up migration
+- Notification `type` field in schema has a comment noting planned future types (`shout_like`, `comment_like`) not yet implemented
