@@ -5,7 +5,7 @@ import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../hooks/useSSE';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 25;
 
 type FeedTab = 'new' | 'popular' | 'announcements';
 
@@ -73,7 +73,10 @@ const ShoutFeed: React.FC = () => {
   // Accordion: only one thread open at a time
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
 
-  const offsetRef = useRef(0);
+  // Cursor-based pagination for "new" tab (created_at of last loaded shout)
+  const cursorRef = useRef<string | null>(null);
+  // Offset-based pagination for "popular" tab (stable: no live mutations)
+  const popularOffsetRef = useRef(0);
   const activeTabRef = useRef(activeTab);
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
@@ -92,23 +95,26 @@ const ShoutFeed: React.FC = () => {
   activeTabRef.current = activeTab;
 
   const fetchShouts = useCallback(async (reset = false) => {
-    const currentOffset = reset ? 0 : offsetRef.current;
     const currentTab = activeTabRef.current;
 
     if (reset) {
       setIsLoading(true);
+      cursorRef.current = null;
+      popularOffsetRef.current = 0;
     } else {
       setIsLoadingMore(true);
     }
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        offset: String(currentOffset),
-      });
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+
       if (currentTab === 'popular') {
         params.set('sortBy', 'popular');
+        if (!reset) params.set('offset', String(popularOffsetRef.current));
+      } else {
+        // "new" tab: cursor-based
+        if (!reset && cursorRef.current) params.set('cursor', cursorRef.current);
       }
 
       const res = await fetch(`/api/v1/shouts?${params}`, { credentials: 'include' });
@@ -117,7 +123,12 @@ const ShoutFeed: React.FC = () => {
 
       setShouts(prev => reset ? data.shouts : [...prev, ...data.shouts]);
       setHasMore(data.hasMore);
-      offsetRef.current = currentOffset + data.shouts.length;
+
+      if (currentTab === 'popular') {
+        popularOffsetRef.current = (reset ? 0 : popularOffsetRef.current) + data.shouts.length;
+      } else {
+        cursorRef.current = data.nextCursor ?? null;
+      }
     } catch (err) {
       console.error('[ShoutFeed] Fetch error:', err);
       setError('Не удалось загрузить вопли. Попробуй ещё раз.');
@@ -173,7 +184,6 @@ const ShoutFeed: React.FC = () => {
     if (newTab === 'announcements') {
       fetchAnnouncement();
     } else {
-      offsetRef.current = 0;
       fetchShouts(true);
     }
   };
@@ -215,7 +225,6 @@ const ShoutFeed: React.FC = () => {
       const shout = data.shout as Shout | undefined;
       if (shout) {
         setShouts(prev => [shout, ...prev]);
-        offsetRef.current += 1;
       }
     },
     delete_shout: (data: Record<string, unknown>) => {
@@ -323,7 +332,7 @@ const ShoutFeed: React.FC = () => {
       ) : (
         <>
           <div className="bg-th-feed rounded-xl px-5 py-4 mb-3">
-            <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); offsetRef.current += 1; }} />
+            <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); }} />
           </div>
 
           {isLoading && shouts.length === 0 && (

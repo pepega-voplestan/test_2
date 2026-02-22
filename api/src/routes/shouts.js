@@ -14,13 +14,13 @@ const router = Router();
 /* get shouts */
 router.get("/shouts", asyncHandler(async (req, res) => {
   const currentUserId = req.session?.user?.id ?? null;
-  const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
-  const offset = parseInt(req.query.offset, 10) || 0;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 25, 50);
   const sortBy = req.query.sortBy || "new";
-  console.log(`[Shouts] Fetching shouts: limit=${limit}, offset=${offset}, sort=${sortBy}, user=${currentUserId || "anon"}`);
 
   let topRaw;
   if (sortBy === "popular") {
+    const offset = parseInt(req.query.offset, 10) || 0;
+    console.log(`[Shouts] Fetching popular shouts: limit=${limit}, offset=${offset}, user=${currentUserId || "anon"}`);
     const sevenDaysAgo = toSqliteDatetime(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
     topRaw = await prisma.shout.findMany({
       where: {
@@ -40,25 +40,32 @@ router.get("/shouts", asyncHandler(async (req, res) => {
       skip: offset,
     });
   } else {
+    // Cursor-based pagination for "new" tab — stable under list mutations
+    const cursor = req.query.cursor || null; // created_at of last seen shout
+    console.log(`[Shouts] Fetching new shouts: limit=${limit}, cursor=${cursor || "none"}, user=${currentUserId || "anon"}`);
     topRaw = await prisma.shout.findMany({
-      where: { parent_id: null, is_deleted: 0 },
+      where: {
+        parent_id: null,
+        is_deleted: 0,
+        ...(cursor ? { created_at: { lt: cursor } } : {}),
+      },
       include: {
         user: { select: { username: true, avatar: true, is_banned: true } },
         media: true,
       },
       orderBy: { created_at: "desc" },
       take: limit + 1,
-      skip: offset,
     });
   }
 
   const hasMore = topRaw.length > limit;
   const top = hasMore ? topRaw.slice(0, limit) : topRaw;
+  const nextCursor = (sortBy !== "popular" && top.length > 0) ? top[top.length - 1].created_at : null;
 
   const dto = await enrichFeed(top, currentUserId);
 
   console.log(`[Shouts] Returning ${dto.length} shouts, hasMore=${hasMore}`);
-  res.json({ shouts: dto, hasMore });
+  res.json({ shouts: dto, hasMore, nextCursor });
 }));
 
 /* get single shout by id */
