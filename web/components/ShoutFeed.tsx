@@ -78,6 +78,16 @@ const ShoutFeed: React.FC = () => {
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
 
+  // Sentinel element for IntersectionObserver-based infinite scroll
+  const loaderRef = useRef<HTMLDivElement>(null);
+  // Refs prevent stale closures inside the observer callback
+  const isLoadingMoreRef = useRef(isLoadingMore);
+  const isLoadingRef = useRef(isLoading);
+  const hasMoreRef = useRef(hasMore);
+  isLoadingMoreRef.current = isLoadingMore;
+  isLoadingRef.current = isLoading;
+  hasMoreRef.current = hasMore;
+
   // Keep ref in sync
   activeTabRef.current = activeTab;
 
@@ -136,6 +146,22 @@ const ShoutFeed: React.FC = () => {
   // Initial load
   useEffect(() => {
     fetchShouts(true);
+  }, [fetchShouts]);
+
+  // Infinite scroll: trigger fetchShouts when the sentinel enters the viewport
+  useEffect(() => {
+    const el = loaderRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasMoreRef.current && !isLoadingMoreRef.current && !isLoadingRef.current) {
+          fetchShouts(false);
+        }
+      },
+      { rootMargin: '300px' } // start loading 300px before the sentinel is visible
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [fetchShouts]);
 
   const handleTabChange = (newTab: FeedTab) => {
@@ -325,7 +351,10 @@ const ShoutFeed: React.FC = () => {
 
           <div className="flex flex-col gap-3">
             {shouts.map((shout) => (
-              <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
+              <div
+                key={shout.id}
+                className="bg-th-feed rounded-xl px-5 py-4"
+              >
                 <ShoutCard
                   shout={shout}
                   showMedia={showMedia}
@@ -339,24 +368,15 @@ const ShoutFeed: React.FC = () => {
             ))}
           </div>
 
-          {hasMore && !isLoading && (
-            <div className="flex justify-center py-8">
-              <button
-                onClick={() => fetchShouts(false)}
-                disabled={isLoadingMore}
-                className="px-6 py-2 rounded-full border border-th-border text-th-text-3 hover:text-th-text hover:border-th-text-3 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoadingMore ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-th-border border-t-th-text-2 rounded-full animate-spin" />
-                    Загрузка...
-                  </span>
-                ) : (
-                  'Загрузить ещё'
-                )}
-              </button>
-            </div>
-          )}
+          {/* Sentinel: IntersectionObserver watches this to trigger loading more */}
+          <div ref={loaderRef} className="flex justify-center py-8 min-h-[1px]">
+            {isLoadingMore && (
+              <span className="w-5 h-5 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+            )}
+            {!hasMore && shouts.length > 0 && !isLoading && (
+              <span className="text-xs text-th-text-4">Всё загружено</span>
+            )}
+          </div>
         </>
       )}
     </div>
