@@ -175,6 +175,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       <button
         ref={btnRef}
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => { setIsOpen(!isOpen); if (isOpen) { setSearch(''); setPopupStyle(null); } }}
         className={`${btnPad} text-th-text-4 hover:text-th-text-2 transition-colors shrink-0`}
         title="Эмодзи"
@@ -213,6 +214,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
                     <button
                       key={i}
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => { onSelect(emoji); setIsOpen(false); setSearch(''); }}
                       className="w-8 h-8 flex items-center justify-center text-lg hover:bg-th-elevated rounded transition-colors"
                     >
@@ -232,6 +234,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
                       <button
                         key={i}
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => { onSelect(emoji); setIsOpen(false); setSearch(''); }}
                         className="w-8 h-8 flex items-center justify-center text-lg hover:bg-th-elevated rounded transition-colors"
                       >

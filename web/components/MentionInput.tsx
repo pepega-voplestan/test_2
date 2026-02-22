@@ -118,18 +118,29 @@ function getCaretRect(): DOMRect | null {
 // Inserts plain text at the current caret position inside a contenteditable element.
 // Handles multi-line text (splits on \n → <br>). Dispatches a synthetic 'input' event
 // so the React onInput handler picks up the change for serialization.
-function insertAtCursor(el: HTMLElement, text: string): void {
+// `savedRange` is used to restore the caret when the editor had lost focus (e.g. after
+// clicking the emoji picker).
+function insertAtCursor(el: HTMLElement, text: string, savedRange?: Range | null): void {
   el.focus();
   const sel = window.getSelection();
   if (!sel) return;
 
-  // If focus didn't produce a caret (e.g. empty element), place cursor at end
-  if (sel.rangeCount === 0) {
-    const r = document.createRange();
-    r.selectNodeContents(el);
-    r.collapse(false);
+  // Prefer savedRange when provided: Chrome often places the caret at position 0 when
+  // re-focusing a contenteditable, so selectionInEditor alone is not a reliable guard.
+  if (savedRange && el.contains(savedRange.startContainer)) {
     sel.removeAllRanges();
-    sel.addRange(r);
+    sel.addRange(savedRange.cloneRange());
+  } else {
+    const selectionInEditor =
+      sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer);
+    if (!selectionInEditor) {
+      // Fallback: place cursor at end
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      r.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
   }
 
   const range = sel.getRangeAt(0);
@@ -168,6 +179,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
   const editorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
   const { users, loading, fetchUsers } = useMentionUsers();
   const { user: currentUser } = useAuth();
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
@@ -242,7 +254,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertText(text: string) {
       const el = editorRef.current;
       if (!el) return;
-      insertAtCursor(el, text);
+      insertAtCursor(el, text, savedRangeRef.current);
     },
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
@@ -413,6 +425,12 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onBlur={() => {
+          const sel = window.getSelection();
+          if (sel && sel.rangeCount > 0) {
+            savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+          }
+        }}
         role="textbox"
         aria-multiline="true"
         className={`w-full outline-none text-th-text bg-transparent break-words whitespace-pre-wrap min-h-[1.5rem] ${textSizeClass} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className ?? ''}`}
