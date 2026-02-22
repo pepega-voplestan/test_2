@@ -566,7 +566,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   };
 
   const handleReplyClick = () => {
-    handleMentionReply({ id: shout.user.id, name: shout.user.name });
+    if (!user) { openModal(); return; }
+    if (!repliesOpen) {
+      toggleThread();
+      // Focus the input after the thread opens
+      setTimeout(() => mentionInputRef.current?.focus(), 0);
+    } else {
+      mentionInputRef.current?.focus();
+    }
   };
 
   const uploadReplyFile = async (file: File) => {
@@ -754,7 +761,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-2">
             <div className="flex items-center gap-4">
-              <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>
+              {!isOwner && <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>}
               {hasComments ? (
                 <button onClick={toggleThread} className={`transition-colors ${repliesOpen ? 'text-th-text' : 'hover:text-th-text-2'}`}>
                   {repliesOpen ? 'Закрыть' : `${commentCount} ${getReplyDeclension(commentCount)}`}
