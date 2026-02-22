@@ -141,7 +141,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
         <img
           src={src}
           alt={alt}
-          className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg pointer-events-none"
+          className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
           draggable={false}
         />
         <button

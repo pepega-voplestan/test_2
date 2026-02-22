@@ -5,7 +5,7 @@ import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../hooks/useSSE';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 25;
 
 type FeedTab = 'new' | 'popular' | 'announcements';
 
@@ -73,32 +73,48 @@ const ShoutFeed: React.FC = () => {
   // Accordion: only one thread open at a time
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
 
-  const offsetRef = useRef(0);
+  // Cursor-based pagination for "new" tab (created_at of last loaded shout)
+  const cursorRef = useRef<string | null>(null);
+  // Offset-based pagination for "popular" tab (stable: no live mutations)
+  const popularOffsetRef = useRef(0);
   const activeTabRef = useRef(activeTab);
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
+
+  // Sentinel element for IntersectionObserver-based infinite scroll
+  const loaderRef = useRef<HTMLDivElement>(null);
+  // Refs prevent stale closures inside the observer callback
+  const isLoadingMoreRef = useRef(isLoadingMore);
+  const isLoadingRef = useRef(isLoading);
+  const hasMoreRef = useRef(hasMore);
+  isLoadingMoreRef.current = isLoadingMore;
+  isLoadingRef.current = isLoading;
+  hasMoreRef.current = hasMore;
 
   // Keep ref in sync
   activeTabRef.current = activeTab;
 
   const fetchShouts = useCallback(async (reset = false) => {
-    const currentOffset = reset ? 0 : offsetRef.current;
     const currentTab = activeTabRef.current;
 
     if (reset) {
       setIsLoading(true);
+      cursorRef.current = null;
+      popularOffsetRef.current = 0;
     } else {
       setIsLoadingMore(true);
     }
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        offset: String(currentOffset),
-      });
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+
       if (currentTab === 'popular') {
         params.set('sortBy', 'popular');
+        if (!reset) params.set('offset', String(popularOffsetRef.current));
+      } else {
+        // "new" tab: cursor-based
+        if (!reset && cursorRef.current) params.set('cursor', cursorRef.current);
       }
 
       const res = await fetch(`/api/v1/shouts?${params}`, { credentials: 'include' });
@@ -107,7 +123,12 @@ const ShoutFeed: React.FC = () => {
 
       setShouts(prev => reset ? data.shouts : [...prev, ...data.shouts]);
       setHasMore(data.hasMore);
-      offsetRef.current = currentOffset + data.shouts.length;
+
+      if (currentTab === 'popular') {
+        popularOffsetRef.current = (reset ? 0 : popularOffsetRef.current) + data.shouts.length;
+      } else {
+        cursorRef.current = data.nextCursor ?? null;
+      }
     } catch (err) {
       console.error('[ShoutFeed] Fetch error:', err);
       setError('Не удалось загрузить вопли. Попробуй ещё раз.');
@@ -138,6 +159,22 @@ const ShoutFeed: React.FC = () => {
     fetchShouts(true);
   }, [fetchShouts]);
 
+  // Infinite scroll: trigger fetchShouts when the sentinel enters the viewport
+  useEffect(() => {
+    const el = loaderRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasMoreRef.current && !isLoadingMoreRef.current && !isLoadingRef.current) {
+          fetchShouts(false);
+        }
+      },
+      { rootMargin: '300px' } // start loading 300px before the sentinel is visible
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fetchShouts]);
+
   const handleTabChange = (newTab: FeedTab) => {
     if (newTab === activeTab) return;
     setActiveTab(newTab);
@@ -147,7 +184,6 @@ const ShoutFeed: React.FC = () => {
     if (newTab === 'announcements') {
       fetchAnnouncement();
     } else {
-      offsetRef.current = 0;
       fetchShouts(true);
     }
   };
@@ -181,8 +217,6 @@ const ShoutFeed: React.FC = () => {
     setOpenThreadId(prev => prev === shoutId ? null : shoutId);
   }, []);
 
-  const isFeedTab = activeTab === 'new' || activeTab === 'popular';
-
   // --- SSE real-time updates ---
   const sseListeners = useMemo(() => ({
     new_shout: (data: Record<string, unknown>) => {
@@ -191,7 +225,6 @@ const ShoutFeed: React.FC = () => {
       const shout = data.shout as Shout | undefined;
       if (shout) {
         setShouts(prev => [shout, ...prev]);
-        offsetRef.current += 1;
       }
     },
     delete_shout: (data: Record<string, unknown>) => {
@@ -274,8 +307,7 @@ const ShoutFeed: React.FC = () => {
             </button>
           </div>
 
-          {isFeedTab && (
-            <button
+          <button
               onClick={() => setShowMedia(!showMedia)}
               className={`p-1.5 transition-colors ${showMedia ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
               title={showMedia ? 'Скрыть медиа' : 'Показать медиа'}
@@ -285,8 +317,7 @@ const ShoutFeed: React.FC = () => {
               ) : (
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
               )}
-            </button>
-          )}
+          </button>
         </div>
       </div>
 
@@ -301,7 +332,7 @@ const ShoutFeed: React.FC = () => {
       ) : (
         <>
           <div className="bg-th-feed rounded-xl px-5 py-4 mb-3">
-            <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); offsetRef.current += 1; }} />
+            <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); }} />
           </div>
 
           {isLoading && shouts.length === 0 && (
@@ -325,7 +356,10 @@ const ShoutFeed: React.FC = () => {
 
           <div className="flex flex-col gap-3">
             {shouts.map((shout) => (
-              <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
+              <div
+                key={shout.id}
+                className="bg-th-feed rounded-xl px-5 py-4"
+              >
                 <ShoutCard
                   shout={shout}
                   showMedia={showMedia}
@@ -339,24 +373,15 @@ const ShoutFeed: React.FC = () => {
             ))}
           </div>
 
-          {hasMore && !isLoading && (
-            <div className="flex justify-center py-8">
-              <button
-                onClick={() => fetchShouts(false)}
-                disabled={isLoadingMore}
-                className="px-6 py-2 rounded-full border border-th-border text-th-text-3 hover:text-th-text hover:border-th-text-3 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoadingMore ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-th-border border-t-th-text-2 rounded-full animate-spin" />
-                    Загрузка...
-                  </span>
-                ) : (
-                  'Загрузить ещё'
-                )}
-              </button>
-            </div>
-          )}
+          {/* Sentinel: IntersectionObserver watches this to trigger loading more */}
+          <div ref={loaderRef} className="flex justify-center py-8 min-h-[1px]">
+            {isLoadingMore && (
+              <span className="w-5 h-5 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+            )}
+            {!hasMore && shouts.length > 0 && !isLoading && (
+              <span className="text-xs text-th-text-4">Всё загружено</span>
+            )}
+          </div>
         </>
       )}
     </div>
