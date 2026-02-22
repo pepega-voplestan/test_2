@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env*
 backups/
+data/
+app.db
+api/prisma/*.db
