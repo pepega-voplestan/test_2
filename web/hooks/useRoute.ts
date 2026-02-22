@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 
 type Route =
   | { page: "feed" }
-  | { page: "profile"; userId: string };
+  | { page: "profile"; userId: string }
+  | { page: "shout"; shoutId: string };
 
 function parseHash(): Route {
   const hash = window.location.hash;
@@ -11,6 +12,12 @@ function parseHash(): Route {
   const profileMatch = hash.match(/^#\/profile\/([a-zA-Z0-9-]+)$/);
   if (profileMatch) {
     return { page: "profile", userId: profileMatch[1] };
+  }
+
+  // #/shout/<shoutId>
+  const shoutMatch = hash.match(/^#\/shout\/([a-zA-Z0-9-]+)$/);
+  if (shoutMatch) {
+    return { page: "shout", shoutId: shoutMatch[1] };
   }
 
   return { page: "feed" };

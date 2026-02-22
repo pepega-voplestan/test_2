@@ -9,6 +9,17 @@ OUTPUT=$(npx prisma migrate deploy 2>&1) && echo "$OUTPUT" || {
     echo "[Start] Existing database detected, resolving baseline migration..."
     npx prisma migrate resolve --applied 0001_baseline
     npx prisma migrate deploy
+  # P3009 = a previous migration run left a failed migration record in _prisma_migrations
+  elif echo "$OUTPUT" | grep -q "P3009"; then
+    FAILED=$(echo "$OUTPUT" | grep "migration started at" | sed "s/.*\`\([^\`]*\)\` migration started.*/\1/")
+    if [ -n "$FAILED" ]; then
+      echo "[Start] Failed migration detected ($FAILED), marking as rolled-back and retrying..."
+      npx prisma migrate resolve --rolled-back "$FAILED"
+      npx prisma migrate deploy
+    else
+      echo "$OUTPUT"
+      exit $EXIT_CODE
+    fi
   else
     echo "$OUTPUT"
     exit $EXIT_CODE
