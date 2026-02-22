@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNotifications } from '../context/NotificationsContext';
 import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
@@ -87,12 +87,29 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
 const NotificationDropdown: React.FC = () => {
   const { notifications, unreadCount, markAllAsRead, flushReads } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Flush buffered reads when dropdown closes — batches everything from the session
   useEffect(() => {
     if (!isOpen) flushReads();
+  }, [isOpen]);
+
+  // Position the dropdown relative to the button, clamped within the viewport
+  useLayoutEffect(() => {
+    if (!isOpen || !buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const DROPDOWN_W = 320; // w-80
+    const PAD = 8;
+    // Right-align to the button's right edge, but don't go off the left side
+    let right = window.innerWidth - rect.right;
+    right = Math.max(PAD, right);
+    // If clamping pushes it off the right side, re-clamp
+    if (window.innerWidth - right - DROPDOWN_W < PAD) {
+      right = window.innerWidth - DROPDOWN_W - PAD;
+    }
+    setDropdownStyle({ position: 'fixed', top: rect.bottom + 8, right });
   }, [isOpen]);
 
   // Close on outside click
@@ -135,7 +152,8 @@ const NotificationDropdown: React.FC = () => {
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute right-0 top-full mt-2 w-80 bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
+          style={dropdownStyle}
+          className="w-80 max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
         >
           <div className="px-4 py-2.5 border-b border-th-border flex items-center justify-between">
             <span className="text-sm font-semibold text-th-text">Уведомления</span>
