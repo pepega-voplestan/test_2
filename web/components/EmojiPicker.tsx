@@ -171,7 +171,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
     : null;
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative inline-flex items-center" ref={ref}>
       <button
         ref={btnRef}
         type="button"
