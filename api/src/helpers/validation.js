@@ -1,7 +1,7 @@
 import { z } from "zod";
 import crypto from "crypto";
 
-export const SHOUT_MAX_LENGTH = 400;
+export const SHOUT_MAX_LENGTH = 500;
 const NEWLINE_CHAR_COST = 40;
 
 export function effectiveCharCount(text) {
