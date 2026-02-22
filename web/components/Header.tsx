@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import NotificationDropdown from './NotificationDropdown';
 
 const Header: React.FC = () => {
   const { user, openModal, logout } = useAuth();
@@ -28,6 +29,9 @@ const Header: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-th-text-3">
+            {/* Notifications */}
+            {user && <NotificationDropdown />}
+
             {/* Feed Icon */}
             <button className="p-2 hover:text-th-text transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
