@@ -1,12 +1,13 @@
 import { z } from "zod";
 import crypto from "crypto";
 
-export const SHOUT_MAX_LENGTH = 500;
+export const SHOUT_MAX_LENGTH = 400;
 const NEWLINE_CHAR_COST = 40;
 
 export function effectiveCharCount(text) {
-  const newlines = (text.match(/\n/g) || []).length;
-  return text.length + newlines * (NEWLINE_CHAR_COST - 1);
+  const normalized = text.replace(/@\[([^\]]+):[^\]]+\]/g, "@$1");
+  const newlines = (normalized.match(/\n/g) || []).length;
+  return normalized.length + newlines * (NEWLINE_CHAR_COST - 1);
 }
 
 export const registerSchema = z.object({
