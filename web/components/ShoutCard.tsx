@@ -566,7 +566,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   };
 
   const handleReplyClick = () => {
-    handleMentionReply({ id: shout.user.id, name: shout.user.name });
+    if (!user) { openModal(); return; }
+    if (!repliesOpen) {
+      toggleThread();
+      // Focus the input after the thread opens
+      setTimeout(() => mentionInputRef.current?.focus(), 0);
+    } else {
+      mentionInputRef.current?.focus();
+    }
   };
 
   const uploadReplyFile = async (file: File) => {
@@ -688,7 +695,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
             <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
               {shout.user.name}
             </a>
-            <span className="text-xs text-th-text-4">{formatTimestamp(shout.timestamp)}</span>
+            <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
             {isOwner && (
               <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">

@@ -2,7 +2,8 @@ import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { broadcast } from "../sse.js";
+import { broadcast, broadcastToUser } from "../sse.js";
+import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
 import { shoutSchema, SHOUT_MAX_LENGTH } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
@@ -13,13 +14,13 @@ const router = Router();
 /* get shouts */
 router.get("/shouts", asyncHandler(async (req, res) => {
   const currentUserId = req.session?.user?.id ?? null;
-  const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
-  const offset = parseInt(req.query.offset, 10) || 0;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 25, 50);
   const sortBy = req.query.sortBy || "new";
-  console.log(`[Shouts] Fetching shouts: limit=${limit}, offset=${offset}, sort=${sortBy}, user=${currentUserId || "anon"}`);
 
   let topRaw;
   if (sortBy === "popular") {
+    const offset = parseInt(req.query.offset, 10) || 0;
+    console.log(`[Shouts] Fetching popular shouts: limit=${limit}, offset=${offset}, user=${currentUserId || "anon"}`);
     const sevenDaysAgo = toSqliteDatetime(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
     topRaw = await prisma.shout.findMany({
       where: {
@@ -39,25 +40,47 @@ router.get("/shouts", asyncHandler(async (req, res) => {
       skip: offset,
     });
   } else {
+    // Cursor-based pagination for "new" tab — stable under list mutations
+    const cursor = req.query.cursor || null; // created_at of last seen shout
+    console.log(`[Shouts] Fetching new shouts: limit=${limit}, cursor=${cursor || "none"}, user=${currentUserId || "anon"}`);
     topRaw = await prisma.shout.findMany({
-      where: { parent_id: null, is_deleted: 0 },
+      where: {
+        parent_id: null,
+        is_deleted: 0,
+        ...(cursor ? { created_at: { lt: cursor } } : {}),
+      },
       include: {
         user: { select: { username: true, avatar: true, is_banned: true } },
         media: true,
       },
       orderBy: { created_at: "desc" },
       take: limit + 1,
-      skip: offset,
     });
   }
 
   const hasMore = topRaw.length > limit;
   const top = hasMore ? topRaw.slice(0, limit) : topRaw;
+  const nextCursor = (sortBy !== "popular" && top.length > 0) ? top[top.length - 1].created_at : null;
 
   const dto = await enrichFeed(top, currentUserId);
 
   console.log(`[Shouts] Returning ${dto.length} shouts, hasMore=${hasMore}`);
-  res.json({ shouts: dto, hasMore });
+  res.json({ shouts: dto, hasMore, nextCursor });
+}));
+
+/* get single shout by id */
+router.get("/shouts/:id", asyncHandler(async (req, res) => {
+  const currentUserId = req.session?.user?.id ?? null;
+  const raw = await prisma.shout.findFirst({
+    where: { id: req.params.id, is_deleted: 0, parent_id: null },
+    include: {
+      user: { select: { username: true, avatar: true, is_banned: true } },
+      media: true,
+    },
+  });
+  if (!raw) return res.status(404).json({ error: "Запись не найдена" });
+  const [dto] = await enrichFeed([raw], currentUserId);
+  res.json({ shout: dto });
 }));
 
 /* delete shout (soft-delete, author only) */
@@ -180,6 +203,37 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
 
   console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
   broadcast("new_shout", { shoutId: id, userId: req.session.user.id, shout: shoutDto });
+
+  const mentionedIds = extractMentionedUserIds(content, req.session.user.id);
+  if (mentionedIds.length > 0) {
+    const now = toSqliteDatetime();
+    const notificationRows = mentionedIds.map(uid => ({
+      id: crypto.randomUUID(),
+      user_id: uid,
+      actor_id: req.session.user.id,
+      type: "mention",
+      shout_id: id,
+      comment_id: null,
+      created_at: now,
+    }));
+    await prisma.notification.createMany({ data: notificationRows });
+    const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
+    const snippet = buildSnippet(content);
+    for (const n of notificationRows) {
+      broadcastToUser(n.user_id, "notification", {
+        id: n.id,
+        type: "mention",
+        actor,
+        shoutId: n.shout_id,
+        commentId: null,
+        isRead: false,
+        timestamp: utcTimestamp(now),
+        snippet,
+      });
+    }
+    console.log(`[Shouts] Sent mention notifications for shout ${id} to ${mentionedIds.length} user(s)`);
+  }
+
   res.json({ ok: true, id, shout: shoutDto });
 }));
 
