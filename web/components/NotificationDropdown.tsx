@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../context/NotificationsContext';
 import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
@@ -96,22 +96,6 @@ const NotificationDropdown: React.FC = () => {
     if (!isOpen) flushReads();
   }, [isOpen]);
 
-  // Position the dropdown relative to the button, clamped within the viewport
-  useLayoutEffect(() => {
-    if (!isOpen || !buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const DROPDOWN_W = 320; // w-80
-    const PAD = 8;
-    // Right-align to the button's right edge, but don't go off the left side
-    let right = window.innerWidth - rect.right;
-    right = Math.max(PAD, right);
-    // If clamping pushes it off the right side, re-clamp
-    if (window.innerWidth - right - DROPDOWN_W < PAD) {
-      right = window.innerWidth - DROPDOWN_W - PAD;
-    }
-    setDropdownStyle({ position: 'fixed', top: rect.bottom + 8, right });
-  }, [isOpen]);
-
   // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
@@ -126,12 +110,28 @@ const NotificationDropdown: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
 
+  function handleBellClick() {
+    if (!isOpen && buttonRef.current) {
+      // Compute position before the dropdown mounts so it renders correctly on the first paint
+      const rect = buttonRef.current.getBoundingClientRect();
+      const DROPDOWN_W = 320; // w-80
+      const PAD = 8;
+      let right = window.innerWidth - rect.right;
+      right = Math.max(PAD, right);
+      if (window.innerWidth - right - DROPDOWN_W < PAD) {
+        right = window.innerWidth - DROPDOWN_W - PAD;
+      }
+      setDropdownStyle({ position: 'fixed', top: rect.bottom + 8, right });
+    }
+    setIsOpen((o) => !o);
+  }
+
   return (
     <div className="relative">
       {/* Bell button */}
       <button
         ref={buttonRef}
-        onClick={() => setIsOpen((o) => !o)}
+        onClick={handleBellClick}
         className="relative p-2 hover:text-th-text transition-colors"
         title="Уведомления"
       >
