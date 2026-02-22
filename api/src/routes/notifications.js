@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
+import { buildSnippet } from "../helpers/mentions.js";
 
 const router = Router();
 
@@ -18,6 +19,8 @@ router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
     },
     include: {
       actor: { select: { username: true, avatar: true } },
+      shout: { select: { content: true } },
+      comment: { select: { content: true } },
     },
     orderBy: { created_at: "desc" },
   });
@@ -30,24 +33,35 @@ router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
     commentId: n.comment_id,
     isRead: !!n.is_read,
     timestamp: utcTimestamp(n.created_at),
+    snippet: buildSnippet(n.comment?.content ?? n.shout?.content ?? ""),
   }));
 
   console.log(`[Notifications] ${userId} fetched ${notifications.length} unread`);
   res.json({ notifications });
 }));
 
-/* PATCH /notifications/:id/read — mark a single notification as read */
-router.patch("/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const userId = req.session.user.id;
+/* PATCH /notifications/read-batch — mark a batch of notifications as read */
+router.patch("/notifications/read-batch", requireAuth, asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: "ids must be a non-empty array" });
+  }
+  const capped = ids.slice(0, 50); // safety cap
 
-  const notif = await prisma.notification.findFirst({
-    where: { id, user_id: userId },
-    select: { id: true },
+  await prisma.notification.updateMany({
+    where: { id: { in: capped }, user_id: req.session.user.id },
+    data: { is_read: 1 },
   });
-  if (!notif) return res.status(404).json({ error: "Не найдено" });
+  res.json({ ok: true });
+}));
 
-  await prisma.notification.update({ where: { id }, data: { is_read: 1 } });
+/* PATCH /notifications/read-all — mark all unread notifications as read */
+router.patch("/notifications/read-all", requireAuth, asyncHandler(async (req, res) => {
+  const userId = req.session.user.id;
+  await prisma.notification.updateMany({
+    where: { user_id: userId, is_read: 0 },
+    data: { is_read: 1 },
+  });
   res.json({ ok: true });
 }));
 
