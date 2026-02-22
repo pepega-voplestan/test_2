@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { broadcast, broadcastToUser } from "../sse.js";
-import { extractMentionedUserIds } from "../helpers/mentions.js";
+import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
 import { shoutSchema, SHOUT_MAX_LENGTH } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
@@ -211,6 +211,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     }));
     await prisma.notification.createMany({ data: notificationRows });
     const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
+    const snippet = buildSnippet(content);
     for (const n of notificationRows) {
       broadcastToUser(n.user_id, "notification", {
         id: n.id,
@@ -220,6 +221,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
         commentId: null,
         isRead: false,
         timestamp: utcTimestamp(now),
+        snippet,
       });
     }
     console.log(`[Shouts] Sent mention notifications for shout ${id} to ${mentionedIds.length} user(s)`);

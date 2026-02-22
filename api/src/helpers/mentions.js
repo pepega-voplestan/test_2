@@ -21,3 +21,18 @@ export function extractMentionedUserIds(content, actorId = null) {
   }
   return [...seen];
 }
+
+/**
+ * Build a short text snippet from shout/comment content for notification previews.
+ * Strips @[name:id] mention tokens to @name, collapses whitespace, and truncates.
+ *
+ * @param {string} content
+ * @param {number} maxLen
+ * @returns {string}
+ */
+export function buildSnippet(content, maxLen = 60) {
+  if (!content) return "";
+  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1");
+  const clean = stripped.replace(/\s+/g, " ").trim();
+  return clean.length > maxLen ? clean.slice(0, maxLen) + "…" : clean;
+}
