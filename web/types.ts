@@ -37,6 +37,16 @@ export interface MentionUser {
   avatar: string;
 }
 
+export interface Notification {
+  id: string;
+  type: 'mention';
+  actor: { id: string; name: string; avatar: string };
+  shoutId: string | null;
+  commentId: string | null;
+  isRead: boolean;
+  timestamp: string;
+}
+
 export interface Shout {
   id: string;
   user: User;

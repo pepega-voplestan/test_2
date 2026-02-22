@@ -2,8 +2,9 @@ import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { broadcast } from "../sse.js";
-import { asyncHandler, utcTimestamp } from "../helpers/common.js";
+import { broadcast, broadcastToUser } from "../sse.js";
+import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
+import { extractMentionedUserIds } from "../helpers/mentions.js";
 import { commentSchema, SHOUT_MAX_LENGTH } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
 
@@ -118,6 +119,35 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
 
   console.log(`[Comments] Comment ${id} on shout ${shoutId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
   broadcast("new_comment", { shoutId, commentId: id, userId: req.session.user.id, comment: commentDto });
+
+  const mentionedIds = extractMentionedUserIds(content, req.session.user.id);
+  if (mentionedIds.length > 0) {
+    const now = toSqliteDatetime();
+    const notificationRows = mentionedIds.map(uid => ({
+      id: crypto.randomUUID(),
+      user_id: uid,
+      actor_id: req.session.user.id,
+      type: "mention",
+      shout_id: shoutId,
+      comment_id: id,
+      created_at: now,
+    }));
+    await prisma.notification.createMany({ data: notificationRows });
+    const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
+    for (const n of notificationRows) {
+      broadcastToUser(n.user_id, "notification", {
+        id: n.id,
+        type: "mention",
+        actor,
+        shoutId: n.shout_id,
+        commentId: n.comment_id,
+        isRead: false,
+        timestamp: utcTimestamp(now),
+      });
+    }
+    console.log(`[Comments] Sent mention notifications for comment ${id} to ${mentionedIds.length} user(s)`);
+  }
+
   res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
 }));
 
