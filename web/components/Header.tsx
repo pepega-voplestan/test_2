@@ -32,13 +32,6 @@ const Header: React.FC = () => {
             {/* Notifications */}
             {user && <NotificationDropdown />}
 
-            {/* Feed Icon */}
-            <button className="p-2 hover:text-th-text transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M2 3c-.552 0-1 .448-1 1v11c0 .552.448 1 1 1s1-.448 1-1V5h14v10c0 .552.448 1 1 1s1-.448 1-1V4c0-.552-.448-1-1-1H2zm5.5 15c-.552 0-1 .448-1 1s.448 1 1 1h5c.552 0 1-.448 1-1s-.448-1-1-1h-5zm-1-3.5c0-.552.448-1 1-1h5c.552 0 1 .448 1 1s-.448-1-1 1h-5c-.552 0-1-.448-1-1zm1-6c-.552 0-1 .448-1 1s.448 1 1 1h5c.552 0 1-.448 1-1s-.448-1-1-1h-5z" clipRule="evenodd"></path>
-              </svg>
-            </button>
-
             {/* Theme Toggle */}
             <button onClick={toggle} className="p-2 hover:text-th-text transition-colors" title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}>
               {theme === 'dark' ? (
