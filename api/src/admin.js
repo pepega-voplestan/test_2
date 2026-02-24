@@ -364,6 +364,15 @@ export async function setupAdmin() {
     },
   });
 
+  // Force component bundling before the router is created.
+  // @adminjs/express fires admin.initialize() without await, and in
+  // development mode initialize() is a no-op. We temporarily set
+  // NODE_ENV=production so the bundler runs, then restore the original value.
+  const origNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  await admin.initialize();
+  process.env.NODE_ENV = origNodeEnv;
+
   const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
   const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
   const ADMIN_COOKIE_SECRET =
