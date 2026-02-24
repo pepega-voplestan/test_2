@@ -14,6 +14,11 @@ const router = Router();
 
 /* register step 1: send verification code */
 router.post("/auth/register/send-code", asyncHandler(async (req, res) => {
+  const regSetting = await prisma.setting.findUnique({ where: { key: "registration_open" } });
+  if (regSetting?.value === "false") {
+    return res.status(403).json({ error: "Регистрация временно закрыта" });
+  }
+
   const parsed = sendCodeSchema.safeParse(req.body);
   if (!parsed.success) {
     const firstIssue = parsed.error.issues[0];
@@ -75,6 +80,11 @@ router.post("/auth/register/send-code", asyncHandler(async (req, res) => {
 
 /* register step 2: verify code and create account */
 router.post("/auth/register/verify", asyncHandler(async (req, res) => {
+  const regSetting = await prisma.setting.findUnique({ where: { key: "registration_open" } });
+  if (regSetting?.value === "false") {
+    return res.status(403).json({ error: "Регистрация временно закрыта" });
+  }
+
   const parsed = verifyCodeSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Введите 6-значный код из письма" });
