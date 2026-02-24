@@ -1,29 +1,16 @@
-import AdminJS, { ComponentLoader } from "adminjs";
+import AdminJS from "adminjs";
 import AdminJSExpress from "@adminjs/express";
 import { Database, Resource, getModelByName } from "@adminjs/prisma";
 import { prisma } from "./db.js";
 import { verifyPassword } from "./auth.js";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 AdminJS.registerAdapter({ Database, Resource });
-
-const componentLoader = new ComponentLoader();
-const Components = {
-  UserRelatedRecords: componentLoader.add(
-    "UserRelatedRecords",
-    path.join(__dirname, "admin-components/UserRelatedRecords")
-  ),
-};
 
 export async function setupAdmin() {
   const admin = new AdminJS({
     rootPath: "/admin",
     loginPath: "/admin/login",
     logoutPath: "/admin/logout",
-    componentLoader,
     resources: [
       // ── Users: view, ban/unban via edit ──
       {
@@ -43,17 +30,50 @@ export async function setupAdmin() {
             commentLikes: { isVisible: false },
             receivedNotifications: { isVisible: false },
             sentNotifications: { isVisible: false },
-            // Virtual property: tabbed related records on show page
-            relatedRecords: {
-              type: "string",
-              isVisible: { show: true, list: false, edit: false, filter: false },
-              components: { show: Components.UserRelatedRecords },
-              position: 100,
-            },
           },
           actions: {
             new: { isAccessible: false },
             delete: { isAccessible: false },
+            // ── Related record actions: redirect to filtered list views ──
+            viewShouts: {
+              actionType: "record",
+              label: "Вопли →",
+              icon: "Document",
+              component: false,
+              handler: async (request, response, context) => {
+                const userId = context.record.params.id;
+                return {
+                  record: context.record.toJSON(context.currentAdmin),
+                  redirectUrl: `/admin/resources/Shout/actions/list?filters.user_id=${userId}`,
+                };
+              },
+            },
+            viewComments: {
+              actionType: "record",
+              label: "Комменты →",
+              icon: "MessageCircle",
+              component: false,
+              handler: async (request, response, context) => {
+                const userId = context.record.params.id;
+                return {
+                  record: context.record.toJSON(context.currentAdmin),
+                  redirectUrl: `/admin/resources/Comment/actions/list?filters.user_id=${userId}`,
+                };
+              },
+            },
+            viewMedia: {
+              actionType: "record",
+              label: "Медиа →",
+              icon: "Image",
+              component: false,
+              handler: async (request, response, context) => {
+                const userId = context.record.params.id;
+                return {
+                  record: context.record.toJSON(context.currentAdmin),
+                  redirectUrl: `/admin/resources/Media/actions/list?filters.user_id=${userId}`,
+                };
+              },
+            },
             edit: {
               before: async (request, context) => {
                 // On save, snapshot the current is_banned before the update
@@ -363,15 +383,6 @@ export async function setupAdmin() {
       softwareBrothers: false,
     },
   });
-
-  // Force component bundling before the router is created.
-  // @adminjs/express fires admin.initialize() without await, and in
-  // development mode initialize() is a no-op. We temporarily set
-  // NODE_ENV=production so the bundler runs, then restore the original value.
-  const origNodeEnv = process.env.NODE_ENV;
-  process.env.NODE_ENV = "production";
-  await admin.initialize();
-  process.env.NODE_ENV = origNodeEnv;
 
   const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
   const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
