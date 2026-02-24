@@ -44,7 +44,7 @@ export async function setupAdmin() {
                 const userId = context.record.params.id;
                 return {
                   record: context.record.toJSON(context.currentAdmin),
-                  redirectUrl: `/admin/resources/Shout/actions/list?filters.user_id=${userId}`,
+                  redirectUrl: `/admin/resources/Shout?filters.user=${userId}`,
                 };
               },
             },
@@ -57,7 +57,7 @@ export async function setupAdmin() {
                 const userId = context.record.params.id;
                 return {
                   record: context.record.toJSON(context.currentAdmin),
-                  redirectUrl: `/admin/resources/Comment/actions/list?filters.user_id=${userId}`,
+                  redirectUrl: `/admin/resources/Comment?filters.user=${userId}`,
                 };
               },
             },
@@ -70,7 +70,7 @@ export async function setupAdmin() {
                 const userId = context.record.params.id;
                 return {
                   record: context.record.toJSON(context.currentAdmin),
-                  redirectUrl: `/admin/resources/Media/actions/list?filters.user_id=${userId}`,
+                  redirectUrl: `/admin/resources/Media?filters.user=${userId}`,
                 };
               },
             },
