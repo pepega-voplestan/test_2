@@ -19,6 +19,7 @@ services:
       - appdata-dev:/data
       - media-dev:/media
       - ./api/src:/app/src:ro
+      - ./api/prisma:/app/prisma:ro
     expose:
       - "3000"
     networks:
