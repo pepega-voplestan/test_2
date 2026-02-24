@@ -8,6 +8,7 @@ import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./swagger.js";
 import { prisma } from "./db.js";
 import { toSqliteDatetime } from "./helpers/common.js";
+import { setupAdmin } from "./admin.js";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -21,6 +22,16 @@ app.use((req, _res, next) => {
   next();
 });
 
+// ── AdminJS admin panel ──
+// Mounted BEFORE the app session middleware so it uses its own isolated session.
+const adminLoginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, message: "Too many login attempts" });
+app.use("/admin/login", adminLoginLimiter);
+
+const { admin, adminRouter } = await setupAdmin();
+app.use(admin.options.rootPath, adminRouter);
+console.log(`[API] Admin panel available at ${admin.options.rootPath}`);
+
+// ── App session middleware (does NOT apply to /admin — already handled above) ──
 const SQLiteStore = SQLiteStoreFactory(session);
 
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -80,6 +91,17 @@ if (!isProd) {
 mountRoutes(app);
 
 app.listen(3000, () => console.log(`[API] Server listening on :3000 (env=${process.env.NODE_ENV})`));
+
+// ── Seed default settings ──
+async function seedSettings() {
+  await prisma.setting.upsert({
+    where: { key: "registration_open" },
+    update: {},
+    create: { key: "registration_open", value: "true" },
+  });
+  console.log("[Settings] Default settings seeded");
+}
+seedSettings().catch((err) => console.error("[Settings] Seed error:", err));
 
 // Periodic cleanup: hard-delete notifications older than 14 days
 const NOTIFICATION_TTL_DAYS = 14;
