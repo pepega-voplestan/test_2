@@ -1,4 +1,4 @@
-.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev db-pull db-pull-dev ensure-htpasswd
+.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev db-pull db-pull-dev test test-docker ensure-htpasswd
 
 # Ensure .htpasswd exists (nginx auth_basic requires a valid file, otherwise /admin returns 500)
 ensure-htpasswd:
@@ -84,3 +84,15 @@ db-pull-dev:
 	docker cp $$(docker-compose -f docker-compose.dev.yml ps -q api-dev):/tmp/app.db.pull ./app.db
 	docker exec $$(docker-compose -f docker-compose.dev.yml ps -q api-dev) rm /tmp/app.db.pull
 	@echo "Pulled development database to ./app.db"
+
+# Run API tests locally
+test:
+	cd api && npm test
+
+# Run API tests in Docker
+test-docker:
+	docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from api-test
+
+# Run API tests with coverage locally
+test-coverage:
+	cd api && npm run test:coverage
