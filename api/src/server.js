@@ -24,12 +24,17 @@ app.use((req, _res, next) => {
 
 // ── AdminJS admin panel ──
 // Mounted BEFORE the app session middleware so it uses its own isolated session.
-const adminLoginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, message: "Too many login attempts" });
-app.use("/admin/login", adminLoginLimiter);
+try {
+  const adminLoginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, message: "Too many login attempts" });
+  app.use("/admin/login", adminLoginLimiter);
 
-const { admin, adminRouter } = await setupAdmin();
-app.use(admin.options.rootPath, adminRouter);
-console.log(`[API] Admin panel available at ${admin.options.rootPath}`);
+  const { admin, adminRouter } = await setupAdmin();
+  app.use(admin.options.rootPath, adminRouter);
+  console.log(`[API] Admin panel available at ${admin.options.rootPath}`);
+} catch (err) {
+  console.error("[API] Failed to set up admin panel:", err.message);
+  console.error("[API] Server will continue without admin panel. Try rebuilding the Docker image (make rebuild-dev).");
+}
 
 // ── App session middleware (does NOT apply to /admin — already handled above) ──
 const SQLiteStore = SQLiteStoreFactory(session);
