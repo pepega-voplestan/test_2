@@ -319,31 +319,6 @@ export async function setupAdmin() {
         },
       },
 
-      // ── Request Logs: read-only, filterable by user/status/method ──
-      {
-        resource: { model: getModelByName("RequestLog"), client: prisma },
-        options: {
-          navigation: { name: "Логи", icon: "Activity" },
-          sort: { sortBy: "created_at", direction: "desc" },
-          properties: {
-            id: { isVisible: { list: false, show: true, filter: false, edit: false } },
-            method: { isDisabled: true },
-            path: { isDisabled: true },
-            status_code: { isDisabled: true },
-            user_id: { isDisabled: true },
-            ip: { isDisabled: true },
-            duration_ms: { isDisabled: true },
-            error: { isDisabled: true, type: "textarea" },
-            created_at: { isDisabled: true },
-          },
-          actions: {
-            new: { isAccessible: false },
-            edit: { isAccessible: false },
-            delete: { isAccessible: false },
-            bulkDelete: { isAccessible: false },
-          },
-        },
-      },
     ],
     branding: {
       companyName: "Вопли — Админ-панель",
