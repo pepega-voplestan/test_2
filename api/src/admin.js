@@ -17,6 +17,7 @@ export async function setupAdmin() {
         resource: { model: getModelByName("User"), client: prisma },
         options: {
           navigation: { name: "Пользователи", icon: "User" },
+          sort: { sortBy: "created_at", direction: "desc" },
           properties: {
             password_hash: { isVisible: false },
             id: { isDisabled: true },
@@ -30,6 +31,44 @@ export async function setupAdmin() {
           actions: {
             new: { isAccessible: false },
             delete: { isAccessible: false },
+            edit: {
+              after: async (response, request, context) => {
+                const record = response.record;
+                if (!record || !record.params) return response;
+
+                const userId = record.params.id;
+                const isBanned = record.params.is_banned;
+                // Detect ban/unban by checking previous value
+                const prev = context.record?.params?.is_banned;
+
+                if (prev !== undefined && prev != isBanned) {
+                  if (Number(isBanned) === 1 && Number(prev) === 0) {
+                    // BANNED: soft-delete all user's active content with marker 2
+                    const { count: shouts } = await prisma.shout.updateMany({
+                      where: { user_id: userId, is_deleted: 0 },
+                      data: { is_deleted: 2 },
+                    });
+                    const { count: comments } = await prisma.comment.updateMany({
+                      where: { user_id: userId, is_deleted: 0 },
+                      data: { is_deleted: 2 },
+                    });
+                    console.log(`[Admin] Banned user ${userId}: hid ${shouts} shouts, ${comments} comments`);
+                  } else if (Number(isBanned) === 0 && Number(prev) === 1) {
+                    // UNBANNED: restore only ban-deleted content (is_deleted = 2)
+                    const { count: shouts } = await prisma.shout.updateMany({
+                      where: { user_id: userId, is_deleted: 2 },
+                      data: { is_deleted: 0 },
+                    });
+                    const { count: comments } = await prisma.comment.updateMany({
+                      where: { user_id: userId, is_deleted: 2 },
+                      data: { is_deleted: 0 },
+                    });
+                    console.log(`[Admin] Unbanned user ${userId}: restored ${shouts} shouts, ${comments} comments`);
+                  }
+                }
+                return response;
+              },
+            },
           },
         },
       },
@@ -39,6 +78,7 @@ export async function setupAdmin() {
         resource: { model: getModelByName("Shout"), client: prisma },
         options: {
           navigation: { name: "Контент", icon: "Document" },
+          sort: { sortBy: "created_at", direction: "desc" },
           properties: {
             content: { type: "textarea" },
             id: { isDisabled: true },
@@ -136,6 +176,7 @@ export async function setupAdmin() {
         resource: { model: getModelByName("Comment"), client: prisma },
         options: {
           navigation: { name: "Контент", icon: "Document" },
+          sort: { sortBy: "created_at", direction: "desc" },
           properties: {
             content: { type: "textarea" },
             id: { isDisabled: true },
@@ -222,6 +263,7 @@ export async function setupAdmin() {
         resource: { model: getModelByName("Media"), client: prisma },
         options: {
           navigation: { name: "Контент", icon: "Document" },
+          sort: { sortBy: "created_at", direction: "desc" },
           properties: {
             id: { isDisabled: true },
             created_at: { isDisabled: true },
@@ -239,6 +281,7 @@ export async function setupAdmin() {
         resource: { model: getModelByName("Announcement"), client: prisma },
         options: {
           navigation: { name: "Контент", icon: "Document" },
+          sort: { sortBy: "created_at", direction: "desc" },
           properties: {
             content: { type: "textarea" },
             id: { isDisabled: true },
@@ -272,6 +315,32 @@ export async function setupAdmin() {
           actions: {
             new: { isAccessible: false },
             delete: { isAccessible: false },
+          },
+        },
+      },
+
+      // ── Request Logs: read-only, filterable by user/status/method ──
+      {
+        resource: { model: getModelByName("RequestLog"), client: prisma },
+        options: {
+          navigation: { name: "Логи", icon: "Activity" },
+          sort: { sortBy: "created_at", direction: "desc" },
+          properties: {
+            id: { isVisible: { list: false, show: true, filter: false, edit: false } },
+            method: { isDisabled: true },
+            path: { isDisabled: true },
+            status_code: { isDisabled: true },
+            user_id: { isDisabled: true },
+            ip: { isDisabled: true },
+            duration_ms: { isDisabled: true },
+            error: { isDisabled: true, type: "textarea" },
+            created_at: { isDisabled: true },
+          },
+          actions: {
+            new: { isAccessible: false },
+            edit: { isAccessible: false },
+            delete: { isAccessible: false },
+            bulkDelete: { isAccessible: false },
           },
         },
       },
