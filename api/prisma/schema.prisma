@@ -149,23 +149,6 @@ model Setting {
   @@map("settings")
 }
 
-model RequestLog {
-  id          String  @id @default(uuid())
-  method      String
-  path        String
-  status_code Int
-  user_id     String?
-  ip          String?
-  duration_ms Int
-  error       String?
-  created_at  String  @default(dbgenerated("(datetime('now'))"))
-
-  @@index([created_at], name: "idx_request_logs_created")
-  @@index([user_id, created_at], name: "idx_request_logs_user")
-  @@index([status_code], name: "idx_request_logs_status")
-  @@map("request_logs")
-}
-
 model Notification {
   id         String  @id @default(uuid())
   user_id    String  // target user (receives the notification)

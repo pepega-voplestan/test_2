@@ -93,33 +93,6 @@ if (!isProd) {
   }));
 }
 
-// ── Persistent request logging for /api/ routes (DB) ──
-app.use("/api/", (req, res, next) => {
-  const start = Date.now();
-  const origJson = res.json.bind(res);
-  let errorBody = null;
-  res.json = (body) => {
-    if (res.statusCode >= 400 && body?.error) errorBody = String(body.error).slice(0, 500);
-    return origJson(body);
-  };
-  res.on("finish", () => {
-    prisma.requestLog
-      .create({
-        data: {
-          method: req.method,
-          path: req.originalUrl,
-          status_code: res.statusCode,
-          user_id: req.session?.user?.id || null,
-          ip: req.ip || null,
-          duration_ms: Date.now() - start,
-          error: errorBody,
-        },
-      })
-      .catch(() => {}); // fire-and-forget, don't crash on log write failure
-  });
-  next();
-});
-
 mountRoutes(app);
 
 app.listen(3000, () => console.log(`[API] Server listening on :3000 (env=${process.env.NODE_ENV})`));
@@ -135,28 +108,21 @@ async function seedSettings() {
 }
 seedSettings().catch((err) => console.error("[Settings] Seed error:", err));
 
-// Periodic cleanup: hard-delete old notifications and request logs
+// Periodic cleanup: hard-delete notifications older than 14 days
 const NOTIFICATION_TTL_DAYS = 14;
-const LOG_TTL_DAYS = 7;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
 
-async function cleanupOldData() {
-  const notifCutoff = toSqliteDatetime(new Date(Date.now() - NOTIFICATION_TTL_DAYS * 24 * 60 * 60 * 1000));
-  const { count: notifs } = await prisma.notification.deleteMany({
-    where: { created_at: { lt: notifCutoff } },
+async function cleanupOldNotifications() {
+  const cutoff = toSqliteDatetime(new Date(Date.now() - NOTIFICATION_TTL_DAYS * 24 * 60 * 60 * 1000));
+  const { count } = await prisma.notification.deleteMany({
+    where: { created_at: { lt: cutoff } },
   });
-  if (notifs > 0) console.log(`[Cleanup] Deleted ${notifs} notifications older than ${NOTIFICATION_TTL_DAYS} days`);
-
-  const logCutoff = toSqliteDatetime(new Date(Date.now() - LOG_TTL_DAYS * 24 * 60 * 60 * 1000));
-  const { count: logs } = await prisma.requestLog.deleteMany({
-    where: { created_at: { lt: logCutoff } },
-  });
-  if (logs > 0) console.log(`[Cleanup] Deleted ${logs} request logs older than ${LOG_TTL_DAYS} days`);
+  if (count > 0) console.log(`[Cleanup] Deleted ${count} notifications older than ${NOTIFICATION_TTL_DAYS} days`);
 }
 
-cleanupOldData().catch((err) => console.error("[Cleanup] Error:", err));
+cleanupOldNotifications().catch((err) => console.error("[Cleanup] Error:", err));
 setInterval(
-  () => cleanupOldData().catch((err) => console.error("[Cleanup] Error:", err)),
+  () => cleanupOldNotifications().catch((err) => console.error("[Cleanup] Error:", err)),
   CLEANUP_INTERVAL_MS
 );
 
