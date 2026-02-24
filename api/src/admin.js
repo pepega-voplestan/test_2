@@ -21,6 +21,11 @@ export async function setupAdmin() {
             password_hash: { isVisible: false },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
+            // Hide reverse relations to unregistered resources
+            shoutLikes: { isVisible: false },
+            commentLikes: { isVisible: false },
+            receivedNotifications: { isVisible: false },
+            sentNotifications: { isVisible: false },
           },
           actions: {
             new: { isAccessible: false },
@@ -38,6 +43,9 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
+            // Hide reverse relations to unregistered resources
+            likes: { isVisible: false },
+            notifications: { isVisible: false },
           },
           actions: {
             // Default delete → soft-delete
@@ -132,6 +140,9 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
+            // Hide reverse relations to unregistered resources
+            likes: { isVisible: false },
+            notifications: { isVisible: false },
           },
           actions: {
             delete: {
@@ -202,6 +213,23 @@ export async function setupAdmin() {
                 };
               },
             },
+          },
+        },
+      },
+
+      // ── Media: read-only, resolves media_id references from Shouts/Comments ──
+      {
+        resource: { model: getModelByName("Media"), client: prisma },
+        options: {
+          navigation: { name: "Контент", icon: "Document" },
+          properties: {
+            id: { isDisabled: true },
+            created_at: { isDisabled: true },
+          },
+          actions: {
+            new: { isAccessible: false },
+            edit: { isAccessible: false },
+            delete: { isAccessible: false },
           },
         },
       },
