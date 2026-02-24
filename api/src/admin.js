@@ -1,16 +1,29 @@
-import AdminJS from "adminjs";
+import AdminJS, { ComponentLoader } from "adminjs";
 import AdminJSExpress from "@adminjs/express";
 import { Database, Resource, getModelByName } from "@adminjs/prisma";
 import { prisma } from "./db.js";
 import { verifyPassword } from "./auth.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 AdminJS.registerAdapter({ Database, Resource });
+
+const componentLoader = new ComponentLoader();
+const Components = {
+  UserRelatedRecords: componentLoader.add(
+    "UserRelatedRecords",
+    path.join(__dirname, "admin-components/UserRelatedRecords")
+  ),
+};
 
 export async function setupAdmin() {
   const admin = new AdminJS({
     rootPath: "/admin",
     loginPath: "/admin/login",
     logoutPath: "/admin/logout",
+    componentLoader,
     resources: [
       // ── Users: view, ban/unban via edit ──
       {
@@ -22,27 +35,52 @@ export async function setupAdmin() {
             password_hash: { isVisible: false },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations to unregistered resources
+            // Hide reverse relations
+            shouts: { isVisible: false },
+            comments: { isVisible: false },
+            media: { isVisible: false },
             shoutLikes: { isVisible: false },
             commentLikes: { isVisible: false },
             receivedNotifications: { isVisible: false },
             sentNotifications: { isVisible: false },
+            // Virtual property: tabbed related records on show page
+            relatedRecords: {
+              type: "string",
+              isVisible: { show: true, list: false, edit: false, filter: false },
+              components: { show: Components.UserRelatedRecords },
+              position: 100,
+            },
           },
           actions: {
             new: { isAccessible: false },
             delete: { isAccessible: false },
             edit: {
+              before: async (request, context) => {
+                // On save, snapshot the current is_banned before the update
+                if (request.method === "post") {
+                  const userId = context.record?.params?.id;
+                  if (userId) {
+                    const user = await prisma.user.findUnique({
+                      where: { id: userId },
+                      select: { is_banned: true },
+                    });
+                    request.params._prevIsBanned = user?.is_banned ?? 0;
+                  }
+                }
+                return request;
+              },
               after: async (response, request, context) => {
+                if (request.method !== "post") return response;
+
                 const record = response.record;
                 if (!record || !record.params) return response;
 
                 const userId = record.params.id;
-                const isBanned = record.params.is_banned;
-                // Detect ban/unban by checking previous value
-                const prev = context.record?.params?.is_banned;
+                const isBanned = Number(record.params.is_banned);
+                const prev = Number(request.params._prevIsBanned ?? 0);
 
-                if (prev !== undefined && prev != isBanned) {
-                  if (Number(isBanned) === 1 && Number(prev) === 0) {
+                if (prev !== isBanned) {
+                  if (isBanned === 1 && prev === 0) {
                     // BANNED: soft-delete all user's active content with marker 2
                     const { count: shouts } = await prisma.shout.updateMany({
                       where: { user_id: userId, is_deleted: 0 },
@@ -53,7 +91,7 @@ export async function setupAdmin() {
                       data: { is_deleted: 2 },
                     });
                     console.log(`[Admin] Banned user ${userId}: hid ${shouts} shouts, ${comments} comments`);
-                  } else if (Number(isBanned) === 0 && Number(prev) === 1) {
+                  } else if (isBanned === 0 && prev === 1) {
                     // UNBANNED: restore only ban-deleted content (is_deleted = 2)
                     const { count: shouts } = await prisma.shout.updateMany({
                       where: { user_id: userId, is_deleted: 2 },
