@@ -12,8 +12,8 @@ const router = Router();
 
 /* reply (create comment) */
 router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) => {
-  const actor = await prisma.user.findUnique({ where: { id: req.session.user.id }, select: { is_banned: true } });
-  if (actor?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+  const banCheck = await prisma.user.findUnique({ where: { id: req.session.user.id }, select: { is_banned: true } });
+  if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
 
   const parsed = commentSchema.safeParse(req.body);
   if (!parsed.success) {

@@ -106,8 +106,8 @@ router.delete("/shouts/:id", requireAuth, asyncHandler(async (req, res) => {
 
 /* new shout */
 router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
-  const actor = await prisma.user.findUnique({ where: { id: req.session.user.id }, select: { is_banned: true } });
-  if (actor?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+  const banCheck = await prisma.user.findUnique({ where: { id: req.session.user.id }, select: { is_banned: true } });
+  if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
 
   const parsed = shoutSchema.safeParse(req.body);
   if (!parsed.success) {
