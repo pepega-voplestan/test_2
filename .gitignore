@@ -5,3 +5,7 @@ backups/
 data/
 app.db
 api/prisma/*.db
+api/coverage/
+api/tests/test.db*
+api/tests/.env.test
+api/tests/.media-tmp/
