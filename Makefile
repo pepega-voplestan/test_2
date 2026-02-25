@@ -1,11 +1,12 @@
 .PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev db-pull db-pull-dev ensure-htpasswd
 
-# Ensure .htpasswd exists (nginx auth_basic requires a valid file)
+# Ensure .htpasswd exists (nginx auth_basic requires a valid file, otherwise /admin returns 500)
 ensure-htpasswd:
 	@if [ ! -f .htpasswd ]; then \
-		rm -rf .htpasswd 2>/dev/null; \
-		printf 'admin:{SHA}0DPiKuNIrrVmD8IUCuw1hQxNqZc=\n' > .htpasswd; \
-		echo "[make] Created default .htpasswd (admin/admin). For production, regenerate: htpasswd -c .htpasswd USERNAME"; \
+		echo "ERROR: .htpasswd file not found. Nginx requires it for /admin basic auth."; \
+		echo "Create it with: htpasswd -c .htpasswd USERNAME"; \
+		echo "Or without htpasswd: docker run --rm httpd:alpine htpasswd -nbB USERNAME PASSWORD > .htpasswd"; \
+		exit 1; \
 	fi
 
 # Start production server
