@@ -24,7 +24,7 @@ router.post("/auth/register/send-code", asyncHandler(async (req, res) => {
     const firstIssue = parsed.error.issues[0];
     const field = firstIssue?.path[0];
     if (field === "email") return res.status(400).json({ error: "Введите корректный email" });
-    if (field === "username") return res.status(400).json({ error: "Имя пользователя: от 3 до 32 символов" });
+    if (field === "username") return res.status(400).json({ error: firstIssue.message });
     if (field === "password") return res.status(400).json({ error: "Пароль: минимум 6 символов" });
     return res.status(400).json({ error: "Некорректные данные" });
   }
