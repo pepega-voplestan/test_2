@@ -52,10 +52,13 @@ export const announcementSchema = z.object({
 
 export const profileUpdateSchema = z.object({
   username: usernameField.optional(),
-  email: z.string().email().max(200).optional().or(z.literal("")),
   avatar: z.string().max(500).optional(),
   currentPassword: z.string().min(1).optional(),
   newPassword: z.string().min(6).max(200).optional(),
+});
+
+export const emailChangeSchema = z.object({
+  email: z.string().email().max(200),
 });
 
 export const sendCodeSchema = z.object({
