@@ -9,6 +9,7 @@ interface ProfilePageProps {
 }
 
 const PAGE_SIZE = 10;
+const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const { refresh } = useAuth();
@@ -38,10 +39,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   // Pending avatar file for preview-only upload
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [pendingAvatarPreview, setPendingAvatarPreview] = useState<string | null>(null);
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
 
   // Password visibility toggles
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+
+  // Email change verification flow
+  const [emailStep, setEmailStep] = useState<'idle' | 'sending' | 'code'>('idle');
+  const [emailCode, setEmailCode] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailSending, setEmailSending] = useState(false);
 
   // Fetch profile
   useEffect(() => {
@@ -154,16 +162,71 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     setOpenThreadId(prev => prev === shoutId ? null : shoutId);
   }, []);
 
-  // Handle profile save
+  // Handle email change: send verification code
+  const handleEmailSendCode = async () => {
+    const newEmail = editForm.email.trim();
+    if (!newEmail || newEmail === (profile?.email || '')) return;
+
+    setEmailError(null);
+    setEmailSending(true);
+    try {
+      const res = await fetch(`/api/v1/users/${userId}/email/send-code`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Ошибка отправки кода');
+      setEmailStep('code');
+      setEmailCode('');
+    } catch (err: unknown) {
+      setEmailError(err instanceof Error ? err.message : 'Ошибка');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // Handle email change: verify code
+  const handleEmailVerify = async () => {
+    const newEmail = editForm.email.trim();
+    setEmailError(null);
+    setEmailSending(true);
+    try {
+      const res = await fetch(`/api/v1/users/${userId}/email/verify`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail, code: emailCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Ошибка подтверждения');
+      // Success — update profile state
+      setProfile(prev => prev ? { ...prev, email: data.email } : prev);
+      setEmailStep('idle');
+      setEmailCode('');
+      setEditSuccess('Email обновлён');
+    } catch (err: unknown) {
+      setEmailError(err instanceof Error ? err.message : 'Ошибка');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // Handle profile save (username, avatar, password + trigger email verification if changed)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setEditError(null);
     setEditSuccess(null);
     setIsSaving(true);
 
+    const emailChanged = editForm.email.trim() !== (profile?.email || '') && editForm.email.trim() !== '';
+
     console.log('[ProfilePage] Saving profile changes');
 
     try {
+      setAvatarUploadError(null);
+
       // Step 1: Upload pending avatar if any
       let newAvatarUrl: string | undefined;
       if (pendingAvatarFile) {
@@ -171,15 +234,24 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         const form = new FormData();
         form.append('avatar', pendingAvatarFile);
 
-        const uploadRes = await fetch('/api/v1/upload/avatar', {
-          method: 'POST',
-          credentials: 'include',
-          body: form,
-        });
+        let uploadRes: Response;
+        try {
+          uploadRes = await fetch('/api/v1/upload/avatar', {
+            method: 'POST',
+            credentials: 'include',
+            body: form,
+          });
+        } catch {
+          const msg = 'Не удалось загрузить аватар. Проверьте соединение с интернетом';
+          setAvatarUploadError(msg);
+          throw new Error(msg);
+        }
 
         if (!uploadRes.ok) {
           const data = await uploadRes.json().catch(() => ({}));
-          throw new Error(data.error || 'Ошибка загрузки аватара');
+          const msg = data.error || 'Ошибка загрузки аватара';
+          setAvatarUploadError(msg);
+          throw new Error(msg);
         }
 
         const uploadData = await uploadRes.json();
@@ -187,24 +259,32 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         console.log('[ProfilePage] Avatar uploaded:', newAvatarUrl);
       }
 
-      // Step 2: Build profile update body
+      // Validate username client-side before sending
+      if (editForm.username !== profile?.name) {
+        const u = editForm.username.trim();
+        if (u.length < 3 || u.length > 32) throw new Error("Имя пользователя: от 3 до 32 символов");
+        if (!USERNAME_RE.test(u)) throw new Error("Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел");
+      }
+
+      // Step 2: Build profile update body (no email — that goes through verification)
       const body: Record<string, string> = {};
       if (editForm.username !== profile?.name) body.username = editForm.username;
-      if (editForm.email !== (profile?.email || '')) body.email = editForm.email;
       if (newAvatarUrl) body.avatar = newAvatarUrl;
       if (editForm.newPassword) {
         body.currentPassword = editForm.currentPassword;
         body.newPassword = editForm.newPassword;
       }
 
-      // If only avatar was uploaded and nothing else changed, still update profile
-      if (Object.keys(body).length === 0 && !pendingAvatarFile) {
+      const hasProfileChanges = Object.keys(body).length > 0 || pendingAvatarFile;
+
+      // Nothing changed at all
+      if (!hasProfileChanges && !emailChanged) {
         setEditError('Нет изменений');
         setIsSaving(false);
         return;
       }
 
-      // If we only had avatar upload and no other changes, skip PUT
+      // Save non-email profile changes
       if (Object.keys(body).length > 0) {
         const res = await fetch(`/api/v1/users/${userId}`, {
           method: 'PUT',
@@ -229,11 +309,21 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       setEditForm(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
       setPendingAvatarFile(null);
       setPendingAvatarPreview(null);
-      setEditSuccess('Профиль обновлён');
-      setIsEditing(false);
 
-      // Refresh auth context so header reflects new name/avatar
-      await refresh();
+      // If email changed, trigger verification flow instead of closing editor
+      if (emailChanged) {
+        if (hasProfileChanges) {
+          setEditSuccess('Профиль обновлён. Подтвердите новый email — код отправлен на почту');
+        }
+        // Auto-trigger email send code
+        await handleEmailSendCode();
+        // Don't close editing — user still needs to enter the code
+        await refresh();
+      } else {
+        setEditSuccess('Профиль обновлён');
+        setIsEditing(false);
+        await refresh();
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ошибка сохранения';
       console.error('[ProfilePage] Save error:', message);
@@ -306,7 +396,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             {/* Owner actions */}
             {profile.isOwner && !isEditing && (
               <button
-                onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); }}
+                onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setAvatarUploadError(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
                 className="text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 px-4 py-1.5 rounded-lg transition-colors"
               >
                 Редактировать профиль
@@ -341,29 +431,84 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               />
             </label>
 
-            <label className="block">
+            <div className="block">
               <div className="text-xs text-th-text-3 mb-1">Email</div>
-              <input
-                type="email"
-                value={editForm.email}
-                onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="user@example.com"
-                className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
-                disabled={isSaving}
-              />
-            </label>
+              {emailStep === 'idle' ? (
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="user@example.com"
+                    className="flex-1 bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    disabled={isSaving || emailSending}
+                  />
+                  {editForm.email.trim() !== (profile?.email || '') && editForm.email.trim() !== '' && (
+                    <button
+                      type="button"
+                      onClick={handleEmailSendCode}
+                      disabled={emailSending}
+                      className="px-4 py-2 text-sm font-medium text-th-text bg-th-ring/10 hover:bg-th-ring/20 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {emailSending ? 'Отправка...' : 'Подтвердить'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-xs text-th-text-4">
+                    Код отправлен на <span className="text-th-text-3">{editForm.email.trim()}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={emailCode}
+                      onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      className="w-32 bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20 text-center tracking-widest font-mono"
+                      disabled={emailSending}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleEmailVerify}
+                      disabled={emailSending || emailCode.length !== 6}
+                      className="px-4 py-2 text-sm font-medium text-th-page bg-th-text hover:opacity-90 rounded-lg transition-opacity disabled:opacity-50"
+                    >
+                      {emailSending ? 'Проверка...' : 'Подтвердить'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
+                      disabled={emailSending}
+                      className="px-3 py-2 text-sm text-th-text-4 hover:text-th-text transition-colors"
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              )}
+              {emailError && (
+                <div className="mt-1 text-xs text-red-400">{emailError}</div>
+              )}
+            </div>
 
             <AvatarUpload
               currentAvatar={editForm.avatar}
               disabled={isSaving}
               pendingPreview={pendingAvatarPreview}
+              externalError={avatarUploadError}
               onFileSelected={(file, previewUrl) => {
                 setPendingAvatarFile(file);
                 setPendingAvatarPreview(previewUrl);
+                setAvatarUploadError(null);
               }}
               onFileCleared={() => {
                 setPendingAvatarFile(null);
                 setPendingAvatarPreview(null);
+                setAvatarUploadError(null);
               }}
             />
 
@@ -428,6 +573,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   setEditError(null);
                   setPendingAvatarFile(null);
                   setPendingAvatarPreview(null);
+                  setAvatarUploadError(null);
+                  setEmailStep('idle');
+                  setEmailCode('');
+                  setEmailError(null);
                   setEditForm({
                     username: profile.name,
                     email: profile.email || '',

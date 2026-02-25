@@ -12,6 +12,9 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
       ANNOUNCEMENTS_SECRET: ${ANNOUNCEMENTS_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+      ADMIN_COOKIE_SECRET: ${ADMIN_COOKIE_SECRET}
     networks:
       - vopli
 
@@ -40,6 +43,7 @@ services:
       - "3005:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
       - webdist:/usr/share/nginx/html:ro
     networks:
       - vopli

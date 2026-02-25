@@ -12,10 +12,14 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
       ANNOUNCEMENTS_SECRET: ${ANNOUNCEMENTS_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+      ADMIN_COOKIE_SECRET: ${ADMIN_COOKIE_SECRET}
     volumes:
       - appdata-dev:/data
       - media-dev:/media
       - ./api/src:/app/src:ro
+      - ./api/prisma:/app/prisma:ro
     expose:
       - "3000"
     networks:
@@ -40,6 +44,7 @@ services:
       - "3006:80"
     volumes:
       - ./nginx-dev.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
       - webdist-dev:/usr/share/nginx/html:ro
     networks:
       - vopli-dev

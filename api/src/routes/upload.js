@@ -42,6 +42,8 @@ router.post("/upload/media", requireAuth, (req, res) => {
     }
 
     const userId = req.session.user.id;
+    const banCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
+    if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
     console.log(`[Media] Processing upload for ${userId}, ${req.file.size} bytes, ${req.file.mimetype}`);
 
     try {
@@ -147,6 +149,9 @@ router.post("/upload/avatar", requireAuth, (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "Файл не выбран" });
     }
+
+    const banCheck = await prisma.user.findUnique({ where: { id: req.session.user.id }, select: { is_banned: true } });
+    if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
 
     const userId = req.session.user.id;
     console.log(`[Avatar] Processing upload for ${userId}, ${req.file.size} bytes, ${req.file.mimetype}`);
