@@ -33,7 +33,11 @@ try {
   console.log(`[API] Admin panel available at ${admin.options.rootPath}`);
 } catch (err) {
   console.error("[API] Failed to set up admin panel:", err.message);
-  console.error("[API] Server will continue without admin panel. Try rebuilding the Docker image (make rebuild-dev).");
+  if (isProd) {
+    console.error("[API] Admin panel is required in production. Exiting.");
+    process.exit(1);
+  }
+  console.error("[API] Server will continue without admin panel in dev mode.");
 }
 
 // ── App session middleware (does NOT apply to /admin — already handled above) ──
