@@ -1,0 +1,12 @@
+services:
+  api-test:
+    build:
+      context: ./api
+      target: test
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: file:/tmp/test.db
+      SESSION_SECRET: test-secret
+    tmpfs:
+      - /tmp:size=100M
+      - /data:size=10M
