@@ -1,8 +1,13 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth, hashPassword, verifyPassword } from "../auth.js";
-import { asyncHandler, utcTimestamp, avatarFor } from "../helpers/common.js";
-import { profileUpdateSchema } from "../helpers/validation.js";
+import { sendVerificationEmail } from "../email.js";
+import { asyncHandler, utcTimestamp, toSqliteDatetime, avatarFor } from "../helpers/common.js";
+import {
+  profileUpdateSchema, emailChangeSchema, verifyCodeSchema,
+  generateCode, CODE_EXPIRY_MINUTES, CODE_MAX_ATTEMPTS,
+} from "../helpers/validation.js";
 import { enrichFeed } from "../helpers/feed.js";
 
 const router = Router();
@@ -90,13 +95,15 @@ router.put("/users/:id", requireAuth, asyncHandler(async (req, res) => {
 
   const parsed = profileUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
-    const field = parsed.error.issues[0]?.path[0];
-    if (field === "email") return res.status(400).json({ error: "Введите корректный email" });
-    if (field === "username") return res.status(400).json({ error: "Имя пользователя: от 3 до 32 символов" });
+    const firstIssue = parsed.error.issues[0];
+    const field = firstIssue?.path[0];
+    if (field === "username") {
+      return res.status(400).json({ error: firstIssue.message || "Имя пользователя: от 3 до 32 символов" });
+    }
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { username, email, avatar, currentPassword, newPassword } = parsed.data;
+  const { username, avatar, currentPassword, newPassword } = parsed.data;
   console.log(`[Profile] Update attempt for user ${currentUserId}`);
 
   if (newPassword) {
@@ -146,29 +153,6 @@ router.put("/users/:id", requireAuth, asyncHandler(async (req, res) => {
     console.log(`[Profile] Avatar updated`);
   }
 
-  if (email !== undefined) {
-    const trimmed = email.trim();
-    if (trimmed) {
-      const existsEmail = await prisma.user.findFirst({
-        where: { email: trimmed, NOT: { id: currentUserId } },
-        select: { id: true },
-      });
-      if (existsEmail) {
-        return res.status(409).json({ error: "Этот email уже используется" });
-      }
-      await prisma.user.update({
-        where: { id: currentUserId },
-        data: { email: trimmed },
-      });
-    } else {
-      await prisma.user.update({
-        where: { id: currentUserId },
-        data: { email: null },
-      });
-    }
-    console.log(`[Profile] Email updated`);
-  }
-
   const updated = await prisma.user.findUnique({
     where: { id: currentUserId },
     select: { id: true, username: true, avatar: true, email: true, created_at: true },
@@ -186,6 +170,141 @@ router.put("/users/:id", requireAuth, asyncHandler(async (req, res) => {
       isOwner: true,
     },
   });
+}));
+
+/* email change step 1: send verification code to new email */
+router.post("/users/:id/email/send-code", requireAuth, asyncHandler(async (req, res) => {
+  const profileId = req.params.id;
+  const currentUserId = req.session.user.id;
+
+  if (profileId !== currentUserId) {
+    return res.status(403).json({ error: "Нельзя редактировать чужой профиль" });
+  }
+
+  const parsed = emailChangeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Введите корректный email" });
+  }
+
+  const { email } = parsed.data;
+  console.log(`[Profile] Email change send-code for user ${currentUserId} → ${email}`);
+
+  // Check if this email is already taken
+  const existsEmail = await prisma.user.findFirst({
+    where: { email, NOT: { id: currentUserId } },
+    select: { id: true },
+  });
+  if (existsEmail) {
+    return res.status(409).json({ error: "Этот email уже используется" });
+  }
+
+  // Invalidate any existing unused codes for this purpose
+  await prisma.verificationCode.updateMany({
+    where: { email, purpose: "email_change", used: 0 },
+    data: { used: 1 },
+  });
+
+  const code = generateCode();
+  const id = crypto.randomUUID();
+  const expires_at = toSqliteDatetime(new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000));
+  const payload = JSON.stringify({ userId: currentUserId, newEmail: email });
+
+  await prisma.verificationCode.create({
+    data: { id, email, code, purpose: "email_change", payload, expires_at },
+  });
+
+  try {
+    await sendVerificationEmail(email, code, "email_change");
+  } catch (err) {
+    console.error(`[Profile] Failed to send email change code to ${email}:`, err.message);
+    return res.status(500).json({ error: err.message });
+  }
+
+  console.log(`[Profile] Email change code sent to ${email} for user ${currentUserId}`);
+  res.json({ ok: true });
+}));
+
+/* email change step 2: verify code and update email */
+router.post("/users/:id/email/verify", requireAuth, asyncHandler(async (req, res) => {
+  const profileId = req.params.id;
+  const currentUserId = req.session.user.id;
+
+  if (profileId !== currentUserId) {
+    return res.status(403).json({ error: "Нельзя редактировать чужой профиль" });
+  }
+
+  const parsed = verifyCodeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Введите 6-значный код из письма" });
+  }
+
+  const { email, code } = parsed.data;
+  console.log(`[Profile] Email change verify for user ${currentUserId}, email=${email}`);
+
+  const record = await prisma.verificationCode.findFirst({
+    where: { email, purpose: "email_change", used: 0 },
+    orderBy: { created_at: "desc" },
+  });
+
+  if (!record) {
+    return res.status(400).json({ error: "Код не найден. Запросите новый код" });
+  }
+
+  // Verify the code belongs to this user
+  const { userId } = JSON.parse(record.payload);
+  if (userId !== currentUserId) {
+    return res.status(403).json({ error: "Код не принадлежит вашему аккаунту" });
+  }
+
+  // Check expiry
+  const now = new Date();
+  const expiresAt = new Date(record.expires_at + "Z");
+  if (now > expiresAt) {
+    await prisma.verificationCode.update({ where: { id: record.id }, data: { used: 1 } });
+    return res.status(400).json({ error: "Код истёк. Запросите новый код" });
+  }
+
+  // Check attempts
+  if (record.attempts >= CODE_MAX_ATTEMPTS) {
+    await prisma.verificationCode.update({ where: { id: record.id }, data: { used: 1 } });
+    return res.status(400).json({ error: "Слишком много попыток. Запросите новый код" });
+  }
+
+  // Increment attempts
+  await prisma.verificationCode.update({
+    where: { id: record.id },
+    data: { attempts: { increment: 1 } },
+  });
+
+  if (record.code !== code) {
+    const remaining = CODE_MAX_ATTEMPTS - record.attempts - 1;
+    return res.status(400).json({
+      error: remaining > 0
+        ? `Неверный код. Осталось попыток: ${remaining}`
+        : "Неверный код. Запросите новый код",
+    });
+  }
+
+  // Mark code as used
+  await prisma.verificationCode.update({ where: { id: record.id }, data: { used: 1 } });
+
+  // Re-check uniqueness (race condition guard)
+  const existsEmail = await prisma.user.findFirst({
+    where: { email, NOT: { id: currentUserId } },
+    select: { id: true },
+  });
+  if (existsEmail) {
+    return res.status(409).json({ error: "Этот email уже используется" });
+  }
+
+  // Update email
+  await prisma.user.update({
+    where: { id: currentUserId },
+    data: { email },
+  });
+
+  console.log(`[Profile] Email updated to "${email}" for user ${currentUserId}`);
+  res.json({ ok: true, email });
 }));
 
 export default router;
