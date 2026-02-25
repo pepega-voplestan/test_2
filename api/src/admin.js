@@ -7,6 +7,16 @@ import { verifyPassword } from "./auth.js";
 AdminJS.registerAdapter({ Database, Resource });
 
 export async function setupAdmin() {
+  // ── Validate required env vars ──
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+  const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
+  const ADMIN_COOKIE_SECRET = process.env.ADMIN_COOKIE_SECRET;
+
+  if (!ADMIN_EMAIL) throw new Error("ADMIN_EMAIL env var is required");
+  if (!ADMIN_PASSWORD_HASH) throw new Error("ADMIN_PASSWORD_HASH env var is required");
+  if (!ADMIN_COOKIE_SECRET) throw new Error("ADMIN_COOKIE_SECRET env var is required");
+  if (ADMIN_COOKIE_SECRET.length < 32) throw new Error("ADMIN_COOKIE_SECRET must be at least 32 characters");
+
   const admin = new AdminJS({
     rootPath: "/admin",
     loginPath: "/admin/login",
@@ -34,6 +44,7 @@ export async function setupAdmin() {
           actions: {
             new: { isAccessible: false },
             delete: { isAccessible: false },
+            bulkDelete: { isAccessible: false },
             // ── Related record actions: redirect to filtered list views ──
             viewShouts: {
               actionType: "record",
@@ -131,7 +142,7 @@ export async function setupAdmin() {
         },
       },
 
-      // ── Shouts: soft-delete (default), restore, hard-delete ──
+      // ── Shouts: soft-delete (default), restore ──
       {
         resource: { model: getModelByName("Shout"), client: prisma },
         options: {
@@ -146,6 +157,7 @@ export async function setupAdmin() {
             notifications: { isVisible: false },
           },
           actions: {
+            bulkDelete: { isAccessible: false },
             // Default delete → soft-delete
             delete: {
               handler: async (request, response, context) => {
@@ -196,40 +208,11 @@ export async function setupAdmin() {
                 };
               },
             },
-            // Permanent hard-delete
-            hardDelete: {
-              actionType: "record",
-              label: "Удалить навсегда",
-              component: false,
-              variant: "danger",
-              guard:
-                "УДАЛИТЬ НАВСЕГДА? Это действие необратимо!",
-              handler: async (request, response, context) => {
-                const { record, resource, h } = context;
-                const shoutId = record.params.id;
-                // Order matters: comments FK is RESTRICT, so delete children first
-                await prisma.comment.deleteMany({
-                  where: { shout_id: shoutId },
-                });
-                await prisma.shout.delete({ where: { id: shoutId } });
-                return {
-                  record: record.toJSON(context.currentAdmin),
-                  redirectUrl: h.resourceUrl({
-                    resourceId:
-                      resource._decorated?.id() || resource.id(),
-                  }),
-                  notice: {
-                    message: "Вопль удалён из базы",
-                    type: "success",
-                  },
-                };
-              },
-            },
           },
         },
       },
 
-      // ── Comments: soft-delete (default), restore, hard-delete ──
+      // ── Comments: soft-delete (default), restore ──
       {
         resource: { model: getModelByName("Comment"), client: prisma },
         options: {
@@ -244,6 +227,7 @@ export async function setupAdmin() {
             notifications: { isVisible: false },
           },
           actions: {
+            bulkDelete: { isAccessible: false },
             delete: {
               handler: async (request, response, context) => {
                 const { record, resource, h } = context;
@@ -288,30 +272,6 @@ export async function setupAdmin() {
                 };
               },
             },
-            hardDelete: {
-              actionType: "record",
-              label: "Удалить навсегда",
-              component: false,
-              variant: "danger",
-              guard: "УДАЛИТЬ НАВСЕГДА? Это действие необратимо!",
-              handler: async (request, response, context) => {
-                const { record, resource, h } = context;
-                await prisma.comment.delete({
-                  where: { id: record.params.id },
-                });
-                return {
-                  record: record.toJSON(context.currentAdmin),
-                  redirectUrl: h.resourceUrl({
-                    resourceId:
-                      resource._decorated?.id() || resource.id(),
-                  }),
-                  notice: {
-                    message: "Комментарий удалён из базы",
-                    type: "success",
-                  },
-                };
-              },
-            },
           },
         },
       },
@@ -330,6 +290,7 @@ export async function setupAdmin() {
             new: { isAccessible: false },
             edit: { isAccessible: false },
             delete: { isAccessible: false },
+            bulkDelete: { isAccessible: false },
           },
         },
       },
@@ -346,6 +307,26 @@ export async function setupAdmin() {
             created_at: { isDisabled: true },
           },
           actions: {
+            bulkDelete: { isAccessible: false },
+            delete: {
+              handler: async (request, response, context) => {
+                const { record, resource, h } = context;
+                await prisma.announcement.update({
+                  where: { id: record.params.id },
+                  data: { is_deleted: 1 },
+                });
+                return {
+                  record: record.toJSON(context.currentAdmin),
+                  redirectUrl: h.resourceUrl({
+                    resourceId: resource._decorated?.id() || resource.id(),
+                  }),
+                  notice: {
+                    message: "Объявление скрыто (soft-delete)",
+                    type: "success",
+                  },
+                };
+              },
+            },
             new: {
               before: async (request) => {
                 // On POST (actual creation), soft-delete all active announcements first
@@ -373,6 +354,7 @@ export async function setupAdmin() {
           actions: {
             new: { isAccessible: false },
             delete: { isAccessible: false },
+            bulkDelete: { isAccessible: false },
           },
         },
       },
@@ -384,21 +366,10 @@ export async function setupAdmin() {
     },
   });
 
-  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-  const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
-  const ADMIN_COOKIE_SECRET =
-    process.env.ADMIN_COOKIE_SECRET || "change-this-admin-cookie-secret";
-
   const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
     admin,
     {
       authenticate: async (email, password) => {
-        if (!ADMIN_EMAIL || !ADMIN_PASSWORD_HASH) {
-          console.warn(
-            "[Admin] ADMIN_EMAIL or ADMIN_PASSWORD_HASH not set — login disabled"
-          );
-          return null;
-        }
         if (email !== ADMIN_EMAIL) return null;
         const valid = await verifyPassword(password, ADMIN_PASSWORD_HASH);
         if (!valid) return null;
