@@ -6,20 +6,26 @@ interface AvatarUploadProps {
   onFileCleared: () => void;
   pendingPreview: string | null;
   disabled?: boolean;
+  externalError?: string | null;
 }
 
 const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
-const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
+const ACCEPTED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const GIF_TYPES = new Set(['image/gif']);
 const ACCEPT_STR = '.jpg,.jpeg,.png,.webp';
 
-export default function AvatarUpload({ currentAvatar, onFileSelected, onFileCleared, pendingPreview, disabled }: AvatarUploadProps) {
+export default function AvatarUpload({ currentAvatar, onFileSelected, onFileCleared, pendingPreview, disabled, externalError }: AvatarUploadProps) {
   const [error, setError] = useState<string | null>(null);
+  const displayError = error || externalError || null;
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const validate = useCallback((file: File): string | null => {
-    if (!ACCEPTED.includes(file.type)) {
-      return 'Допустимые форматы: JPG, PNG, WebP';
+    if (GIF_TYPES.has(file.type)) {
+      return 'GIF не поддерживается для аватара. Используйте JPG, PNG или WebP';
+    }
+    if (!ACCEPTED.has(file.type)) {
+      return 'Неподдерживаемый формат файла. Допустимые форматы: JPG, PNG, WebP';
     }
     if (file.size > MAX_SIZE) {
       return 'Файл слишком большой (макс. 2 МБ)';
@@ -165,9 +171,9 @@ export default function AvatarUpload({ currentAvatar, onFileSelected, onFileClea
       />
 
       {/* Error */}
-      {error && (
+      {displayError && (
         <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-          {error}
+          {displayError}
         </div>
       )}
     </div>
