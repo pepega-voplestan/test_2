@@ -142,13 +142,6 @@ model VerificationCode {
   @@map("verification_codes")
 }
 
-model Setting {
-  key   String @id
-  value String
-
-  @@map("settings")
-}
-
 model Notification {
   id         String  @id @default(uuid())
   user_id    String  // target user (receives the notification)

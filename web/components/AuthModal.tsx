@@ -3,8 +3,6 @@ import { useAuth } from "../context/AuthContext";
 
 type Mode = "login" | "register" | "register-verify" | "forgot" | "forgot-verify" | "forgot-newpass";
 
-const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
-
 export default function AuthModal() {
   const {
     isAuthModalOpen,
@@ -91,8 +89,7 @@ export default function AuthModal() {
 
         case "register": {
           const u = username.trim();
-          if (u.length < 3 || u.length > 32) throw new Error("Имя пользователя: от 3 до 32 символов");
-          if (!USERNAME_RE.test(u)) throw new Error("Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел");
+          if (u.length < 3) throw new Error("Имя пользователя: минимум 3 символа");
           if (password.length < 6) throw new Error("Пароль: минимум 6 символов");
           const em = email.trim();
           if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))

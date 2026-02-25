@@ -8,11 +8,8 @@ const router = Router();
 
 /* like toggle (shout) */
 router.post("/shouts/:id/like", requireAuth, asyncHandler(async (req, res) => {
-  const userId = req.session.user.id;
-  const banCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
-  if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
-
   const shoutId = req.params.id;
+  const userId = req.session.user.id;
 
   const exists = await prisma.shoutLike.findUnique({
     where: { shout_id_user_id: { shout_id: shoutId, user_id: userId } },
@@ -37,11 +34,8 @@ router.post("/shouts/:id/like", requireAuth, asyncHandler(async (req, res) => {
 
 /* like toggle (comment) */
 router.post("/comments/:id/like", requireAuth, asyncHandler(async (req, res) => {
-  const userId = req.session.user.id;
-  const banCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
-  if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
-
   const commentId = req.params.id;
+  const userId = req.session.user.id;
 
   const exists = await prisma.commentLike.findUnique({
     where: { comment_id_user_id: { comment_id: commentId, user_id: userId } },

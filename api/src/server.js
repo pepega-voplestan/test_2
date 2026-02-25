@@ -8,7 +8,6 @@ import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./swagger.js";
 import { prisma } from "./db.js";
 import { toSqliteDatetime } from "./helpers/common.js";
-import { setupAdmin } from "./admin.js";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -16,31 +15,12 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "50kb" }));
 
-// Console request logging
+// Request logging middleware
 app.use((req, _res, next) => {
   console.log(`[API] ${req.method} ${req.url}`);
   next();
 });
 
-// ── AdminJS admin panel ──
-// Mounted BEFORE the app session middleware so it uses its own isolated session.
-try {
-  const adminLoginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, message: "Too many login attempts" });
-  app.use("/admin/login", adminLoginLimiter);
-
-  const { admin, adminRouter } = await setupAdmin();
-  app.use(admin.options.rootPath, adminRouter);
-  console.log(`[API] Admin panel available at ${admin.options.rootPath}`);
-} catch (err) {
-  console.error("[API] Failed to set up admin panel:", err.message);
-  if (isProd) {
-    console.error("[API] Admin panel is required in production. Exiting.");
-    process.exit(1);
-  }
-  console.error("[API] Server will continue without admin panel in dev mode.");
-}
-
-// ── App session middleware (does NOT apply to /admin — already handled above) ──
 const SQLiteStore = SQLiteStoreFactory(session);
 
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -73,9 +53,6 @@ const resetCodeLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { error:
 app.use("/api/v1/auth/forgot-password/send-code", resetCodeLimiter);
 app.use("/api/v1/auth/forgot-password/reset", authLimiter);
 
-// Email change code sending (5 per minute, same as password reset)
-app.use("/api/v1/users/:id/email/send-code", resetCodeLimiter);
-
 // Per-user rate limiting: 100 requests per 10 min (keyed by user id, falls back to IP for anonymous)
 const perUserKey = (req) => req.session?.user?.id || req.ip;
 const uploadLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator: perUserKey, message: { error: "Слишком много загрузок. Подождите немного" } });
@@ -103,17 +80,6 @@ if (!isProd) {
 mountRoutes(app);
 
 app.listen(3000, () => console.log(`[API] Server listening on :3000 (env=${process.env.NODE_ENV})`));
-
-// ── Seed default settings ──
-async function seedSettings() {
-  await prisma.setting.upsert({
-    where: { key: "registration_open" },
-    update: {},
-    create: { key: "registration_open", value: "true" },
-  });
-  console.log("[Settings] Default settings seeded");
-}
-seedSettings().catch((err) => console.error("[Settings] Seed error:", err));
 
 // Periodic cleanup: hard-delete notifications older than 14 days
 const NOTIFICATION_TTL_DAYS = 14;

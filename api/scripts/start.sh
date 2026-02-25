@@ -1,10 +1,6 @@
 #!/bin/sh
 set -e
 
-# Regenerate Prisma Client so it matches the current schema
-# (needed in dev when prisma/ is mounted from host with newer models than the image)
-npx prisma generate
-
 # Attempt normal migration deploy
 OUTPUT=$(npx prisma migrate deploy 2>&1) && echo "$OUTPUT" || {
   EXIT_CODE=$?

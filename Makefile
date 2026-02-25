@@ -1,20 +1,11 @@
-.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev db-pull db-pull-dev ensure-htpasswd
-
-# Ensure .htpasswd exists (nginx auth_basic requires a valid file, otherwise /admin returns 500)
-ensure-htpasswd:
-	@if [ ! -f .htpasswd ]; then \
-		echo "ERROR: .htpasswd file not found. Nginx requires it for /admin basic auth."; \
-		echo "Create it with: htpasswd -c .htpasswd USERNAME"; \
-		echo "Or without htpasswd: docker run --rm httpd:alpine htpasswd -nbB USERNAME PASSWORD > .htpasswd"; \
-		exit 1; \
-	fi
+.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev db-pull db-pull-dev
 
 # Start production server
-prod: ensure-htpasswd
+prod:
 	docker-compose -f docker-compose.yml up --build
 
 # Start development server (with .env)
-dev: ensure-htpasswd
+dev:
 	docker-compose -f docker-compose.dev.yml --env-file .env.dev up --build
 
 # Stop prod containers
@@ -62,12 +53,12 @@ restore-dev:
 	./scripts/restore.sh dev $(TIMESTAMP)
 
 # Safe redeploy: backup, rebuild, and start production
-deploy: ensure-htpasswd
+deploy:
 	./scripts/backup.sh prod
 	docker-compose -f docker-compose.yml up --build -d
 
 # Safe redeploy: backup, rebuild, and start development
-deploy-dev: ensure-htpasswd
+deploy-dev:
 	./scripts/backup.sh dev
 	docker-compose -f docker-compose.dev.yml --env-file .env.dev up --build -d
 
