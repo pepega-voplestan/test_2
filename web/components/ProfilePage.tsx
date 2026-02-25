@@ -38,6 +38,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   // Pending avatar file for preview-only upload
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [pendingAvatarPreview, setPendingAvatarPreview] = useState<string | null>(null);
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
 
   // Password visibility toggles
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -223,6 +224,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     console.log('[ProfilePage] Saving profile changes');
 
     try {
+      setAvatarUploadError(null);
+
       // Step 1: Upload pending avatar if any
       let newAvatarUrl: string | undefined;
       if (pendingAvatarFile) {
@@ -230,15 +233,24 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         const form = new FormData();
         form.append('avatar', pendingAvatarFile);
 
-        const uploadRes = await fetch('/api/v1/upload/avatar', {
-          method: 'POST',
-          credentials: 'include',
-          body: form,
-        });
+        let uploadRes: Response;
+        try {
+          uploadRes = await fetch('/api/v1/upload/avatar', {
+            method: 'POST',
+            credentials: 'include',
+            body: form,
+          });
+        } catch {
+          const msg = 'Не удалось загрузить аватар. Проверьте соединение с интернетом';
+          setAvatarUploadError(msg);
+          throw new Error(msg);
+        }
 
         if (!uploadRes.ok) {
           const data = await uploadRes.json().catch(() => ({}));
-          throw new Error(data.error || 'Ошибка загрузки аватара');
+          const msg = data.error || 'Ошибка загрузки аватара';
+          setAvatarUploadError(msg);
+          throw new Error(msg);
         }
 
         const uploadData = await uploadRes.json();
@@ -376,7 +388,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             {/* Owner actions */}
             {profile.isOwner && !isEditing && (
               <button
-                onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
+                onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setAvatarUploadError(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
                 className="text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 px-4 py-1.5 rounded-lg transition-colors"
               >
                 Редактировать профиль
@@ -479,13 +491,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               currentAvatar={editForm.avatar}
               disabled={isSaving}
               pendingPreview={pendingAvatarPreview}
+              externalError={avatarUploadError}
               onFileSelected={(file, previewUrl) => {
                 setPendingAvatarFile(file);
                 setPendingAvatarPreview(previewUrl);
+                setAvatarUploadError(null);
               }}
               onFileCleared={() => {
                 setPendingAvatarFile(null);
                 setPendingAvatarPreview(null);
+                setAvatarUploadError(null);
               }}
             />
 
@@ -550,6 +565,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   setEditError(null);
                   setPendingAvatarFile(null);
                   setPendingAvatarPreview(null);
+                  setAvatarUploadError(null);
                   setEmailStep('idle');
                   setEmailCode('');
                   setEmailError(null);
