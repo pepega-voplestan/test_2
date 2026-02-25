@@ -2,6 +2,12 @@ import { z } from "zod";
 import crypto from "crypto";
 
 export const SHOUT_MAX_LENGTH = 400;
+
+// Allowed: English, Russian letters, digits, dash, underscore, space (no leading/trailing spaces)
+const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
+const usernameField = z.string().trim().min(3).max(32).regex(USERNAME_RE, {
+  message: "Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел",
+});
 const NEWLINE_CHAR_COST = 40;
 
 export function effectiveCharCount(text) {
@@ -11,7 +17,7 @@ export function effectiveCharCount(text) {
 }
 
 export const registerSchema = z.object({
-  username: z.string().min(3).max(32),
+  username: usernameField,
   password: z.string().min(6).max(200),
   email: z.string().email().max(200),
 });
@@ -45,7 +51,7 @@ export const announcementSchema = z.object({
 });
 
 export const profileUpdateSchema = z.object({
-  username: z.string().min(3).max(32).optional(),
+  username: usernameField.optional(),
   email: z.string().email().max(200).optional().or(z.literal("")),
   avatar: z.string().max(500).optional(),
   currentPassword: z.string().min(1).optional(),
@@ -53,7 +59,7 @@ export const profileUpdateSchema = z.object({
 });
 
 export const sendCodeSchema = z.object({
-  username: z.string().min(3).max(32),
+  username: usernameField,
   password: z.string().min(6).max(200),
   email: z.string().email().max(200),
 });
