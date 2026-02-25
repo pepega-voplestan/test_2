@@ -9,6 +9,7 @@ interface ProfilePageProps {
 }
 
 const PAGE_SIZE = 10;
+const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const { refresh } = useAuth();
@@ -256,6 +257,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         const uploadData = await uploadRes.json();
         newAvatarUrl = uploadData.avatar;
         console.log('[ProfilePage] Avatar uploaded:', newAvatarUrl);
+      }
+
+      // Validate username client-side before sending
+      if (editForm.username !== profile?.name) {
+        const u = editForm.username.trim();
+        if (u.length < 3 || u.length > 32) throw new Error("Имя пользователя: от 3 до 32 символов");
+        if (!USERNAME_RE.test(u)) throw new Error("Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел");
       }
 
       // Step 2: Build profile update body (no email — that goes through verification)

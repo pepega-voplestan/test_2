@@ -5,9 +5,12 @@ export const SHOUT_MAX_LENGTH = 400;
 
 // Allowed: English, Russian letters, digits, dash, underscore, space (no leading/trailing spaces)
 const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
-const usernameField = z.string().trim().min(3).max(32).regex(USERNAME_RE, {
-  message: "Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел",
-});
+const usernameField = z.string().trim()
+  .min(3, { message: "Имя пользователя: от 3 до 32 символов" })
+  .max(32, { message: "Имя пользователя: от 3 до 32 символов" })
+  .regex(USERNAME_RE, {
+    message: "Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел",
+  });
 const NEWLINE_CHAR_COST = 40;
 
 export function effectiveCharCount(text) {
