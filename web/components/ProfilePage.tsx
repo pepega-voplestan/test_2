@@ -211,12 +211,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     }
   };
 
-  // Handle profile save (username, avatar, password — email handled separately)
+  // Handle profile save (username, avatar, password + trigger email verification if changed)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setEditError(null);
     setEditSuccess(null);
     setIsSaving(true);
+
+    const emailChanged = editForm.email.trim() !== (profile?.email || '') && editForm.email.trim() !== '';
 
     console.log('[ProfilePage] Saving profile changes');
 
@@ -244,7 +246,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         console.log('[ProfilePage] Avatar uploaded:', newAvatarUrl);
       }
 
-      // Step 2: Build profile update body (no email — that's a separate flow now)
+      // Step 2: Build profile update body (no email — that goes through verification)
       const body: Record<string, string> = {};
       if (editForm.username !== profile?.name) body.username = editForm.username;
       if (newAvatarUrl) body.avatar = newAvatarUrl;
@@ -253,14 +255,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         body.newPassword = editForm.newPassword;
       }
 
-      // If only avatar was uploaded and nothing else changed, still update profile
-      if (Object.keys(body).length === 0 && !pendingAvatarFile) {
+      const hasProfileChanges = Object.keys(body).length > 0 || pendingAvatarFile;
+
+      // Nothing changed at all
+      if (!hasProfileChanges && !emailChanged) {
         setEditError('Нет изменений');
         setIsSaving(false);
         return;
       }
 
-      // If we only had avatar upload and no other changes, skip PUT
+      // Save non-email profile changes
       if (Object.keys(body).length > 0) {
         const res = await fetch(`/api/v1/users/${userId}`, {
           method: 'PUT',
@@ -285,11 +289,21 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       setEditForm(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
       setPendingAvatarFile(null);
       setPendingAvatarPreview(null);
-      setEditSuccess('Профиль обновлён');
-      setIsEditing(false);
 
-      // Refresh auth context so header reflects new name/avatar
-      await refresh();
+      // If email changed, trigger verification flow instead of closing editor
+      if (emailChanged) {
+        if (hasProfileChanges) {
+          setEditSuccess('Профиль обновлён. Подтвердите новый email — код отправлен на почту');
+        }
+        // Auto-trigger email send code
+        await handleEmailSendCode();
+        // Don't close editing — user still needs to enter the code
+        await refresh();
+      } else {
+        setEditSuccess('Профиль обновлён');
+        setIsEditing(false);
+        await refresh();
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ошибка сохранения';
       console.error('[ProfilePage] Save error:', message);
