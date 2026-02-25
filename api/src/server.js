@@ -73,6 +73,9 @@ const resetCodeLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { error:
 app.use("/api/v1/auth/forgot-password/send-code", resetCodeLimiter);
 app.use("/api/v1/auth/forgot-password/reset", authLimiter);
 
+// Email change code sending (5 per minute, same as password reset)
+app.use("/api/v1/users/:id/email/send-code", resetCodeLimiter);
+
 // Per-user rate limiting: 100 requests per 10 min (keyed by user id, falls back to IP for anonymous)
 const perUserKey = (req) => req.session?.user?.id || req.ip;
 const uploadLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator: perUserKey, message: { error: "Слишком много загрузок. Подождите немного" } });
