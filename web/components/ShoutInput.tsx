@@ -281,7 +281,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => mentionInputRef.current?.insertText('||||')}
+                              onClick={() => mentionInputRef.current?.wrapSpoiler()}
                               className="p-1 text-th-text-4 hover:text-th-text-2 transition-colors"
                               title="Инлайн-спойлер (||текст||)"
                             >
