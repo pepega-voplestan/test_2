@@ -11,6 +11,8 @@ export interface UserProfile {
   avatar: string;
   isBanned?: boolean;
   email?: string;
+  showNsfw?: boolean;
+  showPolitics?: boolean;
   createdAt: string;
   shoutCount?: number;
   isOwner: boolean;

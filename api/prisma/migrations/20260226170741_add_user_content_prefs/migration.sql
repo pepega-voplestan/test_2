@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN "show_nsfw" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN "show_politics" INTEGER NOT NULL DEFAULT 0;

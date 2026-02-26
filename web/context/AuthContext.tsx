@@ -4,6 +4,8 @@ export type User = {
   id: string;
   name: string;
   avatar: string;
+  showNsfw?: boolean;
+  showPolitics?: boolean;
 };
 
 type AuthContextType = {

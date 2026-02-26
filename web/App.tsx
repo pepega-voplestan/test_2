@@ -15,8 +15,8 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider>
-      <ContentPreferencesProvider>
       <AuthProvider>
+      <ContentPreferencesProvider>
         <NotificationsProvider>
           <div className="min-h-screen font-sans bg-th-page transition-colors">
             <Header />
@@ -36,8 +36,8 @@ const App: React.FC = () => {
             <AuthModal />
           </div>
         </NotificationsProvider>
-      </AuthProvider>
       </ContentPreferencesProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 };

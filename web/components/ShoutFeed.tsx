@@ -57,7 +57,7 @@ const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading
 
 const ShoutFeed: React.FC = () => {
   const { user } = useAuth();
-  const { prefs, setShowMedia, setShowNsfw, setShowPolitics } = useContentPreferences();
+  const { prefs, setShowMedia } = useContentPreferences();
   const [activeTab, setActiveTab] = useState<FeedTab>('new');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -344,16 +344,6 @@ const ShoutFeed: React.FC = () => {
                   <input type="checkbox" checked={prefs.showMedia} onChange={(e) => setShowMedia(e.target.checked)}
                     className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]" />
                   <span className="text-sm text-th-text-2">Медиа</span>
-                </label>
-                <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
-                  <input type="checkbox" checked={prefs.showNsfw} onChange={(e) => setShowNsfw(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]" />
-                  <span className="text-sm text-th-text-2">NSFW <span className="text-th-text-4 text-xs">(18+)</span></span>
-                </label>
-                <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
-                  <input type="checkbox" checked={prefs.showPolitics} onChange={(e) => setShowPolitics(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]" />
-                  <span className="text-sm text-th-text-2">Политика</span>
                 </label>
               </div>
             )}

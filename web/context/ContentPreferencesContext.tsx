@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useAuth } from "./AuthContext";
 
 export interface ContentPreferences {
   showMedia: boolean;
@@ -21,7 +22,7 @@ const DEFAULTS: ContentPreferences = {
   showPolitics: false,
 };
 
-function loadPrefs(): ContentPreferences {
+function loadLocalPrefs(): ContentPreferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -39,13 +40,29 @@ function loadPrefs(): ContentPreferences {
 const ContentPreferencesContext = createContext<ContentPreferencesContextType | undefined>(undefined);
 
 export function ContentPreferencesProvider({ children }: { children: ReactNode }) {
-  const [prefs, setPrefs] = useState<ContentPreferences>(loadPrefs);
+  const { user } = useAuth();
+  const [prefs, setPrefs] = useState<ContentPreferences>(loadLocalPrefs);
 
+  // Sync server prefs when user logs in/out
+  useEffect(() => {
+    if (user) {
+      setPrefs((prev) => ({
+        showMedia: prev.showMedia,
+        showNsfw: typeof user.showNsfw === "boolean" ? user.showNsfw : DEFAULTS.showNsfw,
+        showPolitics: typeof user.showPolitics === "boolean" ? user.showPolitics : DEFAULTS.showPolitics,
+      }));
+    } else {
+      // Logged out — revert to localStorage defaults
+      setPrefs(loadLocalPrefs());
+    }
+  }, [user?.id, user?.showNsfw, user?.showPolitics]);
+
+  // Persist showMedia to localStorage (it stays client-side only)
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ showMedia: prefs.showMedia }));
     } catch {}
-  }, [prefs]);
+  }, [prefs.showMedia]);
 
   const setShowMedia = (v: boolean) => setPrefs((p) => ({ ...p, showMedia: v }));
   const setShowNsfw = (v: boolean) => setPrefs((p) => ({ ...p, showNsfw: v }));
