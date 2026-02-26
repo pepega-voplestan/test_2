@@ -59,20 +59,6 @@ const ShoutFeed: React.FC = () => {
   const { user } = useAuth();
   const { prefs, setShowMedia } = useContentPreferences();
   const [activeTab, setActiveTab] = useState<FeedTab>('new');
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
-
-  // Close settings dropdown on outside click
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [settingsOpen]);
 
   const [shouts, setShouts] = useState<Shout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -327,27 +313,20 @@ const ShoutFeed: React.FC = () => {
             </button>
           </div>
 
-          <div className="relative" ref={settingsRef}>
-            <button
-              onClick={() => setSettingsOpen(!settingsOpen)}
-              className={`p-1.5 transition-colors ${settingsOpen ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
-              title="Настройки контента"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          <button
+            onClick={() => setShowMedia(!prefs.showMedia)}
+            className={`relative p-1.5 transition-colors ${prefs.showMedia ? 'text-th-text-3 hover:text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
+            title={prefs.showMedia ? 'Скрыть медиа' : 'Показать медиа'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            {!prefs.showMedia && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="absolute inset-0 w-full h-full text-th-text-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="3" x2="21" y2="21" />
               </svg>
-            </button>
-            {settingsOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-th-card border border-th-border rounded-lg shadow-xl z-40 py-2">
-                <div className="px-3 py-1.5 text-[10px] font-bold text-th-text-4 uppercase tracking-wider">Отображение</div>
-                <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
-                  <input type="checkbox" checked={prefs.showMedia} onChange={(e) => setShowMedia(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]" />
-                  <span className="text-sm text-th-text-2">Медиа</span>
-                </label>
-              </div>
             )}
-          </div>
+          </button>
         </div>
       </div>
 
