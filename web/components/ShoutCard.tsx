@@ -855,7 +855,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 <div className="rounded-lg bg-th-inset/60 border border-th-border-2 flex items-center justify-center py-3 px-4">
                   <button
                     onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-[#e5e7eb]"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-2"
                   >
                     <span className="font-bold">
                       {isSpoilerHidden ? 'СПОЙЛЕР' : 'ПОЛИТИКА'}
@@ -882,7 +882,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       <div className="absolute inset-0 flex items-center justify-center">
                         <button
                           onClick={() => setNsfwRevealed(true)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card/90 border border-th-border shadow-sm hover:bg-th-elevated transition-colors backdrop-blur-sm text-xs text-[#e5e7eb]"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card/90 border border-th-border shadow-sm hover:bg-th-elevated transition-colors backdrop-blur-sm text-xs text-th-text-2"
                         >
                           <span className="font-bold">NSFW</span>
                           <span>·</span>
