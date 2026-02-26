@@ -25,6 +25,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
     topRaw = await prisma.shout.findMany({
       where: {
         parent_id: null,
+        is_deleted: 0,
         created_at: { gte: sevenDaysAgo },
       },
       include: {
