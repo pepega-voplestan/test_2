@@ -826,9 +826,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
                 <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                 {/* Content flag badges */}
-                {shout.isSpoiler && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">SP</span>}
-                {shout.isNsfw && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">18+</span>}
-                {shout.isPolitics && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">POL</span>}
+                {shout.isSpoiler && (
+                  <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                      <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                    </svg>
+                  </span>
+                )}
+                {shout.isNsfw && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">NSFW</span>}
+                {shout.isPolitics && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">ПОЛИТИКА</span>}
                 {isOwner && (
                   <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -864,7 +871,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                         </svg>
                       )}
-                      <span className="text-sm font-medium text-th-text">{isSpoilerHidden ? 'Спойлер' : 'Политика'}</span>
+                      <span className="text-sm font-medium text-th-text">{isSpoilerHidden ? 'Спойлер' : 'ПОЛИТИКА'}</span>
                       <span className="text-th-text-4">·</span>
                       <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
                     </button>
@@ -890,8 +897,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                           onClick={() => setNsfwRevealed(true)}
                           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
                         >
-                          <span className="text-xs font-bold text-red-400">18+</span>
-                          <span className="text-sm font-medium text-th-text">NSFW</span>
+                          <span className="text-sm font-bold text-red-400">NSFW</span>
                           <span className="text-th-text-4">·</span>
                           <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
                         </button>
