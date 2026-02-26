@@ -167,7 +167,7 @@ router.post("/auth/register/verify", asyncHandler(async (req, res) => {
     data: { id: userId, username, password_hash, avatar, email },
   });
 
-  req.session.user = { id: userId, name: username, avatar };
+  req.session.user = { id: userId, name: username, avatar, showNsfw: false, showPolitics: false };
   console.log(`[Auth] Registered new user: ${username} (${userId})`);
   res.json({ ok: true, user: req.session.user });
 }));
@@ -181,7 +181,7 @@ router.post("/auth/login", asyncHandler(async (req, res) => {
 
   const user = await prisma.user.findFirst({
     where: { OR: [{ username: login }, { email: login }] },
-    select: { id: true, username: true, password_hash: true, avatar: true, is_banned: true },
+    select: { id: true, username: true, password_hash: true, avatar: true, is_banned: true, show_nsfw: true, show_politics: true },
   });
 
   if (!user) {
@@ -203,6 +203,8 @@ router.post("/auth/login", asyncHandler(async (req, res) => {
     id: user.id,
     name: user.username,
     avatar: user.avatar,
+    showNsfw: !!user.show_nsfw,
+    showPolitics: !!user.show_politics,
   };
 
   console.log(`[Auth] Login success: ${user.username} (${user.id})`);
@@ -332,7 +334,7 @@ router.post("/auth/forgot-password/reset", asyncHandler(async (req, res) => {
   const { userId } = JSON.parse(record.payload);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, username: true, avatar: true, is_banned: true },
+    select: { id: true, username: true, avatar: true, is_banned: true, show_nsfw: true, show_politics: true },
   });
   if (!user) {
     return res.status(400).json({ error: "Пользователь не найден" });
@@ -348,7 +350,7 @@ router.post("/auth/forgot-password/reset", asyncHandler(async (req, res) => {
   });
 
   // Auto-login
-  req.session.user = { id: user.id, name: user.username, avatar: user.avatar };
+  req.session.user = { id: user.id, name: user.username, avatar: user.avatar, showNsfw: !!user.show_nsfw, showPolitics: !!user.show_politics };
   console.log(`[Auth] Password reset and auto-login: ${user.username} (${user.id})`);
   res.json({ ok: true, user: req.session.user });
 }));
