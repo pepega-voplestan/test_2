@@ -225,7 +225,7 @@ const ShoutFeed: React.FC = () => {
 
   const removeShout = useCallback((shoutId: string) => {
     setShouts(prev => prev.map(s =>
-      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined } : s
+      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
     ));
   }, []);
 
@@ -248,7 +248,7 @@ const ShoutFeed: React.FC = () => {
       if (data.userId === userIdRef.current) return;
       const shoutId = data.shoutId as string;
       setShouts(prev => prev.map(s =>
-        s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined } : s
+        s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
       ));
     },
     new_comment: (data: Record<string, unknown>) => {

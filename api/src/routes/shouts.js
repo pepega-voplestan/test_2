@@ -114,7 +114,13 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { content, mediaId, youtubeUrl, isSpoiler, isNsfw, isPolitics } = parsed.data;
+  let { content, mediaId, youtubeUrl, isSpoiler, isNsfw, isPolitics } = parsed.data;
+
+  // Only one content flag allowed — prioritize: spoiler > nsfw > politics
+  if ([isSpoiler, isNsfw, isPolitics].filter(Boolean).length > 1) {
+    if (isSpoiler) { isNsfw = false; isPolitics = false; }
+    else if (isNsfw) { isPolitics = false; }
+  }
 
   // Must have content or media
   if (!content.trim() && !mediaId && !youtubeUrl) {
@@ -171,6 +177,9 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     }
   }
 
+  // NSFW only applies when media is present (it blurs the media)
+  const effectiveNsfw = isNsfw && finalMediaId;
+
   const id = crypto.randomUUID();
   const shout = await prisma.shout.create({
     data: {
@@ -180,7 +189,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
       content,
       media_id: finalMediaId,
       is_spoiler: isSpoiler ? 1 : 0,
-      is_nsfw: isNsfw ? 1 : 0,
+      is_nsfw: effectiveNsfw ? 1 : 0,
       is_politics: isPolitics ? 1 : 0,
     },
     include: {

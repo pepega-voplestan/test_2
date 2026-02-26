@@ -46,10 +46,12 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   // YouTube auto-detection
   const [detectedYtId, setDetectedYtId] = useState<string | null>(null);
 
-  // Content flags
-  const [isSpoiler, setIsSpoiler] = useState(false);
-  const [isNsfw, setIsNsfw] = useState(false);
-  const [isPolitics, setIsPolitics] = useState(false);
+  // Content flag — mutually exclusive: only one tag per shout
+  type ContentTag = 'spoiler' | 'nsfw' | 'politics' | null;
+  const [activeTag, setActiveTag] = useState<ContentTag>(null);
+  const isSpoiler = activeTag === 'spoiler';
+  const isNsfw = activeTag === 'nsfw';
+  const isPolitics = activeTag === 'politics';
 
   const charCount = effectiveLength(content, NEWLINE_CHAR_COST);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
@@ -165,6 +167,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     setMediaId(null);
     setMediaPreview(null);
     setError(null);
+    // NSFW only makes sense with media — clear it
+    if (activeTag === 'nsfw') setActiveTag(null);
   };
 
   const submitShout = async () => {
@@ -204,9 +208,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       setMediaPreview(null);
       setDetectedYtId(null);
       setError(null);
-      setIsSpoiler(false);
-      setIsNsfw(false);
-      setIsPolitics(false);
+      setActiveTag(null);
       onShoutCreated(result.shout as Shout);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Не удалось отправить вопль';
@@ -283,7 +285,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                               type="button"
                               onClick={() => mentionInputRef.current?.wrapSpoiler()}
                               className="p-1 text-th-text-4 hover:text-th-text-2 transition-colors"
-                              title="Инлайн-спойлер (||текст||)"
+                              title="Спойлер (||текст||)"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
@@ -291,28 +293,29 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                               </svg>
                             </button>
                           </div>
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-0.5 shrink-0 bg-th-inset/50 rounded-lg p-0.5">
                             <button
                               type="button"
-                              onClick={() => setIsSpoiler(!isSpoiler)}
-                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${isSpoiler ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'border-th-border text-th-text-4 hover:text-th-text-3 hover:border-th-text-4'}`}
-                              title="Спойлер"
+                              onClick={() => setActiveTag(activeTag === 'spoiler' ? null : 'spoiler')}
+                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors ${isSpoiler ? 'bg-amber-500/20 text-amber-400 shadow-sm' : 'text-th-text-4 hover:text-th-text-3'}`}
+                              title="Спойлер (скроет содержимое)"
                             >
                               SP
                             </button>
                             <button
                               type="button"
-                              onClick={() => setIsNsfw(!isNsfw)}
-                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${isNsfw ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'border-th-border text-th-text-4 hover:text-th-text-3 hover:border-th-text-4'}`}
-                              title="NSFW"
+                              onClick={() => setActiveTag(activeTag === 'nsfw' ? null : 'nsfw')}
+                              disabled={!hasMedia}
+                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors ${isNsfw ? 'bg-red-500/20 text-red-400 shadow-sm' : 'text-th-text-4 hover:text-th-text-3'} disabled:opacity-30 disabled:cursor-not-allowed`}
+                              title={hasMedia ? 'NSFW (скроет медиа)' : 'NSFW (нужно прикрепить медиа)'}
                             >
                               18+
                             </button>
                             <button
                               type="button"
-                              onClick={() => setIsPolitics(!isPolitics)}
-                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${isPolitics ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'border-th-border text-th-text-4 hover:text-th-text-3 hover:border-th-text-4'}`}
-                              title="Политика"
+                              onClick={() => setActiveTag(activeTag === 'politics' ? null : 'politics')}
+                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors ${isPolitics ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-th-text-4 hover:text-th-text-3'}`}
+                              title="Политика (скроет содержимое)"
                             >
                               POL
                             </button>

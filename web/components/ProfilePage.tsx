@@ -144,7 +144,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   // Shout delete callback (mark as deleted, keep in list for comments)
   const removeShout = useCallback((shoutId: string) => {
     setShouts(prev => prev.map(s =>
-      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined } : s
+      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
     ));
   }, []);
 

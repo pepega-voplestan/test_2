@@ -48,7 +48,7 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
   function handleDelete() {
     // Mark as deleted in-place so comments remain visible
     setShout((prev) =>
-      prev ? { ...prev, isDeleted: true, content: '', media: undefined } : prev
+      prev ? { ...prev, isDeleted: true, content: '', media: undefined, user: null } : prev
     );
   }
 
