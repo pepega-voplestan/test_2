@@ -546,7 +546,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
             e.preventDefault();
             const spoilerSpan = node as HTMLElement;
             // Insert a zero-width space after the spoiler span and place cursor there (same line)
-            const textNode = document.createTextNode('\u200B');
+            const textNode = document.createTextNode('\u00A0');
             spoilerSpan.after(textNode);
             const newRange = document.createRange();
             newRange.setStart(textNode, 1);
