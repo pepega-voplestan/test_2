@@ -852,16 +852,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
               {fullHide ? (
                 /* --- Spoiler / Politics: unified fixed-size overlay hiding ALL content --- */
-                <div className="rounded-lg bg-th-inset/60 border border-th-border-2 flex items-center justify-center py-6 px-4">
+                <div className="rounded-lg bg-th-inset/60 border border-th-border-2 flex items-center justify-center py-3 px-4">
                   <button
                     onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-[#e5e7eb]"
                   >
-                    <span className={`font-bold ${isSpoilerHidden ? 'text-amber-400' : 'text-blue-400'}`}>
+                    <span className="font-bold">
                       {isSpoilerHidden ? 'СПОЙЛЕР' : 'ПОЛИТИКА'}
                     </span>
-                    <span className="text-th-text-4">·</span>
-                    <span className="font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                    <span>·</span>
+                    <span className="font-bold">ПОКАЗАТЬ</span>
                   </button>
                 </div>
               ) : (
@@ -882,11 +882,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       <div className="absolute inset-0 flex items-center justify-center">
                         <button
                           onClick={() => setNsfwRevealed(true)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card/90 border border-th-border shadow-sm hover:bg-th-elevated transition-colors backdrop-blur-sm text-xs"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card/90 border border-th-border shadow-sm hover:bg-th-elevated transition-colors backdrop-blur-sm text-xs text-[#e5e7eb]"
                         >
-                          <span className="font-bold text-red-400">NSFW</span>
-                          <span className="text-th-text-4">·</span>
-                          <span className="font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                          <span className="font-bold">NSFW</span>
+                          <span>·</span>
+                          <span className="font-bold">ПОКАЗАТЬ</span>
                         </button>
                       </div>
                     </div>
