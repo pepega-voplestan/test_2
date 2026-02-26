@@ -35,11 +35,9 @@ model Shout {
   parent_id  String?
   content    String
   media_id   String?
-  is_deleted Int     @default(0)
-  is_spoiler Int     @default(0)
-  is_nsfw    Int     @default(0)
-  is_politics Int    @default(0)
-  is_muted   Int     @default(0)
+  is_deleted      Int     @default(0)
+  visibility_tag  String  @default("")
+  is_muted        Int     @default(0)
   created_at String  @default(dbgenerated("(datetime('now'))"))
 
   // Legacy inline media columns — retained for baseline, remove in follow-up migration

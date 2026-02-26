@@ -106,9 +106,7 @@ export async function enrichFeed(topShouts, currentUserId) {
       likedBy: currentUserId && shoutLikedSet.has(row.id) ? [currentUserId] : [],
       ...(media ? { media } : {}),
       comments: children,
-      isSpoiler: !!row.is_spoiler,
-      isNsfw: !!row.is_nsfw,
-      isPolitics: !!row.is_politics,
+      visibilityTag: row.visibility_tag || "",
       isDeleted,
     };
   }
