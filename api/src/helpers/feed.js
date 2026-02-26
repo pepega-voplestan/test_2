@@ -93,7 +93,7 @@ export async function enrichFeed(topShouts, currentUserId) {
     return {
       id: row.id,
       user: isDeleted
-        ? { id: row.user_id, name: row.user.username, avatar: row.user.avatar, isBanned: !!row.user.is_banned }
+        ? null
         : {
             id: row.user_id,
             name: row.user.username,

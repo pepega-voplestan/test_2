@@ -23,7 +23,8 @@ export interface MentionInputProps {
 // Exported so parents can compute the effective character count.
 // Replaces @[name:id] with @name before counting so mentions don't inflate the budget.
 export function effectiveLength(serialized: string, newlineCharCost: number): number {
-  const normalized = serialized.replace(/@\[([^\]]+):[^\]]+\]/g, '@$1');
+  // Normalize mentions @[name:id] → @name, strip inline spoiler markers ||
+  const normalized = serialized.replace(/@\[([^\]]+):[^\]]+\]/g, '@$1').replace(/\|\|/g, '');
   const newlines = (normalized.match(/\n/g) || []).length;
   return normalized.length + newlines * (newlineCharCost - 1);
 }

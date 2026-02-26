@@ -288,9 +288,41 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   return null;
 };
 
+/* ---------- Inline spoiler component ---------- */
+
+const InlineSpoiler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [revealed, setRevealed] = React.useState(false);
+  return (
+    <span
+      onClick={(e) => { e.stopPropagation(); setRevealed(r => !r); }}
+      className={`inline rounded px-0.5 cursor-pointer transition-all duration-200 ${
+        revealed
+          ? 'bg-th-text-4/20 text-inherit'
+          : 'bg-th-text-4/40 text-transparent select-none hover:bg-th-text-4/50'
+      }`}
+      title={revealed ? 'Нажмите, чтобы скрыть' : 'Нажмите, чтобы раскрыть спойлер'}
+    >
+      {children}
+    </span>
+  );
+};
+
 /* ---------- Content rendering ---------- */
 
 function renderContent(text: string) {
+  // First split on inline spoiler tokens ||...||, keeping delimiters
+  const spoilerParts = text.split(/(\|\|[\s\S]*?\|\|)/);
+  return spoilerParts.map((spoilerPart, si) => {
+    const spoilerMatch = spoilerPart.match(/^\|\|([\s\S]*?)\|\|$/);
+    if (spoilerMatch) {
+      // Render inner content (mentions/URLs still parsed inside spoilers)
+      return <InlineSpoiler key={`sp-${si}`}>{renderInline(spoilerMatch[1], `sp-${si}`)}</InlineSpoiler>;
+    }
+    return renderInline(spoilerPart, `${si}`);
+  });
+}
+
+function renderInline(text: string, keyPrefix: string) {
   // Split on mention tokens @[name:id], bare @words (legacy), and URLs, keeping the delimiters.
   // Structured mentions must come first so @[name:id] is never partially matched by @word.
   const parts = text.split(/((?:@\[[^\]]+:[^\]]+\])|(?:@[a-zA-Z0-9_-]+)|(?:https?:\/\/[^\s]+))/);
@@ -300,21 +332,21 @@ function renderContent(text: string) {
     if (mentionMatch) {
       const [, name, id] = mentionMatch;
       return (
-        <a key={i} href={`#/profile/${id}`} className="text-blue-400 hover:underline font-medium">
+        <a key={`${keyPrefix}-${i}`} href={`#/profile/${id}`} className="text-blue-400 hover:underline font-medium">
           @{name}
         </a>
       );
     }
     // URL
     if (/^https?:\/\//.test(part)) {
-      return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{part}</a>;
+      return <a key={`${keyPrefix}-${i}`} href={part} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">{part}</a>;
     }
     // Legacy bare @username (backwards-compat with old shouts).
     // Strict check: only a single word, never an arbitrary segment starting with @.
     if (/^@[a-zA-Z0-9_-]+$/.test(part)) {
-      return <span key={i} className="text-sky-500">{part}</span>;
+      return <span key={`${keyPrefix}-${i}`} className="text-sky-500">{part}</span>;
     }
-    return part;
+    return <React.Fragment key={`${keyPrefix}-${i}`}>{part}</React.Fragment>;
   });
 }
 
@@ -534,7 +566,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const isReplyOverLimit = replyCharCount > SHOUT_MAX_LENGTH;
   const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
   const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
-  const isOwner = user && user.id === shout.user.id;
+  const isOwner = user && shout.user && user.id === shout.user.id;
 
   // Content hiding state
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
@@ -750,7 +782,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   return (
     <div className="flex flex-col">
       <div className="flex gap-4">
-        {!isDeleted ? (
+        {!isDeleted && shout.user ? (
           <a href={`#/profile/${shout.user.id}`} className="shrink-0">
             <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
               {shout.user.avatar ? (
@@ -787,9 +819,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
             /* --- Normal shout content --- */
             <>
               <div className="flex items-baseline gap-2 mb-1">
-                <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
-                  {shout.user.name}
-                </a>
+                {shout.user && (
+                  <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+                    {shout.user.name}
+                  </a>
+                )}
                 <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                 {/* Content flag badges */}
                 {shout.isSpoiler && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">SP</span>}
