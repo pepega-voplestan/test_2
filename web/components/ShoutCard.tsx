@@ -719,7 +719,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const embeds = shout.content ? extractEmbeds(shout.content) : [];
 
-  // Whether the media section should be blurred (spoiler or politics)
+  // Whether text + media should be blurred (spoiler or politics)
   const blurBody = isSpoilerHidden || isPoliticsHidden;
 
   // Render media section (reused in normal and NSFW-only blur mode)
@@ -845,60 +845,74 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
               </div>
 
-              {/* --- Content text (always visible, never blurred) --- */}
-              {shout.content && (
-                <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
-                   {renderContent(shout.content)}
-                </div>
-              )}
-
-              {/* --- Media section with blur overlays --- */}
               {blurBody ? (
-                /* --- Spoiler / Politics: blur media only --- */
-                <div className="relative rounded-lg overflow-hidden mb-3">
-                  <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
-                    {renderMediaSection()}
+                /* --- Spoiler / Politics: blur text + media, contained to content bounds --- */
+                <>
+                  {shout.content && (
+                    <div className="relative rounded-lg overflow-hidden mb-3 w-fit max-w-full">
+                      <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
+                        <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap">
+                          {renderContent(shout.content)}
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <button
+                          onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
+                        >
+                          {isSpoilerHidden ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                              <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                          <span className="text-sm font-medium text-th-text">{isSpoilerHidden ? 'Спойлер' : 'ПОЛИТИКА'}</span>
+                          <span className="text-th-text-4">·</span>
+                          <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="relative rounded-lg overflow-hidden w-fit max-w-full">
+                    <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
+                      {renderMediaSection()}
+                    </div>
                   </div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <button
-                      onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
-                    >
-                      {isSpoilerHidden ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                          <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                      <span className="text-sm font-medium text-th-text">{isSpoilerHidden ? 'Спойлер' : 'ПОЛИТИКА'}</span>
-                      <span className="text-th-text-4">·</span>
-                      <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
-                    </button>
-                  </div>
-                </div>
-              ) : isNsfwHidden && shout.media ? (
-                /* --- NSFW media blur overlay --- */
-                <div className="relative rounded-lg overflow-hidden mb-3">
-                  <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
-                    {renderMediaSection()}
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <button
-                      onClick={() => setNsfwRevealed(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
-                    >
-                      <span className="text-sm font-bold text-red-400">NSFW</span>
-                      <span className="text-th-text-4">·</span>
-                      <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
-                    </button>
-                  </div>
-                </div>
+                </>
               ) : (
-                renderMediaSection()
+                /* --- Normal content render --- */
+                <>
+                  {shout.content && (
+                    <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+                       {renderContent(shout.content)}
+                    </div>
+                  )}
+
+                  {isNsfwHidden && shout.media ? (
+                    /* --- NSFW media blur overlay --- */
+                    <div className="relative rounded-lg overflow-hidden w-fit max-w-full">
+                      <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
+                        {renderMediaSection()}
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <button
+                          onClick={() => setNsfwRevealed(true)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
+                        >
+                          <span className="text-sm font-bold text-red-400">NSFW</span>
+                          <span className="text-th-text-4">·</span>
+                          <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    renderMediaSection()
+                  )}
+                </>
               )}
             </>
           )}
