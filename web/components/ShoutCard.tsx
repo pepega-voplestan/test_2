@@ -719,8 +719,13 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const embeds = shout.content ? extractEmbeds(shout.content) : [];
 
-  // Whether text + media should be blurred (spoiler or politics)
-  const blurBody = isSpoilerHidden || isPoliticsHidden;
+  // Whether the entire shout body is hidden (spoiler or politics)
+  const fullHide = isSpoilerHidden || isPoliticsHidden;
+
+  // For GIFs: use static WebP thumbnail when media should not play (behind any hide)
+  const gifSrc = (shout.media?.type === 'image' && shout.media.animated && shout.media.gif)
+    ? (fullHide || isNsfwHidden ? shout.media.url : shout.media.gif)
+    : (shout.media?.type === 'image' ? shout.media.url : undefined);
 
   // Render media section (reused in normal and NSFW-only blur mode)
   const renderMediaSection = () => {
@@ -735,7 +740,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
         {shout.media?.type === 'image' && (
            <div className="mb-3 rounded-lg">
                <img
-                 src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.url} alt="attachment" loading="lazy"
+                 src={gifSrc} alt="attachment" loading="lazy"
                  onClick={() => setLightboxOpen(true)}
                  className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
                />
@@ -826,14 +831,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
                 <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                 {/* Content flag badges */}
-                {shout.isSpoiler && (
-                  <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                      <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                    </svg>
-                  </span>
-                )}
+                {shout.isSpoiler && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">СПОЙЛЕР</span>}
                 {shout.isNsfw && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">NSFW</span>}
                 {shout.isPolitics && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">ПОЛИТИКА</span>}
                 {isOwner && (
@@ -845,46 +843,22 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
               </div>
 
-              {blurBody ? (
-                /* --- Spoiler / Politics: blur text + media, contained to content bounds --- */
-                <>
-                  {shout.content && (
-                    <div className="relative rounded-lg overflow-hidden mb-3 w-fit max-w-full">
-                      <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
-                        <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap">
-                          {renderContent(shout.content)}
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <button
-                          onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
-                        >
-                          {isSpoilerHidden ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                              <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                            </svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          <span className="text-sm font-medium text-th-text">{isSpoilerHidden ? 'Спойлер' : 'ПОЛИТИКА'}</span>
-                          <span className="text-th-text-4">·</span>
-                          <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <div className="relative rounded-lg overflow-hidden w-fit max-w-full">
-                    <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
-                      {renderMediaSection()}
-                    </div>
-                  </div>
-                </>
+              {fullHide ? (
+                /* --- Spoiler / Politics: unified fixed-size overlay hiding ALL content --- */
+                <div className="rounded-lg bg-th-inset/60 border border-th-border-2 flex items-center justify-center py-8 px-4">
+                  <button
+                    onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-th-card border border-th-border shadow-md hover:bg-th-elevated transition-colors"
+                  >
+                    <span className={`text-sm font-bold ${isSpoilerHidden ? 'text-amber-400' : 'text-blue-400'}`}>
+                      {isSpoilerHidden ? 'СПОЙЛЕР' : 'ПОЛИТИКА'}
+                    </span>
+                    <span className="text-th-text-4">·</span>
+                    <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                  </button>
+                </div>
               ) : (
-                /* --- Normal content render --- */
+                /* --- Normal / NSFW content render --- */
                 <>
                   {shout.content && (
                     <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
@@ -893,9 +867,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                   )}
 
                   {isNsfwHidden && shout.media ? (
-                    /* --- NSFW media blur overlay --- */
-                    <div className="relative rounded-lg overflow-hidden w-fit max-w-full">
-                      <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
+                    /* --- NSFW: only blur media within its own bounds --- */
+                    <div className="relative rounded-lg overflow-hidden mb-3 inline-block max-w-full">
+                      <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
                         {renderMediaSection()}
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
