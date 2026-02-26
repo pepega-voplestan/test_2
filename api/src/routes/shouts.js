@@ -95,7 +95,7 @@ router.delete("/shouts/:id", requireAuth, asyncHandler(async (req, res) => {
   if (shout.user_id !== userId) return res.status(403).json({ error: "Можно удалять только свои записи" });
 
   // Soft-delete the shout only — comments remain accessible
-  await prisma.shout.update({ where: { id: shoutId }, data: { is_deleted: 1, is_muted: 1 } });
+  await prisma.shout.update({ where: { id: shoutId }, data: { is_deleted: 1 } });
 
   console.log(`[Shouts] Soft-deleted shout ${shoutId} by ${userId}`);
   broadcast("delete_shout", { shoutId, userId });
