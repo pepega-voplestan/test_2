@@ -574,9 +574,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [politicsRevealed, setPoliticsRevealed] = useState(false);
 
   const isDeleted = !!shout.isDeleted;
-  const isSpoilerHidden = !!shout.isSpoiler && !spoilerRevealed;
-  const isNsfwHidden = !!shout.isNsfw && !nsfwRevealed && !prefs.showNsfw;
-  const isPoliticsHidden = !!shout.isPolitics && !politicsRevealed && !prefs.showPolitics;
+  const tag = shout.visibilityTag || '';
+  const isSpoilerHidden = tag === 'spoiler' && !spoilerRevealed;
+  const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed && !prefs.showNsfw;
+  const isPoliticsHidden = tag === 'politics' && !politicsRevealed && !prefs.showPolitics;
 
   useEffect(() => {
     if (replyMediaId) { setReplyDetectedYtId(null); return; }
@@ -831,7 +832,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
                 <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                 {/* Content flag badges */}
-                {shout.isSpoiler && (
+                {tag === 'spoiler' && (
                   <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
@@ -839,8 +840,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                     </svg>
                   </span>
                 )}
-                {shout.isNsfw && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">NSFW</span>}
-                {shout.isPolitics && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">ПОЛИТИКА</span>}
+                {tag === 'nsfw' && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">NSFW</span>}
+                {tag === 'politics' && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">ПОЛИТИКА</span>}
                 {isOwner && (
                   <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">

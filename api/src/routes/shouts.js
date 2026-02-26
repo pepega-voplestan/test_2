@@ -33,7 +33,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
         media: true,
       },
       orderBy: [
-        { likes: { _count: "desc" } },
+        { comments: { _count: "desc" } },
         { created_at: "desc" },
       ],
       take: limit + 1,
@@ -114,13 +114,8 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  let { content, mediaId, youtubeUrl, isSpoiler, isNsfw, isPolitics } = parsed.data;
-
-  // Only one content flag allowed — prioritize: spoiler > nsfw > politics
-  if ([isSpoiler, isNsfw, isPolitics].filter(Boolean).length > 1) {
-    if (isSpoiler) { isNsfw = false; isPolitics = false; }
-    else if (isNsfw) { isPolitics = false; }
-  }
+  const { content, mediaId, youtubeUrl, visibilityTag: rawTag } = parsed.data;
+  const visibilityTag = rawTag || "";
 
   // Must have content or media
   if (!content.trim() && !mediaId && !youtubeUrl) {
@@ -178,7 +173,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
   }
 
   // NSFW only applies when media is present (it blurs the media)
-  const effectiveNsfw = isNsfw && finalMediaId;
+  const effectiveTag = (visibilityTag === "nsfw" && !finalMediaId) ? "" : visibilityTag;
 
   const id = crypto.randomUUID();
   const shout = await prisma.shout.create({
@@ -188,9 +183,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
       parent_id: null,
       content,
       media_id: finalMediaId,
-      is_spoiler: isSpoiler ? 1 : 0,
-      is_nsfw: effectiveNsfw ? 1 : 0,
-      is_politics: isPolitics ? 1 : 0,
+      visibility_tag: effectiveTag,
     },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
@@ -211,9 +204,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     likes: 0,
     likedBy: [],
     comments: [],
-    isSpoiler: !!shout.is_spoiler,
-    isNsfw: !!shout.is_nsfw,
-    isPolitics: !!shout.is_politics,
+    visibilityTag: shout.visibility_tag || "",
     isDeleted: false,
     ...(shout.media ? { media: buildMedia(shout.media) } : {}),
   };
