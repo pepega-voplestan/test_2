@@ -25,7 +25,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   const shoutId = req.params.id;
   const parent = await prisma.shout.findFirst({
     where: { id: shoutId },
-    select: { id: true, user_id: true },
+    select: { id: true, user_id: true, is_deleted: true },
   });
   if (!parent)
     return res.status(404).json({ error: "Запись не найдена" });
@@ -123,7 +123,12 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   console.log(`[Comments] Comment ${id} on shout ${shoutId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
   broadcast("new_comment", { shoutId, commentId: id, userId: req.session.user.id, comment: commentDto });
 
-  const mentionedIds = extractMentionedUserIds(content, req.session.user.id);
+  const rawMentionedIds = extractMentionedUserIds(content, req.session.user.id);
+  // If the shout is deleted, suppress all notifications to its author
+  const shoutDeleted = !!parent.is_deleted;
+  const mentionedIds = shoutDeleted
+    ? rawMentionedIds.filter(uid => uid !== parent.user_id)
+    : rawMentionedIds;
   const now = toSqliteDatetime();
   const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
   const snippet = buildSnippet(content);
@@ -154,9 +159,9 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     console.log(`[Comments] Sent mention notifications for comment ${id} to ${mentionedIds.length} user(s)`);
   }
 
-  // Notify shout author of the reply (if not the commenter and not already notified via mention)
+  // Notify shout author of the reply (skip if deleted, commenter is author, or already mentioned)
   const shoutAuthorId = parent.user_id;
-  if (shoutAuthorId !== req.session.user.id && !mentionedIds.includes(shoutAuthorId)) {
+  if (!shoutDeleted && shoutAuthorId !== req.session.user.id && !mentionedIds.includes(shoutAuthorId)) {
     const replyNotifId = crypto.randomUUID();
     await prisma.notification.create({
       data: {
