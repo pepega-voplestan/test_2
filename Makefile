@@ -1,4 +1,4 @@
-.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev db-pull db-pull-dev test test-web test-all test-docker test-coverage test-web-coverage ensure-htpasswd
+.PHONY: prod dev down down-dev logs logs-dev rebuild rebuild-dev backup backup-upload backup-dev restore restore-dev deploy deploy-dev db-pull db-pull-dev test test-web test-all test-docker test-coverage test-web-coverage ensure-htpasswd install
 
 # Ensure .htpasswd exists (nginx auth_basic requires a valid file, otherwise /admin returns 500)
 ensure-htpasswd:
@@ -109,3 +109,9 @@ test-coverage:
 # Run web tests with coverage locally
 test-web-coverage:
 	cd web && npm run test:coverage
+
+# Install all dependencies (root + api + web) and set up git hooks
+install:
+	npm install
+	cd api && npm install
+	cd web && npm install
