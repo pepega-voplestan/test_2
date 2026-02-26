@@ -6,6 +6,7 @@ import ShoutPage from './components/ShoutPage';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationsProvider } from './context/NotificationsContext';
+import { ContentPreferencesProvider } from './context/ContentPreferencesContext';
 import AuthModal from './components/AuthModal';
 import { useRoute } from './hooks/useRoute';
 
@@ -14,6 +15,7 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider>
+      <ContentPreferencesProvider>
       <AuthProvider>
         <NotificationsProvider>
           <div className="min-h-screen font-sans bg-th-page transition-colors">
@@ -35,6 +37,7 @@ const App: React.FC = () => {
           </div>
         </NotificationsProvider>
       </AuthProvider>
+      </ContentPreferencesProvider>
     </ThemeProvider>
   );
 };

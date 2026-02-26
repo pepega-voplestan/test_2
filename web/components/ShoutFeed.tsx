@@ -3,6 +3,7 @@ import ShoutInput from './ShoutInput';
 import ShoutCard from './ShoutCard';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useSSE } from '../hooks/useSSE';
 
 const PAGE_SIZE = 25;
@@ -56,8 +57,22 @@ const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading
 
 const ShoutFeed: React.FC = () => {
   const { user } = useAuth();
+  const { prefs, setShowMedia, setShowNsfw, setShowPolitics } = useContentPreferences();
   const [activeTab, setActiveTab] = useState<FeedTab>('new');
-  const [showMedia, setShowMedia] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  // Close settings dropdown on outside click
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [settingsOpen]);
 
   const [shouts, setShouts] = useState<Shout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -209,7 +224,9 @@ const ShoutFeed: React.FC = () => {
   }, []);
 
   const removeShout = useCallback((shoutId: string) => {
-    setShouts(prev => prev.filter(s => s.id !== shoutId));
+    setShouts(prev => prev.map(s =>
+      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined } : s
+    ));
   }, []);
 
   // Accordion toggle: open clicked thread, close any previously open
@@ -229,7 +246,10 @@ const ShoutFeed: React.FC = () => {
     },
     delete_shout: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
-      setShouts(prev => prev.filter(s => s.id !== data.shoutId));
+      const shoutId = data.shoutId as string;
+      setShouts(prev => prev.map(s =>
+        s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined } : s
+      ));
     },
     new_comment: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
@@ -307,17 +327,37 @@ const ShoutFeed: React.FC = () => {
             </button>
           </div>
 
-          <button
-              onClick={() => setShowMedia(!showMedia)}
-              className={`p-1.5 transition-colors ${showMedia ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
-              title={showMedia ? 'Скрыть медиа' : 'Показать медиа'}
+          <div className="relative" ref={settingsRef}>
+            <button
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              className={`p-1.5 transition-colors ${settingsOpen ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
+              title="Настройки контента"
             >
-              {showMedia ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
-              )}
-          </button>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+            {settingsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-th-card border border-th-border rounded-lg shadow-xl z-40 py-2">
+                <div className="px-3 py-1.5 text-[10px] font-bold text-th-text-4 uppercase tracking-wider">Отображение</div>
+                <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
+                  <input type="checkbox" checked={prefs.showMedia} onChange={(e) => setShowMedia(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]" />
+                  <span className="text-sm text-th-text-2">Медиа</span>
+                </label>
+                <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
+                  <input type="checkbox" checked={prefs.showNsfw} onChange={(e) => setShowNsfw(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-th-border accent-red-500" />
+                  <span className="text-sm text-th-text-2">NSFW <span className="text-th-text-4 text-xs">(18+)</span></span>
+                </label>
+                <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
+                  <input type="checkbox" checked={prefs.showPolitics} onChange={(e) => setShowPolitics(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-th-border accent-blue-500" />
+                  <span className="text-sm text-th-text-2">Политика</span>
+                </label>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -362,7 +402,7 @@ const ShoutFeed: React.FC = () => {
               >
                 <ShoutCard
                   shout={shout}
-                  showMedia={showMedia}
+                  showMedia={prefs.showMedia}
                   onCommentAdded={addCommentToShout}
                   onDelete={removeShout}
                   onCommentDeleted={removeComment}
