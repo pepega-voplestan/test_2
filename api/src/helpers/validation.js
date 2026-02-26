@@ -61,6 +61,8 @@ export const profileUpdateSchema = z.object({
   avatar: z.string().max(500).optional(),
   currentPassword: z.string().min(1).optional(),
   newPassword: z.string().min(6).max(200).optional(),
+  showNsfw: z.boolean().optional(),
+  showPolitics: z.boolean().optional(),
 });
 
 export const emailChangeSchema = z.object({
