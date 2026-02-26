@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { useContentPreferences } from '../context/ContentPreferencesContext';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
@@ -528,7 +527,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   isThreadOpen, onThreadToggle
 }) => {
   const { user, openModal } = useAuth();
-  const { prefs } = useContentPreferences();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -576,8 +574,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const isDeleted = !!shout.isDeleted;
   const tag = shout.visibilityTag || '';
   const isSpoilerHidden = tag === 'spoiler' && !spoilerRevealed;
-  const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed && !prefs.showNsfw;
-  const isPoliticsHidden = tag === 'politics' && !politicsRevealed && !prefs.showPolitics;
+  const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed;
+  const isPoliticsHidden = tag === 'politics' && !politicsRevealed;
 
   useEffect(() => {
     if (replyMediaId) { setReplyDetectedYtId(null); return; }
@@ -852,18 +850,28 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               </div>
 
               {fullHide ? (
-                /* --- Spoiler / Politics: unified fixed-size overlay hiding ALL content --- */
-                <div className="rounded-lg bg-th-inset/60 border border-th-border-2 flex items-center justify-center py-3 px-4">
-                  <button
-                    onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-2"
-                  >
-                    <span className="font-bold">
-                      {isSpoilerHidden ? 'СПОЙЛЕР' : 'ПОЛИТИКА'}
-                    </span>
-                    <span>·</span>
-                    <span className="font-bold">ПОКАЗАТЬ</span>
-                  </button>
+                /* --- Spoiler / Politics: blurred content overlay matching real body size --- */
+                <div className="relative rounded-lg overflow-hidden">
+                  <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
+                    {shout.content && (
+                      <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+                        {renderContent(shout.content)}
+                      </div>
+                    )}
+                    {renderMediaSection()}
+                  </div>
+                  <div className="absolute inset-0 bg-th-inset/40 flex items-center justify-center rounded-lg">
+                    <button
+                      onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-2"
+                    >
+                      <span className="font-bold">
+                        {isSpoilerHidden ? 'СПОЙЛЕР' : 'ПОЛИТИКА'}
+                      </span>
+                      <span>·</span>
+                      <span className="font-bold">ПОКАЗАТЬ</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 /* --- Normal / NSFW content render --- */
