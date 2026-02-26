@@ -42,7 +42,7 @@ interface MentionQuery {
 function serializeContent(el: HTMLElement): string {
   function walk(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) {
-      return (node.textContent ?? '').replace(/\u00A0/g, ' ');
+      return (node.textContent ?? '').replace(/\u00A0/g, ' ').replace(/\u200B/g, '');
     }
     if (node.nodeName === 'BR') return '\n';
     if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.mentionId) {
@@ -503,15 +503,13 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     const el = editorRef.current;
     if (!el) return;
 
-    // Un-decorate any existing spoiler spans back to text with || markers
-    // so serializeContent sees clean text nodes before re-decorating
+    // Remove spoiler spans that have been emptied by the user
     const spoilerSpans = el.querySelectorAll('span[data-spoiler]');
     for (const span of Array.from(spoilerSpans)) {
-      const text = document.createTextNode(`||${span.textContent ?? ''}||`);
-      span.parentNode?.replaceChild(text, span);
+      if (!span.textContent) {
+        span.parentNode?.removeChild(span);
+      }
     }
-    // Normalize adjacent text nodes after un-decorating
-    el.normalize();
 
     const serialized = serializeContent(el);
     setIsEmpty(serialized === '');
@@ -526,7 +524,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       setMentionQuery(null);
     }
 
-    // Re-decorate ||text|| visually after serialization
+    // Decorate new ||text|| patterns in plain text nodes (skips existing spoiler spans)
     decorateSpoilers(el);
   };
 
@@ -536,6 +534,33 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       e.preventDefault();
       onSubmitRef.current();
       return;
+    }
+
+    // Enter inside a spoiler span → escape out of it
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node: Node | null = sel.getRangeAt(0).startContainer;
+        while (node && node !== editorRef.current) {
+          if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).dataset.spoiler !== undefined) {
+            e.preventDefault();
+            const spoilerSpan = node as HTMLElement;
+            // Insert a <br> after the spoiler span and place cursor there
+            const br = document.createElement('br');
+            spoilerSpan.after(br);
+            const textNode = document.createTextNode('\u200B'); // zero-width space as cursor anchor
+            br.after(textNode);
+            const newRange = document.createRange();
+            newRange.setStart(textNode, 1);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            editorRef.current?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            return;
+          }
+          node = node.parentNode;
+        }
+      }
     }
 
     // Dropdown navigation

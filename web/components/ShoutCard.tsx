@@ -831,7 +831,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
                 <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                 {/* Content flag badges */}
-                {shout.isSpoiler && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">СПОЙЛЕР</span>}
+                {shout.isSpoiler && (
+                  <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                      <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                    </svg>
+                  </span>
+                )}
                 {shout.isNsfw && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">NSFW</span>}
                 {shout.isPolitics && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">ПОЛИТИКА</span>}
                 {isOwner && (
@@ -845,16 +852,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
               {fullHide ? (
                 /* --- Spoiler / Politics: unified fixed-size overlay hiding ALL content --- */
-                <div className="rounded-lg bg-th-inset/60 border border-th-border-2 flex items-center justify-center py-8 px-4">
+                <div className="rounded-lg bg-th-inset/60 border border-th-border-2 flex items-center justify-center py-6 px-4">
                   <button
                     onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-th-card border border-th-border shadow-md hover:bg-th-elevated transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs"
                   >
-                    <span className={`text-sm font-bold ${isSpoilerHidden ? 'text-amber-400' : 'text-blue-400'}`}>
+                    <span className={`font-bold ${isSpoilerHidden ? 'text-amber-400' : 'text-blue-400'}`}>
                       {isSpoilerHidden ? 'СПОЙЛЕР' : 'ПОЛИТИКА'}
                     </span>
                     <span className="text-th-text-4">·</span>
-                    <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                    <span className="font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
                   </button>
                 </div>
               ) : (
@@ -875,11 +882,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       <div className="absolute inset-0 flex items-center justify-center">
                         <button
                           onClick={() => setNsfwRevealed(true)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card/90 border border-th-border shadow-sm hover:bg-th-elevated transition-colors backdrop-blur-sm text-xs"
                         >
-                          <span className="text-sm font-bold text-red-400">NSFW</span>
+                          <span className="font-bold text-red-400">NSFW</span>
                           <span className="text-th-text-4">·</span>
-                          <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                          <span className="font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
                         </button>
                       </div>
                     </div>
