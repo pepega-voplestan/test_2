@@ -25,7 +25,6 @@ router.get("/shouts", asyncHandler(async (req, res) => {
     topRaw = await prisma.shout.findMany({
       where: {
         parent_id: null,
-        is_deleted: 0,
         created_at: { gte: sevenDaysAgo },
       },
       include: {
@@ -46,7 +45,6 @@ router.get("/shouts", asyncHandler(async (req, res) => {
     topRaw = await prisma.shout.findMany({
       where: {
         parent_id: null,
-        is_deleted: 0,
         ...(cursor ? { created_at: { lt: cursor } } : {}),
       },
       include: {
@@ -72,7 +70,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
 router.get("/shouts/:id", asyncHandler(async (req, res) => {
   const currentUserId = req.session?.user?.id ?? null;
   const raw = await prisma.shout.findFirst({
-    where: { id: req.params.id, is_deleted: 0, parent_id: null },
+    where: { id: req.params.id, parent_id: null },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
       media: true,
@@ -95,11 +93,10 @@ router.delete("/shouts/:id", requireAuth, asyncHandler(async (req, res) => {
   if (!shout) return res.status(404).json({ error: "Запись не найдена" });
   if (shout.user_id !== userId) return res.status(403).json({ error: "Можно удалять только свои записи" });
 
-  // Soft-delete the shout and all its comments
-  await prisma.shout.update({ where: { id: shoutId }, data: { is_deleted: 1 } });
-  await prisma.comment.updateMany({ where: { shout_id: shoutId }, data: { is_deleted: 1 } });
+  // Soft-delete the shout only — comments remain accessible
+  await prisma.shout.update({ where: { id: shoutId }, data: { is_deleted: 1, is_muted: 1 } });
 
-  console.log(`[Shouts] Soft-deleted shout ${shoutId} (and comments) by ${userId}`);
+  console.log(`[Shouts] Soft-deleted shout ${shoutId} by ${userId}`);
   broadcast("delete_shout", { shoutId, userId });
   res.json({ ok: true });
 }));
@@ -116,7 +113,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { content, mediaId, youtubeUrl } = parsed.data;
+  const { content, mediaId, youtubeUrl, isSpoiler, isNsfw, isPolitics } = parsed.data;
 
   // Must have content or media
   if (!content.trim() && !mediaId && !youtubeUrl) {
@@ -181,6 +178,9 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
       parent_id: null,
       content,
       media_id: finalMediaId,
+      is_spoiler: isSpoiler ? 1 : 0,
+      is_nsfw: isNsfw ? 1 : 0,
+      is_politics: isPolitics ? 1 : 0,
     },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
@@ -201,6 +201,10 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     likes: 0,
     likedBy: [],
     comments: [],
+    isSpoiler: !!shout.is_spoiler,
+    isNsfw: !!shout.is_nsfw,
+    isPolitics: !!shout.is_politics,
+    isDeleted: false,
     ...(shout.media ? { media: buildMedia(shout.media) } : {}),
   };
 

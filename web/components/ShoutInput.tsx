@@ -46,6 +46,11 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   // YouTube auto-detection
   const [detectedYtId, setDetectedYtId] = useState<string | null>(null);
 
+  // Content flags
+  const [isSpoiler, setIsSpoiler] = useState(false);
+  const [isNsfw, setIsNsfw] = useState(false);
+  const [isPolitics, setIsPolitics] = useState(false);
+
   const charCount = effectiveLength(content, NEWLINE_CHAR_COST);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = !!mediaId || !!detectedYtId;
@@ -170,13 +175,16 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     console.log('[ShoutInput] Submitting:', content.substring(0, 50), mediaId ? `media=${mediaId}` : detectedYtId ? `yt=${detectedYtId}` : '');
 
     try {
-      const body: Record<string, string> = { content: content.trim() };
+      const body: Record<string, unknown> = { content: content.trim() };
       if (mediaId) {
         body.mediaId = mediaId;
       } else if (detectedYtId) {
         const ytMatch = content.match(/https?:\/\/[^\s]+/);
         if (ytMatch) body.youtubeUrl = ytMatch[0];
       }
+      if (isSpoiler) body.isSpoiler = true;
+      if (isNsfw) body.isNsfw = true;
+      if (isPolitics) body.isPolitics = true;
 
       const res = await fetch('/api/v1/shouts', {
         method: 'POST',
@@ -196,6 +204,9 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       setMediaPreview(null);
       setDetectedYtId(null);
       setError(null);
+      setIsSpoiler(false);
+      setIsNsfw(false);
+      setIsPolitics(false);
       onShoutCreated(result.shout as Shout);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Не удалось отправить вопль';
@@ -254,7 +265,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             }}
                             size="md"
                         />
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-2 justify-end flex-wrap">
                           <div className="flex items-center gap-1 shrink-0">
                             <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} />
                             <button
@@ -267,6 +278,32 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                               </svg>
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setIsSpoiler(!isSpoiler)}
+                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${isSpoiler ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'border-th-border text-th-text-4 hover:text-th-text-3 hover:border-th-text-4'}`}
+                              title="Спойлер"
+                            >
+                              SP
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsNsfw(!isNsfw)}
+                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${isNsfw ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'border-th-border text-th-text-4 hover:text-th-text-3 hover:border-th-text-4'}`}
+                              title="NSFW"
+                            >
+                              18+
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsPolitics(!isPolitics)}
+                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${isPolitics ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'border-th-border text-th-text-4 hover:text-th-text-3 hover:border-th-text-4'}`}
+                              title="Политика"
+                            >
+                              POL
                             </button>
                           </div>
                           <input

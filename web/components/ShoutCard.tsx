@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useContentPreferences } from '../context/ContentPreferencesContext';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
@@ -495,6 +496,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   isThreadOpen, onThreadToggle
 }) => {
   const { user, openModal } = useAuth();
+  const { prefs } = useContentPreferences();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -533,6 +535,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
   const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
   const isOwner = user && user.id === shout.user.id;
+
+  // Content hiding state
+  const [spoilerRevealed, setSpoilerRevealed] = useState(false);
+  const [nsfwRevealed, setNsfwRevealed] = useState(false);
+  const [politicsRevealed, setPoliticsRevealed] = useState(false);
+
+  const isDeleted = !!shout.isDeleted;
+  const isSpoilerHidden = !!shout.isSpoiler && !spoilerRevealed;
+  const isNsfwHidden = !!shout.isNsfw && !nsfwRevealed && !prefs.showNsfw;
+  const isPoliticsHidden = !!shout.isPolitics && !politicsRevealed && !prefs.showPolitics;
 
   useEffect(() => {
     if (replyMediaId) { setReplyDetectedYtId(null); return; }
@@ -675,107 +687,201 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const embeds = shout.content ? extractEmbeds(shout.content) : [];
 
+  // Whether the entire shout body should be blurred (spoiler or politics)
+  const blurBody = isSpoilerHidden || isPoliticsHidden;
+
+  // Render media section (reused in normal and NSFW-only blur mode)
+  const renderMediaSection = () => {
+    if (!showMedia) return null;
+
+    return (
+      <>
+        {embeds.map((embed, idx) => (
+          <EmbedCard key={`embed-${idx}`} embed={embed} />
+        ))}
+
+        {shout.media?.type === 'image' && (
+           <div className="mb-3 rounded-lg">
+               <img
+                 src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.url} alt="attachment" loading="lazy"
+                 onClick={() => setLightboxOpen(true)}
+                 className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
+               />
+           </div>
+        )}
+
+        {lightboxOpen && shout.media?.type === 'image' && (
+          <Lightbox
+            src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
+            onClose={() => setLightboxOpen(false)}
+          />
+        )}
+
+        {shout.media?.type === 'youtube' && (
+            <div className="mb-3 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
+              <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
+                  {ytLoaded ? (
+                    <iframe className="w-full h-full" src={`${shout.media.embedUrl}?autoplay=1`} title={shout.media.title || "YouTube"}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
+                      sandbox="allow-scripts allow-same-origin allow-presentation" />
+                  ) : (
+                    <>
+                      <img src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`} alt={shout.media.title || "YouTube video"} loading="lazy" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-14 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
+                          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white ml-0.5" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        </div>
+                      </div>
+                    </>
+                  )}
+              </div>
+              {(shout.media.title || shout.media.channel) && (
+                <div className="px-3 py-2">
+                  {shout.media.title && <div className="text-sm text-th-text-2 font-medium leading-snug line-clamp-2">{shout.media.title}</div>}
+                  {shout.media.channel && <div className="text-xs text-th-text-3 mt-0.5">{shout.media.channel}</div>}
+                </div>
+              )}
+            </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="flex flex-col">
       <div className="flex gap-4">
-        <a href={`#/profile/${shout.user.id}`} className="shrink-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
-            {shout.user.avatar ? (
-              <img src={shout.user.avatar} alt={shout.user.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
-                {shout.user.name.charAt(0).toUpperCase()}
-              </div>
-            )}
+        {!isDeleted ? (
+          <a href={`#/profile/${shout.user.id}`} className="shrink-0">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
+              {shout.user.avatar ? (
+                <img src={shout.user.avatar} alt={shout.user.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
+                  {shout.user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+          </a>
+        ) : (
+          <div className="shrink-0">
+            <div className="w-10 h-10 rounded-full bg-th-input flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-th-text-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
           </div>
-        </a>
+        )}
 
         <div className="grow min-w-0">
-          <div className="flex items-baseline gap-2 mb-1">
-            <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
-              {shout.user.name}
-            </a>
-            <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
-            {isOwner && (
-              <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </button>
-            )}
-          </div>
-
-          {shout.content && (
-            <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
-               {renderContent(shout.content)}
-            </div>
-          )}
-
-          {showMedia && embeds.map((embed, idx) => (
-            <EmbedCard key={`embed-${idx}`} embed={embed} />
-          ))}
-
-          {showMedia && shout.media?.type === 'image' && (
-             <div className="mb-3 rounded-lg">
-                 <img
-                   src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.url} alt="attachment" loading="lazy"
-                   onClick={() => setLightboxOpen(true)}
-                   className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
-                 />
-             </div>
-          )}
-
-          {lightboxOpen && shout.media?.type === 'image' && (
-            <Lightbox
-              src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
-              onClose={() => setLightboxOpen(false)}
-            />
-          )}
-
-          {showMedia && shout.media?.type === 'youtube' && (
-              <div className="mb-3 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
-                <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
-                    {ytLoaded ? (
-                      <iframe className="w-full h-full" src={`${shout.media.embedUrl}?autoplay=1`} title={shout.media.title || "YouTube"}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
-                        sandbox="allow-scripts allow-same-origin allow-presentation" />
-                    ) : (
-                      <>
-                        <img src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`} alt={shout.media.title || "YouTube video"} loading="lazy" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-14 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
-                            <svg viewBox="0 0 24 24" className="w-6 h-6 text-white ml-0.5" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                </div>
-                {(shout.media.title || shout.media.channel) && (
-                  <div className="px-3 py-2">
-                    {shout.media.title && <div className="text-sm text-th-text-2 font-medium leading-snug line-clamp-2">{shout.media.title}</div>}
-                    {shout.media.channel && <div className="text-xs text-th-text-3 mt-0.5">{shout.media.channel}</div>}
-                  </div>
+          {isDeleted ? (
+            /* --- Deleted shout placeholder --- */
+            <>
+              <div className="flex items-baseline gap-2 mb-1">
+                <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
+              </div>
+              <div className="text-th-text-4 text-sm italic mb-3">
+                Этот вопль был удалён
+              </div>
+            </>
+          ) : (
+            /* --- Normal shout content --- */
+            <>
+              <div className="flex items-baseline gap-2 mb-1">
+                <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+                  {shout.user.name}
+                </a>
+                <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
+                {/* Content flag badges */}
+                {shout.isSpoiler && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">SP</span>}
+                {shout.isNsfw && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">18+</span>}
+                {shout.isPolitics && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">POL</span>}
+                {isOwner && (
+                  <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 )}
               </div>
+
+              {blurBody ? (
+                /* --- Spoiler / Politics blur overlay --- */
+                <div className="relative rounded-lg overflow-hidden mb-3">
+                  <div className="blur-md select-none pointer-events-none" aria-hidden="true">
+                    {shout.content && (
+                      <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+                        {renderContent(shout.content)}
+                      </div>
+                    )}
+                    {renderMediaSection()}
+                  </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-th-card/60 backdrop-blur-sm rounded-lg">
+                    <span className="text-xs font-bold text-th-text-3 mb-2">
+                      {isSpoilerHidden ? 'Спойлер' : 'Политика'}
+                    </span>
+                    <button
+                      onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
+                      className="px-4 py-1.5 text-sm font-medium rounded-lg bg-th-elevated border border-th-border hover:bg-th-card text-th-text transition-colors"
+                    >
+                      {isSpoilerHidden ? 'Показать спойлер' : 'Показать политический контент'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* --- Normal content render --- */
+                <>
+                  {shout.content && (
+                    <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+                       {renderContent(shout.content)}
+                    </div>
+                  )}
+
+                  {isNsfwHidden && shout.media ? (
+                    /* --- NSFW media blur overlay --- */
+                    <div className="relative rounded-lg overflow-hidden mb-3">
+                      <div className="blur-md select-none pointer-events-none" aria-hidden="true">
+                        {renderMediaSection()}
+                      </div>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-th-card/60 backdrop-blur-sm rounded-lg">
+                        <span className="text-[10px] font-bold text-red-400 mb-2">NSFW</span>
+                        <button
+                          onClick={() => setNsfwRevealed(true)}
+                          className="px-4 py-1.5 text-sm font-medium rounded-lg bg-th-elevated border border-th-border hover:bg-th-card text-th-text transition-colors"
+                        >
+                          Показать NSFW
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    renderMediaSection()
+                  )}
+                </>
+              )}
+            </>
           )}
 
+          {/* Action bar — always visible, even for deleted shouts */}
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-2">
             <div className="flex items-center gap-4">
-              <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>
+              {!isDeleted && (
+                <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>
+              )}
               {hasComments ? (
                 <button onClick={toggleThread} className={`transition-colors ${repliesOpen ? 'text-th-text' : 'hover:text-th-text-2'}`}>
                   {repliesOpen ? 'Закрыть' : `${commentCount} ${getReplyDeclension(commentCount)}`}
                 </button>
-              ) : (
+              ) : !isDeleted ? (
                 <span className="opacity-50 cursor-default">0 ответов</span>
-              )}
+              ) : null}
             </div>
-            <div className="flex items-center">
-                <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
-                    <span className="text-xs font-bold">{likes}</span>
-                    <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
-                </button>
-            </div>
+            {!isDeleted && (
+              <div className="flex items-center">
+                  <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+                      <span className="text-xs font-bold">{likes}</span>
+                      <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
+                  </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -784,7 +890,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !isDeleting && setConfirmDelete(false)}>
           <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-th-text font-medium mb-2">Удалить вопль?</div>
-            <div className="text-th-text-3 text-sm mb-4">Это действие нельзя отменить. Вопль будет скрыт от всех пользователей.</div>
+            <div className="text-th-text-3 text-sm mb-4">Содержимое вопля будет скрыто, но комментарии останутся доступны.</div>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="px-4 py-1.5 text-sm text-th-text-3 hover:text-th-text transition-colors rounded">Отмена</button>
               <button onClick={handleDelete} disabled={isDeleting} className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded font-medium disabled:opacity-50 transition-colors">

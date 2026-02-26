@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useContentPreferences } from '../context/ContentPreferencesContext';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
 
@@ -13,6 +14,7 @@ const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const { refresh } = useAuth();
+  const { prefs } = useContentPreferences();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -139,9 +141,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     );
   }, []);
 
-  // Shout delete callback (remove from list without reload)
+  // Shout delete callback (mark as deleted, keep in list for comments)
   const removeShout = useCallback((shoutId: string) => {
-    setShouts(prev => prev.filter(s => s.id !== shoutId));
+    setShouts(prev => prev.map(s =>
+      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined } : s
+    ));
   }, []);
 
   // Comment delete callback (remove from parent without reload)
@@ -620,7 +624,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
             <ShoutCard
               shout={shout}
-              showMedia={true}
+              showMedia={prefs.showMedia}
               onCommentAdded={addCommentToShout}
               onDelete={removeShout}
               onCommentDeleted={removeComment}
