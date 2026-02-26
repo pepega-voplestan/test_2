@@ -37,6 +37,9 @@ export const shoutSchema = z.object({
   ),
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
+  isSpoiler: z.boolean().optional(),
+  isNsfw: z.boolean().optional(),
+  isPolitics: z.boolean().optional(),
 });
 
 export const commentSchema = z.object({

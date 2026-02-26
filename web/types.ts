@@ -57,4 +57,8 @@ export interface Shout {
   likedBy?: string[];
   media?: ShoutMedia;
   comments?: Comment[];
+  isSpoiler?: boolean;
+  isNsfw?: boolean;
+  isPolitics?: boolean;
+  isDeleted?: boolean;
 }
