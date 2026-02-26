@@ -545,11 +545,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
           if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).dataset.spoiler !== undefined) {
             e.preventDefault();
             const spoilerSpan = node as HTMLElement;
-            // Insert a <br> after the spoiler span and place cursor there
-            const br = document.createElement('br');
-            spoilerSpan.after(br);
-            const textNode = document.createTextNode('\u200B'); // zero-width space as cursor anchor
-            br.after(textNode);
+            // Insert a zero-width space after the spoiler span and place cursor there (same line)
+            const textNode = document.createTextNode('\u200B');
+            spoilerSpan.after(textNode);
             const newRange = document.createRange();
             newRange.setStart(textNode, 1);
             newRange.collapse(true);
