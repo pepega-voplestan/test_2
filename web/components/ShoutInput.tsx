@@ -203,9 +203,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
         const ytMatch = content.match(/https?:\/\/[^\s]+/);
         if (ytMatch) body.youtubeUrl = ytMatch[0];
       }
-      if (isSpoiler) body.isSpoiler = true;
-      if (isNsfw) body.isNsfw = true;
-      if (isPolitics) body.isPolitics = true;
+      if (activeTag) body.visibilityTag = activeTag;
 
       const res = await fetch('/api/v1/shouts', {
         method: 'POST',

@@ -65,7 +65,7 @@ router.get("/users/:id/shouts", asyncHandler(async (req, res) => {
   console.log(`[Profile] Fetching shouts for user ${profileId}: limit=${limit}, offset=${offset}`);
 
   const topRaw = await prisma.shout.findMany({
-    where: { user_id: profileId, parent_id: null },
+    where: { user_id: profileId, parent_id: null, is_deleted: 0 },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
       media: true,
