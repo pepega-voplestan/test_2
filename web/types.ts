@@ -50,7 +50,7 @@ export interface Notification {
 
 export interface Shout {
   id: string;
-  user: User;
+  user: User | null;
   content: string;
   timestamp: string;
   likes: number;
