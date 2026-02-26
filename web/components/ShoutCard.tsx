@@ -719,7 +719,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const embeds = shout.content ? extractEmbeds(shout.content) : [];
 
-  // Whether the entire shout body should be blurred (spoiler or politics)
+  // Whether the media section should be blurred (spoiler or politics)
   const blurBody = isSpoilerHidden || isPoliticsHidden;
 
   // Render media section (reused in normal and NSFW-only blur mode)
@@ -845,15 +845,18 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
               </div>
 
+              {/* --- Content text (always visible, never blurred) --- */}
+              {shout.content && (
+                <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+                   {renderContent(shout.content)}
+                </div>
+              )}
+
+              {/* --- Media section with blur overlays --- */}
               {blurBody ? (
-                /* --- Spoiler / Politics blur overlay --- */
+                /* --- Spoiler / Politics: blur media only --- */
                 <div className="relative rounded-lg overflow-hidden mb-3">
-                  <div className="blur-md select-none pointer-events-none" aria-hidden="true">
-                    {shout.content && (
-                      <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
-                        {renderContent(shout.content)}
-                      </div>
-                    )}
+                  <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
                     {renderMediaSection()}
                   </div>
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -877,36 +880,25 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                     </button>
                   </div>
                 </div>
+              ) : isNsfwHidden && shout.media ? (
+                /* --- NSFW media blur overlay --- */
+                <div className="relative rounded-lg overflow-hidden mb-3">
+                  <div className="blur-2xl select-none pointer-events-none" aria-hidden="true">
+                    {renderMediaSection()}
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <button
+                      onClick={() => setNsfwRevealed(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
+                    >
+                      <span className="text-sm font-bold text-red-400">NSFW</span>
+                      <span className="text-th-text-4">·</span>
+                      <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
+                    </button>
+                  </div>
+                </div>
               ) : (
-                /* --- Normal content render --- */
-                <>
-                  {shout.content && (
-                    <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
-                       {renderContent(shout.content)}
-                    </div>
-                  )}
-
-                  {isNsfwHidden && shout.media ? (
-                    /* --- NSFW media blur overlay --- */
-                    <div className="relative rounded-lg overflow-hidden mb-3">
-                      <div className="blur-md select-none pointer-events-none" aria-hidden="true">
-                        {renderMediaSection()}
-                      </div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <button
-                          onClick={() => setNsfwRevealed(true)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-th-card/90 border border-th-border shadow-lg hover:bg-th-elevated transition-colors backdrop-blur-sm"
-                        >
-                          <span className="text-sm font-bold text-red-400">NSFW</span>
-                          <span className="text-th-text-4">·</span>
-                          <span className="text-sm font-bold text-[#0087ff]">ПОКАЗАТЬ</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    renderMediaSection()
-                  )}
-                </>
+                renderMediaSection()
               )}
             </>
           )}

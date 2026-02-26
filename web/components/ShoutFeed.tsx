@@ -347,12 +347,12 @@ const ShoutFeed: React.FC = () => {
                 </label>
                 <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
                   <input type="checkbox" checked={prefs.showNsfw} onChange={(e) => setShowNsfw(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-th-border accent-red-500" />
+                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]" />
                   <span className="text-sm text-th-text-2">NSFW <span className="text-th-text-4 text-xs">(18+)</span></span>
                 </label>
                 <label className="flex items-center gap-3 px-3 py-2 hover:bg-th-elevated/50 cursor-pointer transition-colors">
                   <input type="checkbox" checked={prefs.showPolitics} onChange={(e) => setShowPolitics(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-th-border accent-blue-500" />
+                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]" />
                   <span className="text-sm text-th-text-2">Политика</span>
                 </label>
               </div>
