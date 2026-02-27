@@ -37,6 +37,7 @@ export const shoutSchema = z.object({
   ),
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
+  visibilityTag: z.enum(["", "spoiler", "nsfw", "politics"]).optional(),
 });
 
 export const commentSchema = z.object({
@@ -58,6 +59,8 @@ export const profileUpdateSchema = z.object({
   avatar: z.string().max(500).optional(),
   currentPassword: z.string().min(1).optional(),
   newPassword: z.string().min(6).max(200).optional(),
+  showNsfw: z.boolean().optional(),
+  showPolitics: z.boolean().optional(),
 });
 
 export const emailChangeSchema = z.object({

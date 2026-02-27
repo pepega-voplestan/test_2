@@ -8,6 +8,7 @@ export interface MentionInputHandle {
   focus(): void;
   insertText(text: string): void;
   insertMention(user: { id: string; name: string }): void;
+  wrapSpoiler(): void;
 }
 
 export interface MentionInputProps {
@@ -23,7 +24,8 @@ export interface MentionInputProps {
 // Exported so parents can compute the effective character count.
 // Replaces @[name:id] with @name before counting so mentions don't inflate the budget.
 export function effectiveLength(serialized: string, newlineCharCost: number): number {
-  const normalized = serialized.replace(/@\[([^\]]+):[^\]]+\]/g, '@$1');
+  // Normalize mentions @[name:id] → @name, strip inline spoiler markers ||
+  const normalized = serialized.replace(/@\[([^\]]+):[^\]]+\]/g, '@$1').replace(/\|\|/g, '');
   const newlines = (normalized.match(/\n/g) || []).length;
   return normalized.length + newlines * (newlineCharCost - 1);
 }
@@ -40,12 +42,17 @@ interface MentionQuery {
 function serializeContent(el: HTMLElement): string {
   function walk(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) {
-      return (node.textContent ?? '').replace(/\u00A0/g, ' ');
+      return (node.textContent ?? '').replace(/\u00A0/g, ' ').replace(/\u200B/g, '');
     }
     if (node.nodeName === 'BR') return '\n';
     if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.mentionId) {
       const e = node as HTMLElement;
       return `@[${e.dataset.mentionName}:${e.dataset.mentionId}]`;
+    }
+    // Spoiler spans: serialize back to ||content||
+    if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.spoiler !== undefined) {
+      const inner = Array.from(node.childNodes).map(walk).join('');
+      return `||${inner}||`;
     }
     // Chrome wraps each new line in a <div>
     if (node.nodeName === 'DIV') {
@@ -174,6 +181,123 @@ function insertAtCursor(el: HTMLElement, text: string, savedRange?: Range | null
   el.dispatchEvent(new InputEvent('input', { bubbles: true }));
 }
 
+// Visually decorate ||text|| in the contenteditable with styled spoiler spans.
+// Works by walking text nodes, finding ||...|| patterns, and replacing them with
+// <span data-spoiler>content</span>. Preserves the caret position.
+function decorateSpoilers(el: HTMLElement): void {
+  const sel = window.getSelection();
+  // Save caret as a text offset in the serialized string so we can restore after DOM mutation
+  let caretOffset = -1;
+  if (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer)) {
+    const range = sel.getRangeAt(0);
+    const preRange = document.createRange();
+    preRange.selectNodeContents(el);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    caretOffset = preRange.toString().length;
+  }
+
+  // Collect all text nodes that are NOT inside a mention span or already inside a spoiler span
+  const textNodes: Text[] = [];
+  function collectTextNodes(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      textNodes.push(node as Text);
+      return;
+    }
+    if (node.nodeName === 'SPAN') {
+      const span = node as HTMLElement;
+      if (span.dataset.mentionId || span.dataset.spoiler !== undefined) return; // skip
+    }
+    for (const child of Array.from(node.childNodes)) {
+      collectTextNodes(child);
+    }
+  }
+  collectTextNodes(el);
+
+  const SPOILER_RE = /\|\|(.+?)\|\|/g;
+  let mutated = false;
+
+  for (const textNode of textNodes) {
+    const text = textNode.textContent ?? '';
+    SPOILER_RE.lastIndex = 0;
+    if (!SPOILER_RE.test(text)) continue;
+
+    // Build replacement fragment
+    SPOILER_RE.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = SPOILER_RE.exec(text)) !== null) {
+      // Text before the match
+      if (match.index > lastIndex) {
+        frag.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      }
+      // Spoiler span
+      const span = document.createElement('span');
+      span.dataset.spoiler = '';
+      span.className = 'bg-th-text-4/30 rounded px-0.5';
+      span.textContent = match[1]; // inner text without ||
+      frag.appendChild(span);
+      lastIndex = match.index + match[0].length;
+    }
+    // Remaining text after last match
+    if (lastIndex < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+    textNode.parentNode?.replaceChild(frag, textNode);
+    mutated = true;
+  }
+
+  if (!mutated) return;
+
+  // Restore caret position by walking the DOM and counting characters
+  if (caretOffset >= 0 && sel) {
+    let remaining = caretOffset;
+    function findOffset(node: Node): { node: Node; offset: number } | null {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const len = (node.textContent ?? '').length;
+        if (remaining <= len) return { node, offset: remaining };
+        remaining -= len;
+        return null;
+      }
+      if (node.nodeName === 'BR') {
+        if (remaining === 0) return { node: node.parentNode!, offset: Array.from(node.parentNode!.childNodes).indexOf(node as ChildNode) };
+        remaining -= 1;
+        return null;
+      }
+      // For spoiler spans, account for the || markers that are visually hidden
+      if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.spoiler !== undefined) {
+        remaining -= 2; // opening ||
+        for (const child of Array.from(node.childNodes)) {
+          const result = findOffset(child);
+          if (result) return result;
+        }
+        remaining -= 2; // closing ||
+        return null;
+      }
+      if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.mentionId) {
+        const e = node as HTMLElement;
+        const tokenLen = `@[${e.dataset.mentionName}:${e.dataset.mentionId}]`.length;
+        if (remaining <= tokenLen) return { node: node.parentNode!, offset: Array.from(node.parentNode!.childNodes).indexOf(node as ChildNode) + 1 };
+        remaining -= tokenLen;
+        return null;
+      }
+      for (const child of Array.from(node.childNodes)) {
+        const result = findOffset(child);
+        if (result) return result;
+      }
+      return null;
+    }
+    const pos = findOffset(el);
+    if (pos) {
+      const newRange = document.createRange();
+      newRange.setStart(pos.node, pos.offset);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+    }
+  }
+}
+
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
   const { placeholder, disabled, onContentChange, onSubmit, onImagePaste, className, size = 'md' } = props;
 
@@ -293,6 +417,48 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       onContentChangeRef.current(serialized);
       setMentionQuery(null);
     },
+    wrapSpoiler() {
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus();
+      const sel = window.getSelection();
+      if (!sel) return;
+
+      // Restore saved range if the editor lost focus (e.g. clicking toolbar button)
+      if (savedRangeRef.current && el.contains(savedRangeRef.current.startContainer)) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current.cloneRange());
+      }
+
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+
+      if (!range.collapsed && el.contains(range.commonAncestorContainer)) {
+        // Has selection — wrap it with ||
+        const selectedText = range.toString();
+        range.deleteContents();
+        const textNode = document.createTextNode(`||${selectedText}||`);
+        range.insertNode(textNode);
+        // Place cursor after the closing ||
+        const newRange = document.createRange();
+        newRange.setStart(textNode, textNode.length);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } else {
+        // No selection — insert |||| and place cursor in the middle
+        const textNode = document.createTextNode('||||');
+        range.deleteContents();
+        range.insertNode(textNode);
+        const newRange = document.createRange();
+        newRange.setStart(textNode, 2); // between the two ||
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
+
+      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function doInsertMention(query: MentionQuery, user: MentionUser) {
@@ -336,6 +502,15 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
   const handleInput = () => {
     const el = editorRef.current;
     if (!el) return;
+
+    // Remove spoiler spans that have been emptied by the user
+    const spoilerSpans = el.querySelectorAll('span[data-spoiler]');
+    for (const span of Array.from(spoilerSpans)) {
+      if (!span.textContent) {
+        span.parentNode?.removeChild(span);
+      }
+    }
+
     const serialized = serializeContent(el);
     setIsEmpty(serialized === '');
     onContentChangeRef.current(serialized);
@@ -348,6 +523,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     } else {
       setMentionQuery(null);
     }
+
+    // Decorate new ||text|| patterns in plain text nodes (skips existing spoiler spans)
+    decorateSpoilers(el);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -356,6 +534,31 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       e.preventDefault();
       onSubmitRef.current();
       return;
+    }
+
+    // Enter inside a spoiler span → escape out of it
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node: Node | null = sel.getRangeAt(0).startContainer;
+        while (node && node !== editorRef.current) {
+          if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).dataset.spoiler !== undefined) {
+            e.preventDefault();
+            const spoilerSpan = node as HTMLElement;
+            // Insert a zero-width space after the spoiler span and place cursor there (same line)
+            const textNode = document.createTextNode('\u00A0');
+            spoilerSpan.after(textNode);
+            const newRange = document.createRange();
+            newRange.setStart(textNode, 1);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            editorRef.current?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            return;
+          }
+          node = node.parentNode;
+        }
+      }
     }
 
     // Dropdown navigation

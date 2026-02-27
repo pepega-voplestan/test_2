@@ -88,21 +88,26 @@ export async function enrichFeed(topShouts, currentUserId) {
   }
 
   function mapShout(row, children) {
-    const media = buildMedia(row.media);
+    const isDeleted = !!row.is_deleted;
+    const media = isDeleted ? undefined : buildMedia(row.media);
     return {
       id: row.id,
-      user: {
-        id: row.user_id,
-        name: row.user.username,
-        avatar: row.user.avatar,
-        isBanned: !!row.user.is_banned,
-      },
-      content: row.content,
+      user: isDeleted
+        ? null
+        : {
+            id: row.user_id,
+            name: row.user.username,
+            avatar: row.user.avatar,
+            isBanned: !!row.user.is_banned,
+          },
+      content: isDeleted ? "" : row.content,
       timestamp: utcTimestamp(row.created_at),
       likes: shoutLikesCount.get(row.id) || 0,
       likedBy: currentUserId && shoutLikedSet.has(row.id) ? [currentUserId] : [],
       ...(media ? { media } : {}),
       comments: children,
+      visibilityTag: row.visibility_tag || "",
+      isDeleted,
     };
   }
 

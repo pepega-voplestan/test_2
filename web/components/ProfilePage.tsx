@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useContentPreferences } from '../context/ContentPreferencesContext';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
 
@@ -13,6 +14,7 @@ const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const { refresh } = useAuth();
+  const { prefs } = useContentPreferences();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -31,6 +33,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     avatar: '',
     currentPassword: '',
     newPassword: '',
+    showNsfw: false,
+    showPolitics: false,
   });
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
@@ -79,6 +83,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           avatar: data.profile.avatar,
           currentPassword: '',
           newPassword: '',
+          showNsfw: !!data.profile.showNsfw,
+          showPolitics: !!data.profile.showPolitics,
         });
       })
       .catch((err) => {
@@ -139,9 +145,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     );
   }, []);
 
-  // Shout delete callback (remove from list without reload)
+  // Shout delete callback (mark as deleted, keep in list for comments)
   const removeShout = useCallback((shoutId: string) => {
-    setShouts(prev => prev.filter(s => s.id !== shoutId));
+    setShouts(prev => prev.map(s =>
+      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
+    ));
   }, []);
 
   // Comment delete callback (remove from parent without reload)
@@ -267,13 +275,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       }
 
       // Step 2: Build profile update body (no email — that goes through verification)
-      const body: Record<string, string> = {};
+      const body: Record<string, string | boolean> = {};
       if (editForm.username !== profile?.name) body.username = editForm.username;
       if (newAvatarUrl) body.avatar = newAvatarUrl;
       if (editForm.newPassword) {
         body.currentPassword = editForm.currentPassword;
         body.newPassword = editForm.newPassword;
       }
+      if (editForm.showNsfw !== !!profile?.showNsfw) body.showNsfw = editForm.showNsfw;
+      if (editForm.showPolitics !== !!profile?.showPolitics) body.showPolitics = editForm.showPolitics;
 
       const hasProfileChanges = Object.keys(body).length > 0 || pendingAvatarFile;
 
@@ -513,6 +523,32 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             />
 
             <div className="border-t border-th-border-2 pt-4">
+              <div className="text-xs text-th-text-3 mb-3">Отображение контента</div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editForm.showNsfw}
+                    onChange={(e) => setEditForm(f => ({ ...f, showNsfw: e.target.checked }))}
+                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]"
+                    disabled={isSaving}
+                  />
+                  <span className="text-sm text-th-text-2">Показывать NSFW контент</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editForm.showPolitics}
+                    onChange={(e) => setEditForm(f => ({ ...f, showPolitics: e.target.checked }))}
+                    className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]"
+                    disabled={isSaving}
+                  />
+                  <span className="text-sm text-th-text-2">Показывать политический контент</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="border-t border-th-border-2 pt-4">
               <div className="text-xs text-th-text-3 mb-3">Смена пароля (оставьте пустым, чтобы не менять)</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
@@ -583,6 +619,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                     avatar: profile.avatar,
                     currentPassword: '',
                     newPassword: '',
+                    showNsfw: !!profile.showNsfw,
+                    showPolitics: !!profile.showPolitics,
                   });
                 }}
                 disabled={isSaving}
@@ -620,7 +658,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
             <ShoutCard
               shout={shout}
-              showMedia={true}
+              showMedia={prefs.showMedia}
               onCommentAdded={addCommentToShout}
               onDelete={removeShout}
               onCommentDeleted={removeComment}

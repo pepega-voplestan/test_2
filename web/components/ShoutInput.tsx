@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
@@ -45,6 +45,30 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
   // YouTube auto-detection
   const [detectedYtId, setDetectedYtId] = useState<string | null>(null);
+
+  // Content flag — mutually exclusive: only one tag per shout
+  type ContentTag = 'spoiler' | 'nsfw' | 'politics' | null;
+  const [activeTag, setActiveTag] = useState<ContentTag>(null);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const tagMenuRef = useRef<HTMLDivElement>(null);
+  const isSpoiler = activeTag === 'spoiler';
+  const isNsfw = activeTag === 'nsfw';
+  const isPolitics = activeTag === 'politics';
+
+  // Close tag menu on outside click
+  useEffect(() => {
+    if (!tagMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (tagMenuRef.current && !tagMenuRef.current.contains(e.target as Node)) setTagMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [tagMenuOpen]);
+
+  const selectTag = useCallback((tag: ContentTag) => {
+    setActiveTag(prev => prev === tag ? null : tag);
+    setTagMenuOpen(false);
+  }, []);
 
   const charCount = effectiveLength(content, NEWLINE_CHAR_COST);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
@@ -160,6 +184,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     setMediaId(null);
     setMediaPreview(null);
     setError(null);
+    // NSFW only makes sense with media — clear it
+    if (activeTag === 'nsfw') setActiveTag(null);
   };
 
   const submitShout = async () => {
@@ -170,13 +196,14 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     console.log('[ShoutInput] Submitting:', content.substring(0, 50), mediaId ? `media=${mediaId}` : detectedYtId ? `yt=${detectedYtId}` : '');
 
     try {
-      const body: Record<string, string> = { content: content.trim() };
+      const body: Record<string, unknown> = { content: content.trim() };
       if (mediaId) {
         body.mediaId = mediaId;
       } else if (detectedYtId) {
         const ytMatch = content.match(/https?:\/\/[^\s]+/);
         if (ytMatch) body.youtubeUrl = ytMatch[0];
       }
+      if (activeTag) body.visibilityTag = activeTag;
 
       const res = await fetch('/api/v1/shouts', {
         method: 'POST',
@@ -196,6 +223,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       setMediaPreview(null);
       setDetectedYtId(null);
       setError(null);
+      setActiveTag(null);
       onShoutCreated(result.shout as Shout);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Не удалось отправить вопль';
@@ -254,7 +282,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             }}
                             size="md"
                         />
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-2 justify-end flex-wrap">
                           <div className="flex items-center gap-1 shrink-0">
                             <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} />
                             <button
@@ -268,6 +296,59 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                                 <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                               </svg>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => mentionInputRef.current?.wrapSpoiler()}
+                              className="p-1 text-th-text-4 hover:text-th-text-2 transition-colors"
+                              title="Спойлер (||текст||)"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                              </svg>
+                            </button>
+                            <div className="relative" ref={tagMenuRef}>
+                              <button
+                                type="button"
+                                onClick={() => setTagMenuOpen(o => !o)}
+                                className={`p-1 transition-colors rounded ${activeTag ? (isSpoiler ? 'text-amber-400' : isNsfw ? 'text-red-400' : 'text-blue-400') : 'text-th-text-4 hover:text-th-text-2'}`}
+                                title="Тег контента"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                              {tagMenuOpen && (
+                                <div className="absolute right-0 bottom-full mb-2 w-52 bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden">
+                                  <div className="px-3 py-2 text-[10px] font-bold text-th-text-4 uppercase tracking-wider border-b border-th-border-2">Тег контента</div>
+                                  <button
+                                    type="button"
+                                    onClick={() => selectTag('spoiler')}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors ${isSpoiler ? 'bg-amber-500/10' : 'hover:bg-th-elevated/50'}`}
+                                  >
+                                    <span className={`text-xs font-bold ${isSpoiler ? 'text-amber-400' : 'text-th-text-3'}`}>СПОЙЛЕР</span>
+                                    {isSpoiler && <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-amber-400 ml-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => hasMedia && selectTag('nsfw')}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors ${!hasMedia ? 'opacity-30 cursor-not-allowed' : isNsfw ? 'bg-red-500/10' : 'hover:bg-th-elevated/50'}`}
+                                  >
+                                    <span className={`text-xs font-bold ${isNsfw ? 'text-red-400' : 'text-th-text-3'}`}>NSFW</span>
+                                    <span className="text-[10px] text-th-text-4">{hasMedia ? '18+' : 'нужно медиа'}</span>
+                                    {isNsfw && <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-red-400 ml-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => selectTag('politics')}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors ${isPolitics ? 'bg-blue-500/10' : 'hover:bg-th-elevated/50'}`}
+                                  >
+                                    <span className={`text-xs font-bold ${isPolitics ? 'text-blue-400' : 'text-th-text-3'}`}>ПОЛИТИКА</span>
+                                    {isPolitics && <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-blue-400 ml-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <input
                             ref={fileInputRef}
