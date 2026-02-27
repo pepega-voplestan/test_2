@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useContentPreferences } from '../context/ContentPreferencesContext';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
@@ -527,6 +528,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   isThreadOpen, onThreadToggle
 }) => {
   const { user, openModal } = useAuth();
+  const { prefs } = useContentPreferences();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -574,8 +576,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const isDeleted = !!shout.isDeleted;
   const tag = shout.visibilityTag || '';
   const isSpoilerHidden = tag === 'spoiler' && !spoilerRevealed;
-  const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed;
-  const isPoliticsHidden = tag === 'politics' && !politicsRevealed;
+  const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed && !prefs.showNsfw;
+  const isPoliticsHidden = tag === 'politics' && !politicsRevealed && !prefs.showPolitics;
 
   useEffect(() => {
     if (replyMediaId) { setReplyDetectedYtId(null); return; }
