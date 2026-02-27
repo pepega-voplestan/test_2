@@ -3,6 +3,7 @@ import ShoutInput from './ShoutInput';
 import ShoutCard from './ShoutCard';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useSSE } from '../hooks/useSSE';
 
 const PAGE_SIZE = 25;
@@ -56,8 +57,8 @@ const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading
 
 const ShoutFeed: React.FC = () => {
   const { user } = useAuth();
+  const { prefs, setShowMedia } = useContentPreferences();
   const [activeTab, setActiveTab] = useState<FeedTab>('new');
-  const [showMedia, setShowMedia] = useState(true);
 
   const [shouts, setShouts] = useState<Shout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -209,7 +210,9 @@ const ShoutFeed: React.FC = () => {
   }, []);
 
   const removeShout = useCallback((shoutId: string) => {
-    setShouts(prev => prev.filter(s => s.id !== shoutId));
+    setShouts(prev => prev.map(s =>
+      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
+    ));
   }, []);
 
   // Accordion toggle: open clicked thread, close any previously open
@@ -229,7 +232,10 @@ const ShoutFeed: React.FC = () => {
     },
     delete_shout: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
-      setShouts(prev => prev.filter(s => s.id !== data.shoutId));
+      const shoutId = data.shoutId as string;
+      setShouts(prev => prev.map(s =>
+        s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
+      ));
     },
     new_comment: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
@@ -308,15 +314,18 @@ const ShoutFeed: React.FC = () => {
           </div>
 
           <button
-              onClick={() => setShowMedia(!showMedia)}
-              className={`p-1.5 transition-colors ${showMedia ? 'text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
-              title={showMedia ? 'Скрыть медиа' : 'Показать медиа'}
-            >
-              {showMedia ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
-              )}
+            onClick={() => setShowMedia(!prefs.showMedia)}
+            className={`relative p-1.5 transition-colors ${prefs.showMedia ? 'text-th-text-3 hover:text-th-text' : 'text-th-text-4 hover:text-th-text-3'}`}
+            title={prefs.showMedia ? 'Скрыть медиа' : 'Показать медиа'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            {!prefs.showMedia && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="absolute inset-0 w-full h-full text-th-text-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="3" x2="21" y2="21" />
+              </svg>
+            )}
           </button>
         </div>
       </div>
@@ -362,7 +371,7 @@ const ShoutFeed: React.FC = () => {
               >
                 <ShoutCard
                   shout={shout}
-                  showMedia={showMedia}
+                  showMedia={prefs.showMedia}
                   onCommentAdded={addCommentToShout}
                   onDelete={removeShout}
                   onCommentDeleted={removeComment}

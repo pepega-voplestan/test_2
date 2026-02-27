@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Shout, Comment } from '../types';
 import { navigateTo } from '../hooks/useRoute';
+import { useContentPreferences } from '../context/ContentPreferencesContext';
 import ShoutCard from './ShoutCard';
 
 interface ShoutPageProps {
@@ -8,6 +9,7 @@ interface ShoutPageProps {
 }
 
 const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
+  const { prefs } = useContentPreferences();
   const [shout, setShout] = useState<Shout | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,10 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
   }
 
   function handleDelete() {
-    navigateTo('/');
+    // Mark as deleted in-place so comments remain visible
+    setShout((prev) =>
+      prev ? { ...prev, isDeleted: true, content: '', media: undefined, user: null } : prev
+    );
   }
 
   return (
@@ -72,7 +77,7 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
       {shout && (
         <ShoutCard
           shout={shout}
-          showMedia
+          showMedia={prefs.showMedia}
           isThreadOpen
           onCommentAdded={handleCommentAdded}
           onDelete={handleDelete}

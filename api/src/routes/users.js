@@ -32,7 +32,7 @@ router.get("/users/:id", asyncHandler(async (req, res) => {
 
   const row = await prisma.user.findUnique({
     where: { id: profileId },
-    select: { id: true, username: true, avatar: true, email: true, is_banned: true, created_at: true },
+    select: { id: true, username: true, avatar: true, email: true, is_banned: true, created_at: true, show_nsfw: true, show_politics: true },
   });
 
   if (!row) return res.status(404).json({ error: "Пользователь не найден" });
@@ -48,7 +48,7 @@ router.get("/users/:id", asyncHandler(async (req, res) => {
     isBanned: !!row.is_banned,
     createdAt: utcTimestamp(row.created_at),
     shoutCount,
-    ...(isOwner ? { email: row.email || "" } : {}),
+    ...(isOwner ? { email: row.email || "", showNsfw: !!row.show_nsfw, showPolitics: !!row.show_politics } : {}),
     isOwner,
   };
 
@@ -103,7 +103,7 @@ router.put("/users/:id", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { username, avatar, currentPassword, newPassword } = parsed.data;
+  const { username, avatar, currentPassword, newPassword, showNsfw, showPolitics } = parsed.data;
   console.log(`[Profile] Update attempt for user ${currentUserId}`);
 
   if (newPassword) {
@@ -153,9 +153,22 @@ router.put("/users/:id", requireAuth, asyncHandler(async (req, res) => {
     console.log(`[Profile] Avatar updated`);
   }
 
+  if (showNsfw !== undefined || showPolitics !== undefined) {
+    const prefsData = {};
+    if (showNsfw !== undefined) prefsData.show_nsfw = showNsfw ? 1 : 0;
+    if (showPolitics !== undefined) prefsData.show_politics = showPolitics ? 1 : 0;
+    await prisma.user.update({
+      where: { id: currentUserId },
+      data: prefsData,
+    });
+    if (showNsfw !== undefined) req.session.user.showNsfw = showNsfw;
+    if (showPolitics !== undefined) req.session.user.showPolitics = showPolitics;
+    console.log(`[Profile] Content preferences updated`);
+  }
+
   const updated = await prisma.user.findUnique({
     where: { id: currentUserId },
-    select: { id: true, username: true, avatar: true, email: true, created_at: true },
+    select: { id: true, username: true, avatar: true, email: true, created_at: true, show_nsfw: true, show_politics: true },
   });
 
   res.json({
@@ -166,6 +179,8 @@ router.put("/users/:id", requireAuth, asyncHandler(async (req, res) => {
       name: updated.username,
       avatar: updated.avatar,
       email: updated.email || "",
+      showNsfw: !!updated.show_nsfw,
+      showPolitics: !!updated.show_politics,
       createdAt: utcTimestamp(updated.created_at),
       isOwner: true,
     },

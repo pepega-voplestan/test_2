@@ -32,7 +32,7 @@ export function extractMentionedUserIds(content, actorId = null) {
  */
 export function buildSnippet(content, maxLen = 60) {
   if (!content) return "";
-  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1");
+  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1").replace(/\|\|/g, "");
   const clean = stripped.replace(/\s+/g, " ").trim();
   return clean.length > maxLen ? clean.slice(0, maxLen) + "…" : clean;
 }

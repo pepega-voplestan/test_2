@@ -11,6 +11,8 @@ export interface UserProfile {
   avatar: string;
   isBanned?: boolean;
   email?: string;
+  showNsfw?: boolean;
+  showPolitics?: boolean;
   createdAt: string;
   shoutCount?: number;
   isOwner: boolean;
@@ -50,11 +52,13 @@ export interface Notification {
 
 export interface Shout {
   id: string;
-  user: User;
+  user: User | null;
   content: string;
   timestamp: string;
   likes: number;
   likedBy?: string[];
   media?: ShoutMedia;
   comments?: Comment[];
+  visibilityTag?: '' | 'spoiler' | 'nsfw' | 'politics';
+  isDeleted?: boolean;
 }
