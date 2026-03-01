@@ -62,5 +62,9 @@ export async function teardown() {
   const mediaTmpPath = path.join(apiDir, "tests", ".media-tmp");
   if (fs.existsSync(mediaTmpPath)) fs.rmSync(mediaTmpPath, { recursive: true });
 
+  // Clean up avatar dir written by upload tests
+  const avatarTmpPath = path.join(apiDir, "tests", "avatars");
+  if (fs.existsSync(avatarTmpPath)) fs.rmSync(avatarTmpPath, { recursive: true });
+
   console.log("[Test Teardown] Database cleaned up");
 }
