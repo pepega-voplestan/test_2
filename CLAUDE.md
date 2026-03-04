@@ -12,7 +12,9 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 .
 ├── api/                    # Backend (Express.js)
 │   ├── src/
-│   │   ├── server.js       # Express app setup, session middleware, rate limiting, dotenv, notification cleanup task
+│   │   ├── server.js       # Entry point: dotenv, imports app.js, seeds settings, notification cleanup
+│   │   ├── app.js          # Express app factory: middleware, session, admin, swagger, routes (imported by server.js and tests)
+│   │   ├── admin.js        # AdminJS panel setup (users, shouts, comments, media, announcements, settings)
 │   │   ├── swagger.js      # OpenAPI 3.0.3 spec for Swagger UI (dev only, blocked in prod)
 │   │   ├── routes/         # Domain-split route handlers
 │   │   │   ├── index.js        # Mounts all domain routers via mountRoutes(app)
@@ -39,8 +41,18 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   └── migrations/     # Prisma migration files
 │   ├── scripts/
 │   │   └── start.sh        # Docker entrypoint: runs prisma migrate deploy, then starts server
+│   ├── tests/
+│   │   ├── setup.js        # Vitest globalSetup: creates test DB, runs migrations, cleanup
+│   │   ├── env.js          # Vitest setupFiles: loads env vars written by globalSetup
+│   │   ├── helpers.js      # Shared test utilities (request, authenticatedAgent, cleanDb, disconnectDb)
+│   │   ├── fixtures/
+│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, etc.)
+│   │   ├── unit/           # Unit tests (auth, admin, common, email, media, mentions, sse, validation, app.setup)
+│   │   └── integration/    # Integration tests (health, auth, shouts, comments, likes, announcements,
+│   │                       #   notifications, feed, upload, users, index)
+│   ├── vitest.config.js    # Vitest config: node env, globalSetup, sequential files, coverage
 │   ├── package.json
-│   ├── Dockerfile          # Alpine Node 20, installs vips-dev + openssl for Sharp & Prisma
+│   ├── Dockerfile          # Alpine Node 20, installs vips-dev + openssl; includes test build target
 │   └── .dockerignore
 ├── web/                    # Frontend (React + TypeScript)
 │   ├── components/
@@ -57,13 +69,18 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── EmojiPicker.tsx   # Emoji picker with grouped categories
 │   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss and scroll lock
 │   ├── context/
-│   │   ├── AuthContext.tsx          # Auth state via React Context + API helper
-│   │   ├── ThemeContext.tsx         # Dark/light theme toggle with localStorage persistence
-│   │   └── NotificationsContext.tsx # Notification state, batched read marking, SSE subscription
+│   │   ├── AuthContext.tsx               # Auth state via React Context + API helper
+│   │   ├── ThemeContext.tsx              # Dark/light theme toggle with localStorage persistence
+│   │   ├── NotificationsContext.tsx      # Notification state, batched read marking, SSE subscription
+│   │   └── ContentPreferencesContext.tsx # Content visibility prefs (showMedia, showNsfw, showPolitics)
 │   ├── hooks/
 │   │   ├── useRoute.ts       # Hash-based client-side routing
+│   │   ├── useRoute.test.ts  # Unit tests for useRoute hook
 │   │   ├── useSSE.ts         # SSE client hook with auto-reconnect + exponential backoff
 │   │   └── useMentionUsers.ts # Module-level singleton cache for mention user list (lazy-loaded on first @)
+│   ├── tests/
+│   │   ├── setup.ts          # Vitest/DOM setup (mocks: matchMedia, scrollTo)
+│   │   └── helpers.tsx       # renderWithProviders helper for tests needing context providers
 │   ├── public/
 │   │   └── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
 │   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider + NotificationsProvider
@@ -72,21 +89,29 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   ├── index.html            # HTML template (Tailwind CDN, CSS custom properties for theming)
 │   ├── tsconfig.json
 │   ├── vite.config.ts        # Dev proxy: /api and /media → localhost:3000
+│   ├── vitest.config.ts      # Vitest config: merges vite config, jsdom env, @testing-library setup
 │   ├── package.json
 │   ├── Dockerfile
 │   └── .dockerignore
 ├── scripts/
 │   ├── backup.sh             # Backup Docker volumes (DB + media) with rotation, optional rclone upload
 │   └── restore.sh            # Restore Docker volumes from a timestamped backup
-├── docker-compose.yml      # Production: 4 services on port 3005
-├── docker-compose.dev.yml  # Development: 4 services on port 3006 (isolated volumes)
-├── nginx.conf              # Production reverse proxy (blocks /api/docs)
-├── nginx-dev.conf          # Development reverse proxy (allows /api/docs for Swagger UI)
-├── media-nginx.conf        # Security-hardened media file server (webp/jpg/jpeg/png/gif)
-├── Makefile                # Shortcuts for docker-compose + backup/restore commands
-├── .env                    # Production environment variables (gitignored)
-├── .env.dev                # Development environment variables (gitignored)
-├── .env.example            # Template with placeholder values
+├── .github/
+│   └── workflows/
+│       └── test.yml          # CI: runs API + web tests on pull requests to main
+├── .husky/
+│   └── pre-push              # Git hook: runs npm test for api and web before every push
+├── docker-compose.yml        # Production: 4 services on port 3005
+├── docker-compose.dev.yml    # Development: 4 services on port 3006 (isolated volumes)
+├── docker-compose.test.yml   # Test: single api-test service with tmpfs DB, runs vitest --coverage
+├── nginx.conf                # Production reverse proxy (blocks /api/docs, proxies /admin with HTTP basic auth)
+├── nginx-dev.conf            # Development reverse proxy (allows /api/docs for Swagger UI, proxies /admin)
+├── media-nginx.conf          # Security-hardened media file server (webp/jpg/jpeg/png/gif)
+├── Makefile                  # Shortcuts for docker-compose + backup/restore + test commands
+├── package.json              # Workspace root: husky setup only
+├── .env                      # Production environment variables (gitignored)
+├── .env.dev                  # Development environment variables (gitignored)
+├── .env.example              # Template with placeholder values
 ├── RELEASE_NOTES_2026-02-18.md # Release notes for the Prisma migration release
 └── README.md
 ```
@@ -101,6 +126,11 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 ### Install Dependencies
 
 ```sh
+# Install all dependencies and set up git hooks (recommended)
+make install
+
+# Or manually:
+npm install          # root (husky hooks)
 cd api && npm install
 cd ../web && npm install
 ```
@@ -142,6 +172,14 @@ make dev
 | `make restore-dev` | Restore development volumes |
 | `make deploy` | Backup, rebuild, and start production (safe redeploy) |
 | `make deploy-dev` | Backup, rebuild, and start development |
+| `make test` | Run API tests locally (`cd api && npm test`) |
+| `make test-web` | Run web tests locally (`cd web && npm test`) |
+| `make test-all` | Run both API and web tests sequentially |
+| `make test-docker` | Run API tests in Docker using `docker-compose.test.yml` |
+| `make test-coverage` | Run API tests with v8 coverage report |
+| `make test-web-coverage` | Run web tests with v8 coverage report |
+| `make install` | Install all dependencies (root + api + web) and set up git hooks |
+| `make ensure-htpasswd` | Validate that `.htpasswd` exists (required for admin panel nginx auth) |
 
 ## API Endpoints
 
@@ -152,8 +190,8 @@ All endpoints are prefixed with `/api/v1/`.
 | GET | `/health` | No | Health check — `{ ok: true }` |
 | GET | `/me` | No | Get current user session |
 | GET | `/events` | No | SSE stream — real-time feed events |
-| POST | `/auth/register/send-code` | No | Step 1: validate inputs, send email verification code (rate limited 20/min) |
-| POST | `/auth/register/verify` | No | Step 2: verify code, create account, auto-login (rate limited 20/min) |
+| POST | `/auth/register/send-code` | No | Step 1: validate inputs, send email verification code (rate limited 20/min). Blocked if `registration_open` setting is `"false"`. |
+| POST | `/auth/register/verify` | No | Step 2: verify code, create account, auto-login (rate limited 20/min). Blocked if `registration_open` setting is `"false"`. |
 | POST | `/auth/login` | No | Login with username or email (rate limited 20/min) |
 | POST | `/auth/logout` | Yes | Logout, destroy session |
 | POST | `/auth/forgot-password/send-code` | No | Send password reset code (rate limited 5/min) |
@@ -178,6 +216,31 @@ All endpoints are prefixed with `/api/v1/`.
 | GET | `/notifications` | Yes | Fetch unread notifications from the past 7 days |
 | PATCH | `/notifications/read-batch` | Yes | Mark a batch of notifications as read (max 50 at once) |
 | PATCH | `/notifications/read-all` | Yes | Mark all unread notifications as read |
+
+## Admin Panel
+
+The app ships an **AdminJS**-powered admin panel at `/admin`, protected by two layers of authentication:
+
+1. **HTTP Basic Auth** (Nginx layer) — requires a `.htpasswd` file mounted into the nginx container. Generate with:
+   ```sh
+   docker run --rm httpd:alpine htpasswd -nbB admin_username YOUR_PASSWORD > .htpasswd
+   ```
+2. **AdminJS login form** — email + bcrypt password hash from env vars (`ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`)
+
+**Admin panel sections:**
+
+| Section | Capabilities |
+|---------|-------------|
+| Пользователи (Users) | View, edit, ban/unban (ban sets `is_deleted=2` on their content); links to user's shouts/comments/media |
+| Вопли (Shouts) | View, soft-delete, restore soft-deleted shouts |
+| Комменты (Comments) | View, soft-delete, restore soft-deleted comments |
+| Медиа (Media) | Read-only view of uploaded media |
+| Объявления (Announcements) | Create announcements (auto-soft-deletes previous), soft-delete existing |
+| Настройки (Settings) | Edit key-value settings (e.g. `registration_open`) |
+
+**Setup** (`api/src/app.js`): AdminJS is initialized on startup (skipped in test mode). If setup fails in dev mode, the server continues without the admin panel. In production, failure is fatal (exits with code 1).
+
+**Registration gating**: The `registration_open` setting (default `"true"`) is checked on both registration endpoints. Set to `"false"` via the admin panel to disable new account creation.
 
 ## API Documentation (Swagger UI)
 
@@ -253,6 +316,8 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `avatar` (String)
 - `email` (String?, UNIQUE)
 - `is_banned` (Int, default 0)
+- `show_nsfw` (Int, default 0) — user preference to show NSFW-tagged shouts
+- `show_politics` (Int, default 0) — user preference to show politics-tagged shouts
 - `created_at` (String, ISO datetime)
 - Relations: `receivedNotifications`, `sentNotifications`
 
@@ -262,7 +327,8 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `parent_id` (String?, FK → shouts, legacy)
 - `content` (String)
 - `media_id` (String?, FK → media)
-- `is_deleted` (Int, default 0, soft-delete)
+- `visibility_tag` (String, default `""`) — content flag: `""`, `"spoiler"`, `"nsfw"`, or `"politics"` (mutually exclusive)
+- `is_deleted` (Int, default 0, soft-delete; `2` = banned-user content)
 - `created_at` (String, ISO datetime)
 - Legacy inline columns: `media_type`, `media_url`, `media_meta` (retained for baseline, to be removed)
 - Indices: `(parent_id, created_at)`, `(created_at)`
@@ -318,6 +384,11 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - Index: `(user_id, is_read, created_at)` for efficient unread fetching
 - Hard-deleted after 14 days by server cleanup task
 
+**Setting** (`settings`)
+- `key` (String, PK) — e.g. `"registration_open"`
+- `value` (String) — e.g. `"true"` or `"false"`
+- Seeded on startup via `server.js`. Editable via admin panel.
+
 Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/app.db`). Sessions stored separately at `/data/sessions.sqlite`.
 
 ## Environment Variables
@@ -331,8 +402,88 @@ Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/
 | `RESEND_API_KEY` | — | Resend SMTP API key for sending emails (falls back to console logging if unset) |
 | `EMAIL_FROM` | — | Sender address for emails (e.g. `"Вопли <noreply@vopley.net>"`) |
 | `ANNOUNCEMENTS_SECRET` | — | Secret key required to post/replace announcements via the API |
+| `ADMIN_EMAIL` | — | Admin panel login email |
+| `ADMIN_PASSWORD_HASH` | — | BCrypt hash of admin password. Generate: `node -e "import('bcryptjs').then(b=>b.default.hash('YOUR_PASSWORD',12).then(console.log))"` |
+| `ADMIN_COOKIE_SECRET` | — | Secret for AdminJS session cookie (min 32 chars). Required in production. |
 
 Environment files: `.env` (production), `.env.dev` (development), `.env.example` (template).
+
+## Testing
+
+The project has a full test suite using **Vitest** for both the backend and frontend.
+
+### Running Tests
+
+```sh
+# API tests (unit + integration)
+make test            # or: cd api && npm test
+
+# Web tests
+make test-web        # or: cd web && npm test
+
+# Both together
+make test-all
+
+# With coverage reports (output to api/coverage/ or web/coverage/)
+make test-coverage
+make test-web-coverage
+
+# In Docker (API only)
+make test-docker
+```
+
+### API Tests (`api/tests/`)
+
+Tests are run sequentially (not in parallel) to avoid SQLite write conflicts.
+
+**Test infrastructure:**
+- `tests/setup.js` — Vitest `globalSetup`: creates a fresh SQLite DB at `tests/test.db`, runs Prisma migrations, writes a temp `.env.test` file, and cleans everything up in teardown.
+- `tests/env.js` — Vitest `setupFiles`: loads `.env.test` into `process.env` for each test worker.
+- `tests/helpers.js` — Shared utilities: `getApp()` (lazy app import), `request()` (supertest), `authenticatedAgent(user)` (supertest agent with session cookie), `cleanDb()` (truncate all tables), `disconnectDb()`.
+- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
+
+**Mocked modules in tests:**
+- `../src/email.js` — `sendVerificationEmail` is a no-op
+- `../src/sse.js` — `broadcast`, `broadcastToUser`, `addClient` are no-ops (prevents heartbeat intervals leaking)
+- `../src/admin.js` — `setupAdmin` is a no-op (prevents AdminJS initialization overhead)
+
+**Coverage config** (`vitest.config.js`):
+- Provider: v8
+- Includes: `src/**/*.js`
+- Excludes: `src/server.js`, `src/swagger.js`
+- Reports: text, HTML, JSON summary → `api/coverage/`
+
+### Web Tests (`web/`)
+
+Uses `jsdom` environment with `@testing-library/react`.
+
+- `web/tests/setup.ts` — Global DOM mocks (`window.matchMedia`, `window.scrollTo`)
+- `web/tests/helpers.tsx` — `renderWithProviders()` helper wraps components with all required context providers
+- `web/hooks/useRoute.test.ts` — Unit tests for hash-based routing hook
+- `web/vitest.config.ts` — Merges Vite config; sets environment to `jsdom`, loads `tests/setup.ts`
+
+**Coverage config** (`web/vitest.config.ts`):
+- Provider: v8
+- Includes: `components/**`, `context/**`, `hooks/**`
+- Reports: text, HTML, JSON summary → `web/coverage/`
+
+### Git Hooks (Husky)
+
+A pre-push hook runs the full test suite before every `git push`:
+
+```sh
+npm test --prefix api || exit 1
+npm test --prefix web || exit 1
+```
+
+Push is aborted if any test fails. Hooks are installed via `make install` (or `npm install` in the repo root, which triggers `husky`).
+
+### CI (GitHub Actions)
+
+`.github/workflows/test.yml` runs on all pull requests targeting `main`:
+1. Installs API and web dependencies
+2. Generates the Prisma client
+3. Runs `npm test` for both API and web
 
 ## Code Conventions
 
@@ -340,11 +491,12 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 
 - ES Modules (`import`/`export`) — `"type": "module"` in package.json
 - `dotenv/config` imported at the top of `server.js` — `.env` file is auto-loaded in dev
+- Express app is defined in `app.js` (exported as default); `server.js` only calls `.listen()` and seeds settings
 - Database access via **Prisma Client** (`prisma.user.findUnique(...)`, `prisma.shout.findMany(...)`, etc.)
 - Input validation with **Zod** schemas (defined in `helpers/validation.js`, used across domain route files)
-- Session-based auth (not JWT) — sessions stored in SQLite via `connect-sqlite3`
+- Session-based auth (not JWT) — sessions stored in SQLite via `connect-sqlite3`; in test mode, in-memory sessions are used
 - Sessions have a 30-day max age with `rolling: true` (extended on every authenticated request)
-- Password hashing with **bcryptjs** (10 rounds)
+- Password hashing with **bcryptjs** (10 rounds; 4 rounds in tests for speed)
 - Email sending via **nodemailer** through Resend SMTP (`smtp.resend.com:465`)
 - Rate limiting: auth endpoints at 20 req/min (forgot-password/send-code at 5/min); upload and shout creation at 100 req/10min per user (falls back to IP)
 - All IDs are UUIDs generated with `crypto.randomUUID()`
@@ -354,7 +506,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Shout/comment character limit: 400 effective chars, where each newline costs 40 chars (`effectiveCharCount` helper)
 - API documentation via **swagger-ui-express** + OpenAPI 3.0.3 spec (`swagger.js`) — dev only, blocked by nginx in production
 - Graceful shutdown: `SIGTERM`/`SIGINT` handlers disconnect Prisma before exiting
-- Request logging: every request is logged as `[API] METHOD /path` to stdout
+- Request logging: every request is logged as `[API] METHOD /path` to stdout (skipped in test mode)
 
 ### Frontend (web/)
 
@@ -363,6 +515,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - React Context for auth state — use `useAuth()` hook from `AuthContext.tsx`
 - React Context for theme — use `useTheme()` hook from `ThemeContext.tsx`; theme stored in `localStorage`
 - React Context for notifications — use `useNotifications()` hook from `NotificationsContext.tsx`
+- React Context for content preferences — use `useContentPreferences()` hook from `ContentPreferencesContext.tsx`
 - Auth flow: 2-step registration (send code → verify), password reset (send code → verify → new password)
 - Hash-based routing via `useRoute.ts` — routes: `#/` (feed), `#/profile/{userId}`, `#/shout/{shoutId}`
 - Styling with **Tailwind CSS** utility classes (loaded via CDN in `index.html`) and CSS custom properties
@@ -375,9 +528,11 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 ## Architecture Notes
 
 - The backend is a stateless Express server (sessions persisted in SQLite, so restarts don't log users out).
+- The Express app is defined in `app.js` and imported by both `server.js` (production) and the test suite. This separation allows integration tests to import the app without starting an HTTP server or loading dotenv.
 - The frontend is a single-page application using hash-based routing — no server-side route handling needed.
 - Comments are stored in a separate `comments` table (not as shouts) — single level of threading, no deep nesting.
-- Shout and comment deletion is a soft-delete: the `is_deleted` flag is set but the row is retained.
+- Shout and comment deletion is a soft-delete: the `is_deleted` flag is set but the row is retained. `is_deleted=2` marks content from banned users.
+- Shouts carry a `visibility_tag` field (`""`, `"spoiler"`, `"nsfw"`, `"politics"`) that the frontend can use to filter or blur content based on user preferences (`show_nsfw`, `show_politics` on the User model; `showMedia` is client-side only in `ContentPreferencesContext`).
 - @mentions are supported in shouts and comments. The composer (`MentionInput.tsx`) is a `contenteditable` div. Typing `@` opens a dropdown of up to 5 matching users (filtered client-side from a module-level cached list). Selected mentions are serialized as `@[username:userId]` tokens in the stored content string. `renderContent` in `ShoutCard.tsx` parses these tokens and renders them as `#/profile/:id` links. Character counting normalizes `@[name:id]` back to `@name` before applying the 400-char limit. The user list is fetched lazily (only on first `@` trigger) via `GET /users/mentions` and cached for the browser session.
 - Mentions automatically trigger `mention` notifications to the mentioned users. Comments also trigger a `reply` notification to the shout author (unless they are the commenter, or already received a mention notification for that comment). Both are handled in `routes/shouts.js` and `routes/comments.js` using `helpers/mentions.js`.
 - Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
@@ -387,7 +542,7 @@ Environment files: `.env` (production), `.env.dev` (development), `.env.example`
 - Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling.
 - The media nginx container serves files from the `/media` volume with a strict allowlist: `.webp`, `.jpg`, `.jpeg`, `.png`, `.gif` extensions only; no dotfiles or directory listing; immutable 1-year cache headers.
 - Popular sort: shouts from the last 7 days, ordered by like count.
-- Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation. Codes expire in 10 minutes, max 5 attempts.
+- Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation. Codes expire in 10 minutes, max 5 attempts. Registration can be disabled by setting `registration_open=false` in the Settings table via the admin panel.
 - Password reset follows the same email verification pattern.
 - Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
 - The `web/package.json` dev script runs both the API and Vite concurrently for local development.
@@ -416,25 +571,29 @@ Backups keep the last 3 snapshots per type (configurable via `KEEP` variable in 
 
 ## Docker Services
 
-Two docker-compose files: `docker-compose.yml` (production, port 3005) and `docker-compose.dev.yml` (development, port 3006).
+Three docker-compose files:
+- `docker-compose.yml` — production (port 3005)
+- `docker-compose.dev.yml` — development (port 3006, isolated volumes)
+- `docker-compose.test.yml` — test runner (single service, tmpfs DB)
 
-Each defines four services:
+Production and development each define four services:
 
 | Service | Description |
 |---------|-------------|
 | `api` / `api-dev` | Express backend (internal port 3000). Runs `prisma migrate deploy` on startup via `scripts/start.sh`. Dev container mounts `./api/src` as read-only for hot-reload without rebuild. |
 | `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images and GIFs only) |
-| `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, SPA fallback. Production blocks `/api/docs` (Swagger UI). SSE endpoint has buffering disabled and 24h timeout. |
+| `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, `/admin` to api with HTTP basic auth, SPA fallback. Production blocks `/api/docs` (Swagger UI). SSE endpoint has buffering disabled and 24h timeout. |
 | `web-build` / `web-build-dev` | One-shot container that builds the React app and populates the `webdist` shared volume |
 
 Production volumes: `appdata`, `webdist`, `media`. Development volumes: `appdata-dev`, `webdist-dev`, `media-dev` (fully isolated).
 
+The test service (`api-test`) uses the `test` Dockerfile target, runs with `tmpfs` for `/tmp` and `/data`, and exits with the vitest coverage exit code.
+
 ## Current Gaps
 
-- No automated tests (no test framework configured)
 - No linting or formatting tools (no ESLint/Prettier)
-- No CI/CD pipeline
 - No error boundary components in the React frontend
 - Tailwind is loaded via CDN rather than built into the bundle
 - Legacy inline media columns on `shouts` table to be removed in a follow-up migration
 - Notification `type` field in schema has a comment noting planned future types (`shout_like`, `comment_like`) not yet implemented
+- Web test coverage is minimal (only `useRoute` hook tested so far)
