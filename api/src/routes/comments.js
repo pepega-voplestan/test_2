@@ -25,7 +25,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   const shoutId = req.params.id;
   const parent = await prisma.shout.findFirst({
     where: { id: shoutId },
-    select: { id: true, user_id: true, is_deleted: true },
+    select: { id: true, user_id: true, is_deleted: true, visibility_tag: true },
   });
   if (!parent)
     return res.status(404).json({ error: "Запись не найдена" });
@@ -131,7 +131,8 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     : rawMentionedIds;
   const now = toSqliteDatetime();
   const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
-  const snippet = buildSnippet(content);
+  const parentSpoiler = !!parent.visibility_tag;
+  const snippet = buildSnippet(content, { spoiler: parentSpoiler });
 
   if (mentionedIds.length > 0) {
     const notificationRows = mentionedIds.map(uid => ({
