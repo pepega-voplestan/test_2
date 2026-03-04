@@ -51,9 +51,14 @@ export function buildSnippet(content, options = {}) {
   const { spoiler = false, maxLen = 60 } = options;
 
   if (!content) return "";
-  if (spoiler || hasInlineSpoiler(content)) return "СПОЙЛЕР";
+  if (spoiler) return "СПОЙЛЕР";
 
-  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1").replace(/\|\|/g, "");
+  // Replace inline spoiler ||text|| with asterisks matching the hidden text length
+  const withMaskedSpoilers = content.replace(/\|\|(.+?)\|\|/gs, (_, inner) =>
+    "*".repeat(inner.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1").length)
+  );
+
+  const stripped = withMaskedSpoilers.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1");
   const clean = stripped.replace(/\s+/g, " ").trim();
   return clean.length > maxLen ? clean.slice(0, maxLen) + "…" : clean;
 }
