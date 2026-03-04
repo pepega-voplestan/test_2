@@ -131,8 +131,9 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     : rawMentionedIds;
   const now = toSqliteDatetime();
   const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
-  const parentSpoiler = !!parent.visibility_tag;
-  const snippet = buildSnippet(content, { spoiler: parentSpoiler });
+  // Only spoiler the snippet if the comment's own content has inline spoilers;
+  // the parent shout's visibility_tag does NOT spoiler comment notifications
+  const snippet = buildSnippet(content);
 
   if (mentionedIds.length > 0) {
     const notificationRows = mentionedIds.map(uid => ({
