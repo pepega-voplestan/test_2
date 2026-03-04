@@ -578,6 +578,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const isSpoilerHidden = tag === 'spoiler' && !spoilerRevealed;
   const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed && !prefs.showNsfw;
   const isPoliticsHidden = tag === 'politics' && !politicsRevealed && !prefs.showPolitics;
+  const isMediaOnlyHidden = isSpoilerHidden || isNsfwHidden;
 
   useEffect(() => {
     if (replyMediaId) { setReplyDetectedYtId(null); return; }
@@ -720,12 +721,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const embeds = shout.content ? extractEmbeds(shout.content) : [];
 
-  // Whether the entire shout body is hidden (spoiler or politics)
-  const fullHide = isSpoilerHidden || isPoliticsHidden;
+  // Whether the entire shout body is hidden (politics only; spoiler now only hides media)
+  const fullHide = isPoliticsHidden;
 
   // For GIFs: use static WebP thumbnail when media should not play (behind any hide)
   const gifSrc = (shout.media?.type === 'image' && shout.media.animated && shout.media.gif)
-    ? (fullHide || isNsfwHidden ? shout.media.url : shout.media.gif)
+    ? (fullHide || isMediaOnlyHidden ? shout.media.url : shout.media.gif)
     : (shout.media?.type === 'image' ? shout.media.url : undefined);
 
   // Render media section (reused in normal and NSFW-only blur mode)
@@ -852,7 +853,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               </div>
 
               {fullHide ? (
-                /* --- Spoiler / Politics: blurred content overlay matching real body size --- */
+                /* --- Politics: blurred content overlay matching real body size --- */
                 <div className="relative rounded-lg overflow-hidden">
                   <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
                     {shout.content && (
@@ -864,12 +865,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                   </div>
                   <div className="absolute inset-0 bg-th-inset/40 flex items-center justify-center rounded-lg">
                     <button
-                      onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setPoliticsRevealed(true)}
+                      onClick={() => setPoliticsRevealed(true)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-2"
                     >
-                      <span className="font-bold">
-                        {isSpoilerHidden ? 'СПОЙЛЕР' : 'ПОЛИТИКА'}
-                      </span>
+                      <span className="font-bold">ПОЛИТИКА</span>
                       <span>·</span>
                       <span className="font-bold">ПОКАЗАТЬ</span>
                     </button>
@@ -884,18 +883,18 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                     </div>
                   )}
 
-                  {isNsfwHidden && shout.media ? (
-                    /* --- NSFW: only blur media within its own bounds --- */
+                  {isMediaOnlyHidden && shout.media ? (
+                    /* --- NSFW / Spoiler: only blur media within its own bounds --- */
                     <div className="relative rounded-lg overflow-hidden mb-3 inline-block max-w-full">
                       <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
                         {renderMediaSection()}
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <button
-                          onClick={() => setNsfwRevealed(true)}
+                          onClick={() => isSpoilerHidden ? setSpoilerRevealed(true) : setNsfwRevealed(true)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card/90 border border-th-border shadow-sm hover:bg-th-elevated transition-colors backdrop-blur-sm text-xs text-th-text-2"
                         >
-                          <span className="font-bold">NSFW</span>
+                          <span className="font-bold">{isSpoilerHidden ? 'СПОЙЛЕР' : 'NSFW'}</span>
                           <span>·</span>
                           <span className="font-bold">ПОКАЗАТЬ</span>
                         </button>

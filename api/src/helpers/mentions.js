@@ -23,15 +23,36 @@ export function extractMentionedUserIds(content, actorId = null) {
 }
 
 /**
+ * Check whether content contains inline spoiler markers (||text||).
+ * @param {string} content
+ * @returns {boolean}
+ */
+export function hasInlineSpoiler(content) {
+  if (!content) return false;
+  // Match at least one pair of || ... || with content between them
+  return /\|\|.+?\|\|/s.test(content);
+}
+
+/**
  * Build a short text snippet from shout/comment content for notification previews.
  * Strips @[name:id] mention tokens to @name, collapses whitespace, and truncates.
  *
+ * If `spoiler` is true the entire snippet is replaced with a generic "СПОЙЛЕР"
+ * placeholder — this covers visibility tags (spoiler/nsfw/politics) and inline
+ * spoiler markers so that hidden content is never leaked through notifications.
+ *
  * @param {string} content
- * @param {number} maxLen
+ * @param {{ spoiler?: boolean, maxLen?: number }} options
  * @returns {string}
  */
-export function buildSnippet(content, maxLen = 60) {
+export function buildSnippet(content, options = {}) {
+  // Support legacy positional call: buildSnippet(content, 60)
+  if (typeof options === "number") options = { maxLen: options };
+  const { spoiler = false, maxLen = 60 } = options;
+
   if (!content) return "";
+  if (spoiler || hasInlineSpoiler(content)) return "СПОЙЛЕР";
+
   const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1").replace(/\|\|/g, "");
   const clean = stripped.replace(/\s+/g, " ").trim();
   return clean.length > maxLen ? clean.slice(0, maxLen) + "…" : clean;
