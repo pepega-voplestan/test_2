@@ -276,13 +276,27 @@ describe("Shouts routes", () => {
     it("sets visibilityTag on the shout", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       const agent = await authenticatedAgent(user);
+      const media = await createMedia({ userId: user.id });
+
+      const res = await agent.post("/api/v1/shouts").send({
+        content: "Spoiler content",
+        visibilityTag: "spoiler",
+        mediaId: media.id,
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.shout.visibilityTag).toBe("spoiler");
+    });
+
+    it("strips spoiler tag when no media is attached", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
 
       const res = await agent.post("/api/v1/shouts").send({
         content: "Spoiler content",
         visibilityTag: "spoiler",
       });
       expect(res.status).toBe(200);
-      expect(res.body.shout.visibilityTag).toBe("spoiler");
+      expect(res.body.shout.visibilityTag).toBe("");
     });
 
     it("creates a mention notification for @mentioned users", async () => {
