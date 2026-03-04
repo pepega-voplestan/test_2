@@ -37,12 +37,13 @@ export function hasInlineSpoiler(content) {
  * Build a short text snippet from shout/comment content for notification previews.
  * Strips @[name:id] mention tokens to @name, collapses whitespace, and truncates.
  *
- * If `spoiler` is true the entire snippet is replaced with a generic "СПОЙЛЕР"
- * placeholder — this covers visibility tags (spoiler/nsfw/politics) and inline
- * spoiler markers so that hidden content is never leaked through notifications.
+ * If `spoiler` is `"politics"` or `true`, the entire snippet is replaced with
+ * "СПОЙЛЕР" (these tags hide all content). For `"nsfw"` / `"spoiler"` tags the
+ * text is visible so the snippet is built normally. Inline `||spoiler||` markers
+ * are always replaced with asterisks of matching length.
  *
  * @param {string} content
- * @param {{ spoiler?: boolean, maxLen?: number }} options
+ * @param {{ spoiler?: string|boolean, maxLen?: number }} options
  * @returns {string}
  */
 export function buildSnippet(content, options = {}) {
@@ -51,7 +52,7 @@ export function buildSnippet(content, options = {}) {
   const { spoiler = false, maxLen = 60 } = options;
 
   if (!content) return "";
-  if (spoiler) return "СПОЙЛЕР";
+  if (spoiler === "politics" || spoiler === true) return "СПОЙЛЕР";
 
   // Replace inline spoiler ||text|| with asterisks matching the hidden text length
   const withMaskedSpoilers = content.replace(/\|\|(.+?)\|\|/gs, (_, inner) =>
