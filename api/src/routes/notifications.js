@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
-import { buildSnippet } from "../helpers/mentions.js";
+import { buildSnippet, hasInlineSpoiler } from "../helpers/mentions.js";
 
 const router = Router();
 
@@ -19,7 +19,7 @@ router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
     },
     include: {
       actor: { select: { username: true, avatar: true } },
-      shout: { select: { content: true } },
+      shout: { select: { content: true, visibility_tag: true } },
       comment: { select: { content: true } },
     },
     orderBy: { created_at: "desc" },
@@ -33,7 +33,7 @@ router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
     commentId: n.comment_id,
     isRead: !!n.is_read,
     timestamp: utcTimestamp(n.created_at),
-    snippet: buildSnippet(n.comment?.content ?? n.shout?.content ?? ""),
+    snippet: buildSnippet(n.comment?.content ?? n.shout?.content ?? "", { spoiler: !!n.shout?.visibility_tag }),
   }));
 
   console.log(`[Notifications] ${userId} fetched ${notifications.length} unread`);
