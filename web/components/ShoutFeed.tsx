@@ -298,13 +298,13 @@ const ShoutFeed: React.FC = () => {
     <div className="w-full">
       <div className="flex items-center justify-end mb-6">
         <div className="flex items-center gap-4">
-          <div className="flex items-end gap-2">
+          <div className="flex items-center gap-2">
             {activeTab === 'popular' && (
-              <div className="flex bg-th-card rounded p-0.5 mb-0.5">
+              <div className="flex bg-th-card rounded p-1">
                 <button
                   onClick={() => handlePopularSortChange('likes')}
-                  className={`p-1.5 rounded transition-all ${
-                    popularSort === 'likes' ? 'bg-th-elevated text-th-text' : 'text-th-text-4 hover:text-th-text-2'
+                  className={`w-[26px] h-[26px] flex items-center justify-center rounded transition-all ${
+                    popularSort === 'likes' ? 'bg-th-elevated text-th-text shadow-sm' : 'text-th-text-4 hover:text-th-text-2'
                   }`}
                   title="По лайкам"
                 >
@@ -312,8 +312,8 @@ const ShoutFeed: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handlePopularSortChange('comments')}
-                  className={`p-1.5 rounded transition-all ${
-                    popularSort === 'comments' ? 'bg-th-elevated text-th-text' : 'text-th-text-4 hover:text-th-text-2'
+                  className={`w-[26px] h-[26px] flex items-center justify-center rounded transition-all ${
+                    popularSort === 'comments' ? 'bg-th-elevated text-th-text shadow-sm' : 'text-th-text-4 hover:text-th-text-2'
                   }`}
                   title="По комментариям"
                 >
