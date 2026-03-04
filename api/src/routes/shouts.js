@@ -227,7 +227,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     }));
     await prisma.notification.createMany({ data: notificationRows });
     const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
-    const snippet = buildSnippet(content, { spoiler: !!effectiveTag });
+    const snippet = buildSnippet(content, { spoiler: effectiveTag || false });
     for (const n of notificationRows) {
       broadcastToUser(n.user_id, "notification", {
         id: n.id,
