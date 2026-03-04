@@ -25,7 +25,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   const shoutId = req.params.id;
   const parent = await prisma.shout.findFirst({
     where: { id: shoutId },
-    select: { id: true, user_id: true, is_deleted: true },
+    select: { id: true, user_id: true, is_deleted: true, visibility_tag: true },
   });
   if (!parent)
     return res.status(404).json({ error: "Запись не найдена" });
@@ -131,6 +131,8 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     : rawMentionedIds;
   const now = toSqliteDatetime();
   const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
+  // Only spoiler the snippet if the comment's own content has inline spoilers;
+  // the parent shout's visibility_tag does NOT spoiler comment notifications
   const snippet = buildSnippet(content);
 
   if (mentionedIds.length > 0) {

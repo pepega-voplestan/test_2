@@ -20,8 +20,12 @@ router.get("/shouts", asyncHandler(async (req, res) => {
   let topRaw;
   if (sortBy === "popular") {
     const offset = parseInt(req.query.offset, 10) || 0;
-    console.log(`[Shouts] Fetching popular shouts: limit=${limit}, offset=${offset}, user=${currentUserId || "anon"}`);
+    const popularSort = req.query.popularSort || "likes"; // "likes" | "comments"
+    console.log(`[Shouts] Fetching popular shouts: limit=${limit}, offset=${offset}, sort=${popularSort}, user=${currentUserId || "anon"}`);
     const sevenDaysAgo = toSqliteDatetime(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+    const orderBy = popularSort === "comments"
+      ? [{ comments: { _count: "desc" } }, { created_at: "desc" }]
+      : [{ likes: { _count: "desc" } }, { created_at: "desc" }];
     topRaw = await prisma.shout.findMany({
       where: {
         parent_id: null,
@@ -32,10 +36,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
         user: { select: { username: true, avatar: true, is_banned: true } },
         media: true,
       },
-      orderBy: [
-        { comments: { _count: "desc" } },
-        { created_at: "desc" },
-      ],
+      orderBy,
       take: limit + 1,
       skip: offset,
     });
@@ -172,8 +173,8 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     }
   }
 
-  // NSFW only applies when media is present (it blurs the media)
-  const effectiveTag = (visibilityTag === "nsfw" && !finalMediaId) ? "" : visibilityTag;
+  // NSFW and spoiler only apply when media is present (they blur the media)
+  const effectiveTag = ((visibilityTag === "nsfw" || visibilityTag === "spoiler") && !finalMediaId) ? "" : visibilityTag;
 
   const id = crypto.randomUUID();
   const shout = await prisma.shout.create({
@@ -226,7 +227,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     }));
     await prisma.notification.createMany({ data: notificationRows });
     const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
-    const snippet = buildSnippet(content);
+    const snippet = buildSnippet(content, { spoiler: effectiveTag || false });
     for (const n of notificationRows) {
       broadcastToUser(n.user_id, "notification", {
         id: n.id,

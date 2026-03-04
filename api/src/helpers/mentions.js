@@ -23,16 +23,43 @@ export function extractMentionedUserIds(content, actorId = null) {
 }
 
 /**
+ * Check whether content contains inline spoiler markers (||text||).
+ * @param {string} content
+ * @returns {boolean}
+ */
+export function hasInlineSpoiler(content) {
+  if (!content) return false;
+  // Match at least one pair of || ... || with content between them
+  return /\|\|.+?\|\|/s.test(content);
+}
+
+/**
  * Build a short text snippet from shout/comment content for notification previews.
  * Strips @[name:id] mention tokens to @name, collapses whitespace, and truncates.
  *
+ * If `spoiler` is `"politics"` or `true`, the entire snippet is replaced with
+ * "ПОЛИТИКА" (these tags hide all content). For `"nsfw"` / `"spoiler"` tags the
+ * text is visible so the snippet is built normally. Inline `||spoiler||` markers
+ * are always replaced with asterisks of matching length.
+ *
  * @param {string} content
- * @param {number} maxLen
+ * @param {{ spoiler?: string|boolean, maxLen?: number }} options
  * @returns {string}
  */
-export function buildSnippet(content, maxLen = 60) {
+export function buildSnippet(content, options = {}) {
+  // Support legacy positional call: buildSnippet(content, 60)
+  if (typeof options === "number") options = { maxLen: options };
+  const { spoiler = false, maxLen = 60 } = options;
+
   if (!content) return "";
-  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1").replace(/\|\|/g, "");
+  if (spoiler === "politics" || spoiler === true) return "ПОЛИТИКА";
+
+  // Replace inline spoiler ||text|| with asterisks matching the hidden text length
+  const withMaskedSpoilers = content.replace(/\|\|(.+?)\|\|/gs, (_, inner) =>
+    "*".repeat(inner.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1").length)
+  );
+
+  const stripped = withMaskedSpoilers.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1");
   const clean = stripped.replace(/\s+/g, " ").trim();
   return clean.length > maxLen ? clean.slice(0, maxLen) + "…" : clean;
 }

@@ -184,8 +184,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     setMediaId(null);
     setMediaPreview(null);
     setError(null);
-    // NSFW only makes sense with media — clear it
-    if (activeTag === 'nsfw') setActiveTag(null);
+    // NSFW and СПОЙЛЕР only make sense with media — clear them
+    if (activeTag === 'nsfw' || activeTag === 'spoiler') setActiveTag(null);
   };
 
   const submitShout = async () => {
@@ -323,10 +323,11 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                                   <div className="px-3 py-2 text-[10px] font-bold text-th-text-4 uppercase tracking-wider border-b border-th-border-2">Тег контента</div>
                                   <button
                                     type="button"
-                                    onClick={() => selectTag('spoiler')}
-                                    className={`flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors ${isSpoiler ? 'bg-amber-500/10' : 'hover:bg-th-elevated/50'}`}
+                                    onClick={() => hasMedia && selectTag('spoiler')}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors ${!hasMedia ? 'opacity-30 cursor-not-allowed' : isSpoiler ? 'bg-amber-500/10' : 'hover:bg-th-elevated/50'}`}
                                   >
                                     <span className={`text-xs font-bold ${isSpoiler ? 'text-amber-400' : 'text-th-text-3'}`}>СПОЙЛЕР</span>
+                                    <span className="text-[10px] text-th-text-4">{hasMedia ? '' : 'нужно медиа'}</span>
                                     {isSpoiler && <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-amber-400 ml-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
                                   </button>
                                   <button

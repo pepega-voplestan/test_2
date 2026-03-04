@@ -8,6 +8,8 @@ interface LightboxProps {
 
 const DISMISS_THRESHOLD = 120; // px of drag needed to dismiss
 const VELOCITY_THRESHOLD = 0.5; // px/ms — fast flick dismisses even if threshold not met
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 5;
 
 const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -16,8 +18,24 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
   // Drag state kept in refs for perf (no re-renders during drag)
   const dragging = useRef(false);
   const startY = useRef(0);
+  const startX = useRef(0);
   const startTime = useRef(0);
   const currentY = useRef(0);
+
+  // Zoom state
+  const zoomLevel = useRef(1);
+  const panX = useRef(0);
+  const panY = useRef(0);
+  // Pan while zoomed
+  const panStartX = useRef(0);
+  const panStartY = useRef(0);
+  const panBaseX = useRef(0);
+  const panBaseY = useRef(0);
+
+  // Pinch-to-zoom state (touch)
+  const pinching = useRef(false);
+  const initialPinchDist = useRef(0);
+  const initialPinchZoom = useRef(1);
 
   // Scroll lock
   useEffect(() => {
@@ -44,6 +62,16 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  const applyZoomTransform = useCallback((animate = false) => {
+    const img = imgRef.current;
+    if (!img) return;
+    const z = zoomLevel.current;
+    const px = panX.current;
+    const py = panY.current;
+    img.style.transition = animate ? 'transform 0.3s cubic-bezier(.2,.8,.3,1)' : 'none';
+    img.style.transform = `translate(${px}px, ${py}px) scale(${z})`;
+  }, []);
 
   const applyTransform = useCallback((dy: number, animate = false) => {
     const img = imgRef.current;
@@ -78,6 +106,20 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
     applyTransform(0, true);
   }, [applyTransform]);
 
+  const resetZoom = useCallback((animate = true) => {
+    zoomLevel.current = 1;
+    panX.current = 0;
+    panY.current = 0;
+    applyZoomTransform(animate);
+    if (animate) {
+      const overlay = overlayRef.current;
+      if (overlay) {
+        overlay.style.transition = 'background 0.3s ease';
+        overlay.style.background = 'rgba(0,0,0,0.8)';
+      }
+    }
+  }, [applyZoomTransform]);
+
   // Block the ghost click that fires after pointerUp when the overlay unmounts
   const blockNextClick = useCallback(() => {
     const blocker = (e: Event) => {
@@ -90,27 +132,146 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
     setTimeout(() => document.removeEventListener('click', blocker, true), 400);
   }, []);
 
+  // Mouse wheel zoom (desktop)
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = -e.deltaY * 0.002;
+      const oldZoom = zoomLevel.current;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom + delta * oldZoom));
+      zoomLevel.current = newZoom;
+
+      if (newZoom <= 1) {
+        panX.current = 0;
+        panY.current = 0;
+      } else {
+        // Scale pan proportionally
+        const ratio = newZoom / oldZoom;
+        panX.current *= ratio;
+        panY.current *= ratio;
+      }
+      applyZoomTransform();
+    };
+
+    overlay.addEventListener('wheel', onWheel, { passive: false });
+    return () => overlay.removeEventListener('wheel', onWheel);
+  }, [applyZoomTransform]);
+
+  // Touch handlers for pinch-to-zoom
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    function getTouchDist(e: TouchEvent): number {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        pinching.current = true;
+        dragging.current = false; // cancel any single-finger drag
+        initialPinchDist.current = getTouchDist(e);
+        initialPinchZoom.current = zoomLevel.current;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinching.current) {
+        e.preventDefault();
+        const dist = getTouchDist(e);
+        const scale = dist / initialPinchDist.current;
+        zoomLevel.current = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialPinchZoom.current * scale));
+
+        if (zoomLevel.current <= 1) {
+          panX.current = 0;
+          panY.current = 0;
+        }
+
+        applyZoomTransform();
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (pinching.current && e.touches.length < 2) {
+        pinching.current = false;
+        if (zoomLevel.current <= 1) {
+          resetZoom(true);
+        }
+      }
+    };
+
+    overlay.addEventListener('touchstart', onTouchStart, { passive: false });
+    overlay.addEventListener('touchmove', onTouchMove, { passive: false });
+    overlay.addEventListener('touchend', onTouchEnd);
+    overlay.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      overlay.removeEventListener('touchstart', onTouchStart);
+      overlay.removeEventListener('touchmove', onTouchMove);
+      overlay.removeEventListener('touchend', onTouchEnd);
+      overlay.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [applyZoomTransform, resetZoom]);
+
   // --- Pointer handlers (work for both mouse and touch) ---
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    e.preventDefault(); // prevent browser from synthesizing click from touch
+    if (pinching.current) return;
+    e.preventDefault();
+
+    const isZoomed = zoomLevel.current > 1;
+
     dragging.current = true;
     startY.current = e.clientY;
+    startX.current = e.clientX;
     startTime.current = Date.now();
     currentY.current = 0;
+
+    if (isZoomed) {
+      panStartX.current = e.clientX;
+      panStartY.current = e.clientY;
+      panBaseX.current = panX.current;
+      panBaseY.current = panY.current;
+    }
+
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, []);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    const dy = e.clientY - startY.current;
-    currentY.current = dy;
-    applyTransform(dy);
-  }, [applyTransform]);
+    if (!dragging.current || pinching.current) return;
+
+    const isZoomed = zoomLevel.current > 1;
+
+    if (isZoomed) {
+      // Pan when zoomed in
+      const dx = e.clientX - panStartX.current;
+      const dy = e.clientY - panStartY.current;
+      panX.current = panBaseX.current + dx;
+      panY.current = panBaseY.current + dy;
+      applyZoomTransform();
+    } else {
+      // Normal drag-to-dismiss
+      const dy = e.clientY - startY.current;
+      currentY.current = dy;
+      applyTransform(dy);
+    }
+  }, [applyTransform, applyZoomTransform]);
 
   const onPointerUp = useCallback(() => {
     if (!dragging.current) return;
     dragging.current = false;
+
+    const isZoomed = zoomLevel.current > 1;
+
+    if (isZoomed) {
+      // Just stop panning; no dismiss logic while zoomed
+      return;
+    }
+
     const dy = currentY.current;
     const elapsed = Date.now() - startTime.current;
     const velocity = Math.abs(dy) / Math.max(elapsed, 1);
@@ -126,12 +287,33 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
     }
   }, [dismiss, snapBack, onClose, blockNextClick]);
 
+  // Double-click/double-tap to toggle zoom
+  const lastTapTime = useRef(0);
+  const handleDoubleAction = useCallback((e: React.MouseEvent | React.PointerEvent) => {
+    const now = Date.now();
+    if (now - lastTapTime.current < 300) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (zoomLevel.current > 1) {
+        resetZoom(true);
+      } else {
+        zoomLevel.current = 2.5;
+        panX.current = 0;
+        panY.current = 0;
+        applyZoomTransform(true);
+      }
+      lastTapTime.current = 0;
+    } else {
+      lastTapTime.current = now;
+    }
+  }, [resetZoom, applyZoomTransform]);
+
   return (
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm cursor-pointer select-none"
       style={{ background: 'rgba(0,0,0,0.8)', touchAction: 'none' }}
-      onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+      onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDoubleAction(e); }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
