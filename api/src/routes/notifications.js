@@ -35,7 +35,7 @@ router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
     timestamp: utcTimestamp(n.created_at),
     snippet: n.comment
       ? buildSnippet(n.comment.content)
-      : buildSnippet(n.shout?.content ?? "", { spoiler: !!n.shout?.visibility_tag }),
+      : buildSnippet(n.shout?.content ?? "", { spoiler: n.shout?.visibility_tag || false }),
   }));
 
   console.log(`[Notifications] ${userId} fetched ${notifications.length} unread`);
