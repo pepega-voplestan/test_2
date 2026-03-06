@@ -29,6 +29,12 @@ jobs:
       - name: Install web dependencies
         run: npm ci --prefix web
 
+      - name: Lint API
+        run: npm run lint --prefix api
+
+      - name: Lint web
+        run: npm run lint --prefix web
+
       - name: Run API tests
         run: npm test --prefix api
 
