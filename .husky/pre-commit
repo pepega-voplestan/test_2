@@ -1,0 +1,2 @@
+npm run lint --prefix api || exit 1
+npm run lint --prefix web || exit 1
