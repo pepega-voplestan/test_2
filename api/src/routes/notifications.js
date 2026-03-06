@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
-import { buildSnippet, hasInlineSpoiler } from "../helpers/mentions.js";
+import { buildSnippet } from "../helpers/mentions.js";
 
 const router = Router();
 
