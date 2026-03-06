@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "../db.js";
 import { hashPassword, verifyPassword } from "../auth.js";
 import { sendVerificationEmail } from "../email.js";
-import { asyncHandler, utcTimestamp, toSqliteDatetime, avatarFor } from "../helpers/common.js";
+import { asyncHandler, toSqliteDatetime, avatarFor } from "../helpers/common.js";
 import {
   sendCodeSchema, verifyCodeSchema, loginSchema,
   forgotPasswordSchema, resetPasswordSchema,
