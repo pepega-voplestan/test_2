@@ -100,7 +100,7 @@ export async function setupAdmin() {
                 }
                 return request;
               },
-              after: async (response, request, context) => {
+              after: async (response, request, _context) => {
                 if (request.method !== "post") return response;
 
                 const record = response.record;

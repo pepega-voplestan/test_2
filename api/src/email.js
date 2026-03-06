@@ -83,6 +83,6 @@ export async function sendVerificationEmail(to, code, purpose) {
     console.log(`[Email] Sent ${purpose} code to ${to}, messageId=${info.messageId}`);
   } catch (err) {
     console.error(`[Email] Failed to send to ${to}:`, err.message);
-    throw new Error("Не удалось отправить письмо. Попробуйте позже.");
+    throw new Error("Не удалось отправить письмо. Попробуйте позже.", { cause: err });
   }
 }
