@@ -51,6 +51,7 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   └── integration/    # Integration tests (health, auth, shouts, comments, likes, announcements,
 │   │                       #   notifications, feed, upload, users, index)
 │   ├── vitest.config.js    # Vitest config: node env, globalSetup, sequential files, coverage
+│   ├── eslint.config.js    # ESLint flat config: @eslint/js recommended, Node globals, allows console, _-prefix unused vars
 │   ├── package.json
 │   ├── Dockerfile          # Alpine Node 20, installs vips-dev + openssl; includes test build target
 │   └── .dockerignore
@@ -58,8 +59,8 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   ├── components/
 │   │   ├── Header.tsx        # App header with auth, navigation, theme toggle, notification dropdown
 │   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step with email verification)
-│   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates
-│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit
+│   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates; popular tab has dual sort buttons (likes/comments)
+│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit; spoiler/nsfw tags require media
 │   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete
 │   │   ├── ShoutPage.tsx     # Single shout detail view (route: #/shout/:id)
 │   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
@@ -67,20 +68,28 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
 │   │   ├── EmojiPicker.tsx   # Emoji picker with grouped categories
-│   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss and scroll lock
+│   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss, pinch/scroll-to-zoom, pan when zoomed, scroll lock
 │   ├── context/
 │   │   ├── AuthContext.tsx               # Auth state via React Context + API helper
+│   │   ├── AuthContext.test.tsx          # Tests: login/logout, registration, password reset, modal state
 │   │   ├── ThemeContext.tsx              # Dark/light theme toggle with localStorage persistence
+│   │   ├── ThemeContext.test.tsx         # Tests: theme toggling and localStorage persistence
 │   │   ├── NotificationsContext.tsx      # Notification state, batched read marking, SSE subscription
-│   │   └── ContentPreferencesContext.tsx # Content visibility prefs (showMedia, showNsfw, showPolitics)
+│   │   ├── NotificationsContext.test.tsx # Tests: SSE events, batching, mark-as-read, cleanup
+│   │   ├── ContentPreferencesContext.tsx # Content visibility prefs (showMedia, showNsfw, showPolitics)
+│   │   └── ContentPreferencesContext.test.tsx # Tests: preference toggles
 │   ├── hooks/
-│   │   ├── useRoute.ts       # Hash-based client-side routing
-│   │   ├── useRoute.test.ts  # Unit tests for useRoute hook
-│   │   ├── useSSE.ts         # SSE client hook with auto-reconnect + exponential backoff
-│   │   └── useMentionUsers.ts # Module-level singleton cache for mention user list (lazy-loaded on first @)
+│   │   ├── useRoute.ts           # Hash-based client-side routing
+│   │   ├── useRoute.test.ts      # Unit tests for hash-based routing hook
+│   │   ├── useSSE.ts             # SSE client hook with auto-reconnect + exponential backoff
+│   │   ├── useSSE.test.ts        # Tests: reconnect logic, backoff (1s → 30s cap)
+│   │   ├── useMentionUsers.ts    # Module-level singleton cache for mention user list (lazy-loaded on first @)
+│   │   └── useMentionUsers.test.ts # Tests: lazy loading and module-level caching
 │   ├── tests/
 │   │   ├── setup.ts          # Vitest/DOM setup (mocks: matchMedia, scrollTo)
-│   │   └── helpers.tsx       # renderWithProviders helper for tests needing context providers
+│   │   ├── helpers.tsx       # renderWithProviders helper for tests needing context providers
+│   │   └── unit/
+│   │       └── effectiveLength.test.ts # Tests: char counting, mention normalization, spoiler stripping, newline cost
 │   ├── public/
 │   │   └── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
 │   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider + NotificationsProvider
@@ -89,7 +98,8 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   ├── index.html            # HTML template (Tailwind CDN, CSS custom properties for theming)
 │   ├── tsconfig.json
 │   ├── vite.config.ts        # Dev proxy: /api and /media → localhost:3000
-│   ├── vitest.config.ts      # Vitest config: merges vite config, jsdom env, @testing-library setup
+│   ├── vitest.config.ts      # Vitest config: merges vite config, jsdom env, @testing-library setup; 10s test/15s hook timeout
+│   ├── eslint.config.js      # ESLint flat config: TS ESLint recommended, react-hooks rules, _-prefix unused vars
 │   ├── package.json
 │   ├── Dockerfile
 │   └── .dockerignore
@@ -98,8 +108,9 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   └── restore.sh            # Restore Docker volumes from a timestamped backup
 ├── .github/
 │   └── workflows/
-│       └── test.yml          # CI: runs API + web tests on pull requests to main
+│       └── ci.yml            # CI: lints then tests API + web on pull requests to main
 ├── .husky/
+│   ├── pre-commit            # Git hook: runs npm run lint for api and web before every commit
 │   └── pre-push              # Git hook: runs npm test for api and web before every push
 ├── docker-compose.yml        # Production: 4 services on port 3005
 ├── docker-compose.dev.yml    # Development: 4 services on port 3006 (isolated volumes)
@@ -291,7 +302,7 @@ Notifications are triggered server-side and delivered in real-time via targeted 
 
 **Lifecycle:**
 - Created in `routes/shouts.js` (for mention notifications in new shouts) and `routes/comments.js` (for mention and reply notifications).
-- `helpers/mentions.js` provides `extractMentionedUserIds(content, actorId)` to parse `@[username:userId]` tokens and `buildSnippet(content, maxLen=60)` to generate truncated previews for notification text.
+- `helpers/mentions.js` provides `extractMentionedUserIds(content, actorId)` to parse `@[username:userId]` tokens and `buildSnippet(content, maxLen=60)` to generate truncated previews for notification text. Snippets apply spoiler-awareness: inline spoiler markers (`||…||`) are replaced with asterisks masking only the hidden part; shouts tagged `politics` replace the entire snippet with "ПОЛИТИКА"; `spoiler`/`nsfw` tags replace it with "СПОЙЛЕР".
 - Self-mentions are excluded — the actor never receives their own notification.
 - Server-side cleanup: `server.js` runs a task every 24 hours that hard-deletes notifications older than 14 days.
 - Frontend: `NotificationsContext.tsx` fetches unread notifications on login (past 7 days only), listens for real-time `notification` SSE events, and batches mark-as-read requests.
@@ -457,10 +468,24 @@ Tests are run sequentially (not in parallel) to avoid SQLite write conflicts.
 
 Uses `jsdom` environment with `@testing-library/react`.
 
+**Test infrastructure:**
 - `web/tests/setup.ts` — Global DOM mocks (`window.matchMedia`, `window.scrollTo`)
 - `web/tests/helpers.tsx` — `renderWithProviders()` helper wraps components with all required context providers
-- `web/hooks/useRoute.test.ts` — Unit tests for hash-based routing hook
-- `web/vitest.config.ts` — Merges Vite config; sets environment to `jsdom`, loads `tests/setup.ts`
+- `web/vitest.config.ts` — Merges Vite config; sets environment to `jsdom`, loads `tests/setup.ts`; 10s test timeout, 15s hook timeout
+
+**Context tests (co-located with source files):**
+- `web/context/AuthContext.test.tsx` — Login/logout, registration flow, password reset, modal state, error handling
+- `web/context/ThemeContext.test.tsx` — Theme toggling and `localStorage` persistence
+- `web/context/NotificationsContext.test.tsx` — SSE subscription, real-time notification updates, batched mark-as-read, cleanup on unmount
+- `web/context/ContentPreferencesContext.test.tsx` — Content visibility preference toggles
+
+**Hook tests (co-located with source files):**
+- `web/hooks/useRoute.test.ts` — Hash-based routing (feed, profile, shout pages), navigation, `hashchange` events
+- `web/hooks/useSSE.test.ts` — SSE client auto-reconnect, exponential backoff (1s → 30s cap)
+- `web/hooks/useMentionUsers.test.ts` — @mention user list lazy loading and module-level singleton cache
+
+**Unit tests:**
+- `web/tests/unit/effectiveLength.test.ts` — Character counting: mention token normalization (`@[name:id]` → `@name`), spoiler marker stripping (`||content||`), newline cost (40 chars per newline), and combinations
 
 **Coverage config** (`web/vitest.config.ts`):
 - Provider: v8
@@ -469,21 +494,45 @@ Uses `jsdom` environment with `@testing-library/react`.
 
 ### Git Hooks (Husky)
 
-A pre-push hook runs the full test suite before every `git push`:
+Two hooks gate commits and pushes:
 
+**Pre-commit** (`.husky/pre-commit`) — runs linting before every `git commit`:
+```sh
+npm run lint --prefix api || exit 1
+npm run lint --prefix web || exit 1
+```
+
+**Pre-push** (`.husky/pre-push`) — runs the full test suite before every `git push`:
 ```sh
 npm test --prefix api || exit 1
 npm test --prefix web || exit 1
 ```
 
-Push is aborted if any test fails. Hooks are installed via `make install` (or `npm install` in the repo root, which triggers `husky`).
+Hooks are installed via `make install` (or `npm install` in the repo root, which triggers `husky`).
+
+### Linting
+
+Both packages use **ESLint** with flat config (`eslint.config.js`):
+
+| Package | Config highlights |
+|---------|------------------|
+| `api/` | `@eslint/js` recommended; Node globals; allows `console.*`; unused vars with `^_` prefix are allowed |
+| `web/` | `typescript-eslint` recommended; `eslint-plugin-react-hooks` (rules of hooks); `no-explicit-any` is warn not error; `^_` prefix convention for intentionally unused identifiers |
+
+Run linting manually:
+```sh
+cd api && npm run lint
+cd web && npm run lint
+```
 
 ### CI (GitHub Actions)
 
-`.github/workflows/test.yml` runs on all pull requests targeting `main`:
+`.github/workflows/ci.yml` runs on all pull requests targeting `main`:
 1. Installs API and web dependencies
 2. Generates the Prisma client
-3. Runs `npm test` for both API and web
+3. Lints API (`npm run lint --prefix api`)
+4. Lints web (`npm run lint --prefix web`)
+5. Runs `npm test` for both API and web
 
 ## Code Conventions
 
@@ -507,6 +556,7 @@ Push is aborted if any test fails. Hooks are installed via `make install` (or `n
 - API documentation via **swagger-ui-express** + OpenAPI 3.0.3 spec (`swagger.js`) — dev only, blocked by nginx in production
 - Graceful shutdown: `SIGTERM`/`SIGINT` handlers disconnect Prisma before exiting
 - Request logging: every request is logged as `[API] METHOD /path` to stdout (skipped in test mode)
+- Linting: ESLint via `npm run lint` (`eslint src`); intentionally unused variables prefixed with `_`
 
 ### Frontend (web/)
 
@@ -524,6 +574,7 @@ Push is aborted if any test fails. Hooks are installed via `make install` (or `n
 - Optimistic UI updates with rollback on error (likes, delete)
 - PascalCase for components, camelCase for functions/variables
 - All user-facing text is in Russian, including Russian time formatting with proper declensions
+- Linting: ESLint via `npm run lint` (`eslint .`); TypeScript strict; react-hooks rules enforced; `no-explicit-any` is a warning; intentionally unused variables prefixed with `_`
 
 ## Architecture Notes
 
@@ -532,16 +583,16 @@ Push is aborted if any test fails. Hooks are installed via `make install` (or `n
 - The frontend is a single-page application using hash-based routing — no server-side route handling needed.
 - Comments are stored in a separate `comments` table (not as shouts) — single level of threading, no deep nesting.
 - Shout and comment deletion is a soft-delete: the `is_deleted` flag is set but the row is retained. `is_deleted=2` marks content from banned users.
-- Shouts carry a `visibility_tag` field (`""`, `"spoiler"`, `"nsfw"`, `"politics"`) that the frontend can use to filter or blur content based on user preferences (`show_nsfw`, `show_politics` on the User model; `showMedia` is client-side only in `ContentPreferencesContext`).
+- Shouts carry a `visibility_tag` field (`""`, `"spoiler"`, `"nsfw"`, `"politics"`) that the frontend can use to filter or blur content based on user preferences (`show_nsfw`, `show_politics` on the User model; `showMedia` is client-side only in `ContentPreferencesContext`). **Spoiler and NSFW tags require media to be attached** — the backend strips those tags if no media is present; the frontend also prevents selecting them without media in `ShoutInput.tsx`.
 - @mentions are supported in shouts and comments. The composer (`MentionInput.tsx`) is a `contenteditable` div. Typing `@` opens a dropdown of up to 5 matching users (filtered client-side from a module-level cached list). Selected mentions are serialized as `@[username:userId]` tokens in the stored content string. `renderContent` in `ShoutCard.tsx` parses these tokens and renders them as `#/profile/:id` links. Character counting normalizes `@[name:id]` back to `@name` before applying the 400-char limit. The user list is fetched lazily (only on first `@` trigger) via `GET /users/mentions` and cached for the browser session.
 - Mentions automatically trigger `mention` notifications to the mentioned users. Comments also trigger a `reply` notification to the shout author (unless they are the commenter, or already received a mention notification for that comment). Both are handled in `routes/shouts.js` and `routes/comments.js` using `helpers/mentions.js`.
 - Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
 - YouTube URLs in shout content are auto-detected via regex and metadata is fetched from the oEmbed API (5s timeout, graceful fallback).
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
 - Animated GIFs skip re-encoding; the original GIF is stored as `original.gif` alongside WebP thumbnail variants. The `animated: true` flag and `gif` URL are included in the media DTO.
-- Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling.
+- Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling. Supports pinch-to-zoom (mobile) and scroll-to-zoom (desktop), pan when zoomed, and double-tap/click to toggle zoom.
 - The media nginx container serves files from the `/media` volume with a strict allowlist: `.webp`, `.jpg`, `.jpeg`, `.png`, `.gif` extensions only; no dotfiles or directory listing; immutable 1-year cache headers.
-- Popular sort: shouts from the last 7 days, ordered by like count.
+- Popular sort: shouts from the last 7 days. The popular tab has dual sort buttons — heart icon (sort by like count) and comment icon (sort by comment count). Uses `popularSort` state toggled by `handlePopularSortChange` in `ShoutFeed.tsx`.
 - Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation. Codes expire in 10 minutes, max 5 attempts. Registration can be disabled by setting `registration_open=false` in the Settings table via the admin panel.
 - Password reset follows the same email verification pattern.
 - Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
@@ -591,9 +642,9 @@ The test service (`api-test`) uses the `test` Dockerfile target, runs with `tmpf
 
 ## Current Gaps
 
-- No linting or formatting tools (no ESLint/Prettier)
+- No Prettier or other auto-formatter (ESLint is active but doesn't enforce style)
 - No error boundary components in the React frontend
 - Tailwind is loaded via CDN rather than built into the bundle
 - Legacy inline media columns on `shouts` table to be removed in a follow-up migration
 - Notification `type` field in schema has a comment noting planned future types (`shout_like`, `comment_like`) not yet implemented
-- Web test coverage is minimal (only `useRoute` hook tested so far)
+- Web component tests are not yet written (contexts and hooks are covered; `components/` directory has no test files)
