@@ -268,7 +268,13 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
     const isZoomed = zoomLevel.current > 1;
 
     if (isZoomed) {
-      // Just stop panning; no dismiss logic while zoomed
+      // Tap (no significant drag) while zoomed → close
+      const dx = Math.abs(panX.current - panBaseX.current);
+      const dy2 = Math.abs(panY.current - panBaseY.current);
+      if (dx < 4 && dy2 < 4) {
+        blockNextClick();
+        onClose();
+      }
       return;
     }
 
