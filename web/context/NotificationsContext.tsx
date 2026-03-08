@@ -140,6 +140,52 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
+  // Browser tab indicator: title prefix + favicon badge
+  useEffect(() => {
+    const defaultTitle = "Вопли";
+    const defaultFaviconHref = "/favicon.svg";
+
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount > 9 ? '9+' : unreadCount}) ${defaultTitle}`;
+
+      // Create favicon with red notification dot
+      const canvas = document.createElement("canvas");
+      canvas.width = 32;
+      canvas.height = 32;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, 32, 32);
+          // Red dot in top-right corner
+          ctx.beginPath();
+          ctx.arc(24, 8, 7, 0, 2 * Math.PI);
+          ctx.fillStyle = "#ef4444";
+          ctx.fill();
+          ctx.strokeStyle = "#18181b";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+          if (link) {
+            link.href = canvas.toDataURL("image/png");
+          }
+        };
+        img.src = defaultFaviconHref;
+      }
+    } else {
+      document.title = defaultTitle;
+      const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+      if (link) link.href = defaultFaviconHref;
+    }
+
+    return () => {
+      document.title = defaultTitle;
+      const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+      if (link) link.href = defaultFaviconHref;
+    };
+  }, [unreadCount]);
+
   const value = useMemo<NotificationsContextType>(
     () => ({ notifications, unreadCount, markAsRead, markAllAsRead, flushReads }),
     [notifications, unreadCount]

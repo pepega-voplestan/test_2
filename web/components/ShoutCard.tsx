@@ -42,7 +42,9 @@ type EmbedInfo =
   | { type: 'coub'; videoId: string }
   | { type: 'tenor'; url: string; tenorId: string }
   | { type: 'imgur-direct'; url: string }
-  | { type: 'twitter'; tweetId: string; url: string };
+  | { type: 'twitter'; tweetId: string; url: string }
+  | { type: 'giphy'; giphyId: string }
+  | { type: 'steam'; appId: string; slug?: string };
 
 function extractEmbeds(text: string): EmbedInfo[] {
   const embeds: EmbedInfo[] = [];
@@ -90,6 +92,28 @@ function extractEmbeds(text: string): EmbedInfo[] {
     const tenorDirect = url.match(/https?:\/\/media1?\.tenor\.com\/[^\s]+\.(gif|mp4)/i);
     if (tenorDirect) {
       embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+    // Giphy: giphy.com/gifs/slug-ID or giphy.com/embed/ID or media.giphy.com direct
+    const giphyPage = url.match(/https?:\/\/(?:www\.)?giphy\.com\/gifs\/(?:[\w-]+-)*([a-zA-Z0-9]+)(?:[?#]|$)/);
+    if (giphyPage) {
+      embeds.push({ type: 'giphy', giphyId: giphyPage[1] });
+      continue;
+    }
+    const giphyEmbed = url.match(/https?:\/\/(?:www\.)?giphy\.com\/embed\/([a-zA-Z0-9]+)/);
+    if (giphyEmbed) {
+      embeds.push({ type: 'giphy', giphyId: giphyEmbed[1] });
+      continue;
+    }
+    const giphyDirect = url.match(/https?:\/\/media[0-4]?\.giphy\.com\/media\/([a-zA-Z0-9]+)\//);
+    if (giphyDirect) {
+      embeds.push({ type: 'giphy', giphyId: giphyDirect[1] });
+      continue;
+    }
+    // Steam store: store.steampowered.com/app/APPID/Optional_Slug/
+    const steam = url.match(/https?:\/\/store\.steampowered\.com\/app\/(\d+)(?:\/([^/?#]*))?/);
+    if (steam) {
+      embeds.push({ type: 'steam', appId: steam[1], slug: steam[2] || undefined });
       continue;
     }
   }
@@ -201,6 +225,89 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
   );
 };
 
+/* ---------- Steam embed card (Discord-style with API fetch) ---------- */
+
+interface SteamAppData {
+  name: string;
+  short_description: string;
+  header_image: string;
+  price_overview?: { final_formatted: string };
+  recommendations?: { total: number };
+}
+
+const steamCache = new Map<string, SteamAppData | null>();
+
+const SteamEmbedCard: React.FC<{ appId: string; slug?: string }> = ({ appId, slug }) => {
+  const [data, setData] = useState<SteamAppData | null>(steamCache.get(appId) ?? null);
+  const [loaded, setLoaded] = useState(steamCache.has(appId));
+  const [imgError, setImgError] = useState(false);
+
+  const fallbackName = slug ? slug.replace(/_/g, ' ') : null;
+
+  useEffect(() => {
+    if (steamCache.has(appId)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=russian`);
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        const entry = json[appId];
+        if (!entry?.success || !entry.data) throw new Error();
+        const d = entry.data as SteamAppData;
+        steamCache.set(appId, d);
+        if (!cancelled) setData(d);
+      } catch {
+        steamCache.set(appId, null);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [appId]);
+
+  const storeUrl = `https://store.steampowered.com/app/${appId}/`;
+  const headerImg = data?.header_image || `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+  const title = data?.name || fallbackName || 'Steam Store';
+  const description = data?.short_description;
+
+  return (
+    <a href={storeUrl} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-lg overflow-hidden border-l-4 border-[#1b2838] bg-[#1b2838]/90 hover:bg-[#1b2838] transition-colors group max-w-[460px]">
+      <div className="px-3 pt-2.5 pb-2">
+        <div className="flex items-center gap-1.5 mb-1">
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-[#66c0f4] shrink-0" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.15 9.43 7.6 11.22l3.44-4.97c-.24-.01-.49-.03-.74-.08-1.79-.33-3.14-1.73-3.36-3.41l-2.34-3.38c-.24-1.04.03-2.14.73-2.95.95-1.1 2.48-1.45 3.82-.89l5.05 2.1c.67-.05 1.36.04 2.02.27 2.09.71 3.4 2.72 3.17 4.87-.22 2.15-1.93 3.83-4.09 4.05-.66.07-1.31-.01-1.92-.22L10.66 24c.43.02.87.03 1.34.03 6.63 0 12-5.37 12-12S18.63 0 12 0z"/>
+          </svg>
+          <span className="text-xs text-[#8f98a0]">Steam</span>
+        </div>
+        <div className="text-sm text-[#67c1f5] font-medium group-hover:underline leading-snug mb-1">{title}</div>
+        {loaded && description && (
+          <div className="text-xs text-[#acb2b8] leading-relaxed mb-1.5 line-clamp-3" dangerouslySetInnerHTML={{ __html: description }} />
+        )}
+        {loaded && data && (data.price_overview || data.recommendations) && (
+          <div className="flex items-center gap-4 text-xs mb-1">
+            {data.price_overview && (
+              <div>
+                <div className="text-[#8f98a0] font-medium">Цена</div>
+                <div className="text-[#acb2b8]">{data.price_overview.final_formatted}</div>
+              </div>
+            )}
+            {data.recommendations && (
+              <div>
+                <div className="text-[#8f98a0] font-medium">Отзывы</div>
+                <div className="text-[#acb2b8]">{data.recommendations.total.toLocaleString()}</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {!imgError && (
+        <img src={headerImg} alt="" loading="lazy" className="w-full aspect-[460/215] object-cover" onError={() => setImgError(true)} />
+      )}
+    </a>
+  );
+};
+
 const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   const [imgError, setImgError] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -281,11 +388,91 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
     );
   }
 
+  if (embed.type === 'giphy') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <div className="w-full" style={{ paddingBottom: '75%', position: 'relative' }}>
+          <iframe
+            src={`https://giphy.com/embed/${embed.giphyId}`}
+            className="absolute inset-0 w-full h-full"
+            allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            title="Giphy GIF"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (embed.type === 'steam') {
+    return <SteamEmbedCard appId={embed.appId} slug={embed.slug} />;
+  }
+
   if (embed.type === 'twitter') {
     return <TwitterEmbedCard tweetId={embed.tweetId} url={embed.url} />;
   }
 
   return null;
+};
+
+/* ---------- Media hidden placeholder ---------- */
+
+const PlaceholderIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
+interface MediaPlaceholderProps {
+  aspectRatio?: string;
+  maxHeight?: number;
+  height?: number;
+  maxWidth?: number;
+  paddingBottom?: string;
+  /** Original media width — used with mediaHeight + maxHeight to compute exact display size */
+  mediaWidth?: number;
+  /** Original media height */
+  mediaHeight?: number;
+  className?: string;
+}
+
+const MediaPlaceholder: React.FC<MediaPlaceholderProps> = ({ aspectRatio, maxHeight, height, maxWidth, paddingBottom, mediaWidth, mediaHeight, className = '' }) => {
+  // Strategy 1: paddingBottom ratio (for iframes like tenor/giphy)
+  if (paddingBottom) {
+    return (
+      <div className={`relative rounded-lg ${className}`} style={{ paddingBottom, maxWidth }}>
+        <div className="absolute inset-0 bg-th-elevated/60 rounded-lg flex items-center justify-center">
+          <PlaceholderIcon />
+        </div>
+      </div>
+    );
+  }
+
+  // Strategy 2: precise image sizing from known dimensions (matches how <img> with max-h renders)
+  if (mediaWidth && mediaHeight && maxHeight) {
+    const scale = Math.min(1, maxHeight / mediaHeight);
+    const displayW = Math.round(mediaWidth * scale);
+    return (
+      <div
+        className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
+        style={{ width: displayW, maxWidth: '100%', aspectRatio: `${mediaWidth}/${mediaHeight}`, maxHeight }}
+      >
+        <PlaceholderIcon />
+      </div>
+    );
+  }
+
+  // Strategy 3: CSS constraints (for videos, generic embeds)
+  return (
+    <div
+      className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
+      style={{ ...(aspectRatio ? { aspectRatio } : {}), ...(maxHeight ? { maxHeight } : {}), ...(height ? { height } : {}), ...(maxWidth ? { maxWidth } : {}), ...(!aspectRatio && !height ? { minHeight: 120 } : {}) }}
+    >
+      <PlaceholderIcon />
+    </div>
+  );
 };
 
 /* ---------- Inline spoiler component ---------- */
@@ -445,9 +632,16 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             </div>
           )}
 
-          {showMedia && embeds.map((embed, idx) => (
+          {showMedia ? embeds.map((embed, idx) => (
             <EmbedCard key={`embed-${idx}`} embed={embed} />
-          ))}
+          )) : embeds.length > 0 ? embeds.map((_embed, idx) => {
+            const e = embeds[idx];
+            if (e.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
+            if (e.type === 'tenor' || e.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" paddingBottom="75%" />;
+            if (e.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" height={240} maxWidth={460} />;
+            if (e.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={48} />;
+            return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" maxHeight={200} height={150} />;
+          }) : null}
 
           {showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
@@ -457,6 +651,12 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
                 className="block cursor-pointer max-h-[200px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
               />
             </div>
+          )}
+
+          {!showMedia && comment.media?.type === 'image' && (
+            comment.media.width && comment.media.height
+              ? <MediaPlaceholder className="mb-2" maxHeight={200} mediaWidth={comment.media.width} mediaHeight={comment.media.height} />
+              : <MediaPlaceholder className="mb-2" maxHeight={200} height={150} />
           )}
 
           {lightboxOpen && comment.media?.type === 'image' && (
@@ -491,6 +691,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
                 </div>
               )}
             </div>
+          )}
+
+          {!showMedia && comment.media?.type === 'youtube' && (
+            <MediaPlaceholder className="mb-2 w-full" aspectRatio="16/9" />
           )}
 
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-1">
@@ -730,60 +934,91 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     : (shout.media?.type === 'image' ? shout.media.url : undefined);
 
   // Render media section (reused in normal and NSFW-only blur mode)
-  const renderMediaSection = () => {
-    if (!showMedia) return null;
+  const hasMediaContent = embeds.length > 0 || !!shout.media;
 
+  // Always renders actual media (used by spoiler/NSFW blur overlays)
+  const renderActualMedia = () => (
+    <>
+      {embeds.map((embed, idx) => (
+        <EmbedCard key={`embed-${idx}`} embed={embed} />
+      ))}
+
+      {shout.media?.type === 'image' && (
+         <div className="mb-3 rounded-lg">
+             <img
+               src={gifSrc} alt="attachment" loading="lazy"
+               onClick={() => setLightboxOpen(true)}
+               className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
+             />
+         </div>
+      )}
+
+      {lightboxOpen && shout.media?.type === 'image' && (
+        <Lightbox
+          src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
+
+      {shout.media?.type === 'youtube' && (
+          <div className="mb-3 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
+            <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
+                {ytLoaded ? (
+                  <iframe className="w-full h-full" src={`${shout.media.embedUrl}?autoplay=1`} title={shout.media.title || "YouTube"}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
+                    sandbox="allow-scripts allow-same-origin allow-presentation" />
+                ) : (
+                  <>
+                    <img src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`} alt={shout.media.title || "YouTube video"} loading="lazy" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-14 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
+                        <svg viewBox="0 0 24 24" className="w-6 h-6 text-white ml-0.5" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                      </div>
+                    </div>
+                  </>
+                )}
+            </div>
+            {(shout.media.title || shout.media.channel) && (
+              <div className="px-3 py-2">
+                {shout.media.title && <div className="text-sm text-th-text-2 font-medium leading-snug line-clamp-2">{shout.media.title}</div>}
+                {shout.media.channel && <div className="text-xs text-th-text-3 mt-0.5">{shout.media.channel}</div>}
+              </div>
+            )}
+          </div>
+      )}
+    </>
+  );
+
+  // Placeholder version for when showMedia is off
+  const renderMediaPlaceholders = () => {
+    if (!hasMediaContent) return null;
     return (
       <>
-        {embeds.map((embed, idx) => (
-          <EmbedCard key={`embed-${idx}`} embed={embed} />
-        ))}
-
+        {embeds.map((embed, idx) => {
+          // Match each embed type's actual rendered dimensions
+          if (embed.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
+          if (embed.type === 'tenor' || embed.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" paddingBottom="75%" />;
+          if (embed.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" height={280} maxWidth={460} />;
+          if (embed.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={56} />;
+          if (embed.type === 'twitter') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={200} />;
+          // imgur images, imgur-direct: unknown dimensions, use reasonable default
+          return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" maxHeight={300} height={200} />;
+        })}
         {shout.media?.type === 'image' && (
-           <div className="mb-3 rounded-lg">
-               <img
-                 src={gifSrc} alt="attachment" loading="lazy"
-                 onClick={() => setLightboxOpen(true)}
-                 className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
-               />
-           </div>
+          shout.media.width && shout.media.height
+            ? <MediaPlaceholder className="mb-3" maxHeight={300} mediaWidth={shout.media.width} mediaHeight={shout.media.height} />
+            : <MediaPlaceholder className="mb-3" maxHeight={300} height={200} />
         )}
-
-        {lightboxOpen && shout.media?.type === 'image' && (
-          <Lightbox
-            src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
-            onClose={() => setLightboxOpen(false)}
-          />
-        )}
-
         {shout.media?.type === 'youtube' && (
-            <div className="mb-3 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
-              <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
-                  {ytLoaded ? (
-                    <iframe className="w-full h-full" src={`${shout.media.embedUrl}?autoplay=1`} title={shout.media.title || "YouTube"}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
-                      sandbox="allow-scripts allow-same-origin allow-presentation" />
-                  ) : (
-                    <>
-                      <img src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`} alt={shout.media.title || "YouTube video"} loading="lazy" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-14 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors">
-                          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white ml-0.5" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                        </div>
-                      </div>
-                    </>
-                  )}
-              </div>
-              {(shout.media.title || shout.media.channel) && (
-                <div className="px-3 py-2">
-                  {shout.media.title && <div className="text-sm text-th-text-2 font-medium leading-snug line-clamp-2">{shout.media.title}</div>}
-                  {shout.media.channel && <div className="text-xs text-th-text-3 mt-0.5">{shout.media.channel}</div>}
-                </div>
-              )}
-            </div>
+          <MediaPlaceholder className="mb-3 w-full" aspectRatio="16/9" />
         )}
       </>
     );
+  };
+
+  const renderMediaSection = () => {
+    if (!showMedia) return renderMediaPlaceholders();
+    return renderActualMedia();
   };
 
   return (
@@ -861,7 +1096,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                         {renderContent(shout.content)}
                       </div>
                     )}
-                    {renderMediaSection()}
+                    {renderActualMedia()}
                   </div>
                   <div className="absolute inset-0 bg-th-inset/40 flex items-center justify-center rounded-lg">
                     <button
@@ -883,11 +1118,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                     </div>
                   )}
 
-                  {isMediaOnlyHidden && shout.media ? (
-                    /* --- NSFW / Spoiler: only blur media within its own bounds --- */
+                  {isMediaOnlyHidden && hasMediaContent ? (
+                    /* --- NSFW / Spoiler: always blur actual media, not placeholders --- */
                     <div className="relative rounded-lg overflow-hidden mb-3 inline-block max-w-full">
                       <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
-                        {renderMediaSection()}
+                        {renderActualMedia()}
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <button
