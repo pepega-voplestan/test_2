@@ -166,13 +166,13 @@ describe("useSSE", () => {
     // Trigger enough errors to exceed the 30 000 ms cap
     // backoff doubles: 1000 → 2000 → 4000 → 8000 → 16000 → 30000 (cap)
     for (let backoff = 1000; backoff < 30_000; backoff *= 2) {
-      act(() => MockEventSource.instances.at(-1)!.triggerError());
+      act(() => MockEventSource.instances[MockEventSource.instances.length - 1]!.triggerError());
       act(() => vi.advanceTimersByTime(backoff));
     }
     const countBeforeCap = MockEventSource.instances.length;
 
     // One more error at the cap (30 000 ms)
-    act(() => MockEventSource.instances.at(-1)!.triggerError());
+    act(() => MockEventSource.instances[MockEventSource.instances.length - 1]!.triggerError());
     act(() => vi.advanceTimersByTime(29_999));
     expect(MockEventSource.instances).toHaveLength(countBeforeCap);
 
