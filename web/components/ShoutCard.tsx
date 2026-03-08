@@ -44,7 +44,7 @@ type EmbedInfo =
   | { type: 'imgur-direct'; url: string }
   | { type: 'twitter'; tweetId: string; url: string }
   | { type: 'giphy'; giphyId: string }
-  | { type: 'steam'; appId: string };
+  | { type: 'steam'; appId: string; slug?: string };
 
 function extractEmbeds(text: string): EmbedInfo[] {
   const embeds: EmbedInfo[] = [];
@@ -110,10 +110,10 @@ function extractEmbeds(text: string): EmbedInfo[] {
       embeds.push({ type: 'giphy', giphyId: giphyDirect[1] });
       continue;
     }
-    // Steam store: store.steampowered.com/app/APPID/...
-    const steam = url.match(/https?:\/\/store\.steampowered\.com\/app\/(\d+)/);
+    // Steam store: store.steampowered.com/app/APPID/Optional_Slug/
+    const steam = url.match(/https?:\/\/store\.steampowered\.com\/app\/(\d+)(?:\/([^/?#]*))?/);
     if (steam) {
-      embeds.push({ type: 'steam', appId: steam[1] });
+      embeds.push({ type: 'steam', appId: steam[1], slug: steam[2] || undefined });
       continue;
     }
   }
@@ -225,6 +225,89 @@ const TwitterEmbedCard: React.FC<{ tweetId: string; url: string }> = ({ tweetId,
   );
 };
 
+/* ---------- Steam embed card (Discord-style with API fetch) ---------- */
+
+interface SteamAppData {
+  name: string;
+  short_description: string;
+  header_image: string;
+  price_overview?: { final_formatted: string };
+  recommendations?: { total: number };
+}
+
+const steamCache = new Map<string, SteamAppData | null>();
+
+const SteamEmbedCard: React.FC<{ appId: string; slug?: string }> = ({ appId, slug }) => {
+  const [data, setData] = useState<SteamAppData | null>(steamCache.get(appId) ?? null);
+  const [loaded, setLoaded] = useState(steamCache.has(appId));
+  const [imgError, setImgError] = useState(false);
+
+  const fallbackName = slug ? slug.replace(/_/g, ' ') : null;
+
+  useEffect(() => {
+    if (steamCache.has(appId)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=russian`);
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        const entry = json[appId];
+        if (!entry?.success || !entry.data) throw new Error();
+        const d = entry.data as SteamAppData;
+        steamCache.set(appId, d);
+        if (!cancelled) setData(d);
+      } catch {
+        steamCache.set(appId, null);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [appId]);
+
+  const storeUrl = `https://store.steampowered.com/app/${appId}/`;
+  const headerImg = data?.header_image || `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+  const title = data?.name || fallbackName || 'Steam Store';
+  const description = data?.short_description;
+
+  return (
+    <a href={storeUrl} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-lg overflow-hidden border-l-4 border-[#1b2838] bg-[#1b2838]/90 hover:bg-[#1b2838] transition-colors group max-w-[460px]">
+      <div className="px-3 pt-2.5 pb-2">
+        <div className="flex items-center gap-1.5 mb-1">
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-[#66c0f4] shrink-0" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.15 9.43 7.6 11.22l3.44-4.97c-.24-.01-.49-.03-.74-.08-1.79-.33-3.14-1.73-3.36-3.41l-2.34-3.38c-.24-1.04.03-2.14.73-2.95.95-1.1 2.48-1.45 3.82-.89l5.05 2.1c.67-.05 1.36.04 2.02.27 2.09.71 3.4 2.72 3.17 4.87-.22 2.15-1.93 3.83-4.09 4.05-.66.07-1.31-.01-1.92-.22L10.66 24c.43.02.87.03 1.34.03 6.63 0 12-5.37 12-12S18.63 0 12 0z"/>
+          </svg>
+          <span className="text-xs text-[#8f98a0]">Steam</span>
+        </div>
+        <div className="text-sm text-[#67c1f5] font-medium group-hover:underline leading-snug mb-1">{title}</div>
+        {loaded && description && (
+          <div className="text-xs text-[#acb2b8] leading-relaxed mb-1.5 line-clamp-3" dangerouslySetInnerHTML={{ __html: description }} />
+        )}
+        {loaded && data && (data.price_overview || data.recommendations) && (
+          <div className="flex items-center gap-4 text-xs mb-1">
+            {data.price_overview && (
+              <div>
+                <div className="text-[#8f98a0] font-medium">Цена</div>
+                <div className="text-[#acb2b8]">{data.price_overview.final_formatted}</div>
+              </div>
+            )}
+            {data.recommendations && (
+              <div>
+                <div className="text-[#8f98a0] font-medium">Отзывы</div>
+                <div className="text-[#acb2b8]">{data.recommendations.total.toLocaleString()}</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {!imgError && (
+        <img src={headerImg} alt="" loading="lazy" className="w-full aspect-[460/215] object-cover" onError={() => setImgError(true)} />
+      )}
+    </a>
+  );
+};
+
 const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   const [imgError, setImgError] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -322,23 +405,7 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   }
 
   if (embed.type === 'steam') {
-    const headerImg = `https://cdn.akamai.steamstatic.com/steam/apps/${embed.appId}/header.jpg`;
-    const storeUrl = `https://store.steampowered.com/app/${embed.appId}/`;
-    return (
-      <a href={storeUrl} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-lg overflow-hidden border-l-4 border-[#1b2838] bg-[#1b2838]/80 hover:bg-[#1b2838] transition-colors group max-w-[460px]">
-        <img src={headerImg} alt="Steam" loading="lazy" className="w-full aspect-[460/215] object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        <div className="px-3 py-2">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-[#66c0f4] shrink-0" fill="currentColor">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.15 9.43 7.6 11.22l3.44-4.97c-.24-.01-.49-.03-.74-.08-1.79-.33-3.14-1.73-3.36-3.41l-2.34-3.38c-.24-1.04.03-2.14.73-2.95.95-1.1 2.48-1.45 3.82-.89l5.05 2.1c.67-.05 1.36.04 2.02.27 2.09.71 3.4 2.72 3.17 4.87-.22 2.15-1.93 3.83-4.09 4.05-.66.07-1.31-.01-1.92-.22L10.66 24c.43.02.87.03 1.34.03 6.63 0 12-5.37 12-12S18.63 0 12 0z"/>
-            </svg>
-            <span className="text-xs text-[#66c0f4] font-medium">Steam</span>
-          </div>
-          <div className="text-sm text-[#c6d4df] font-medium group-hover:underline leading-snug">Открыть в Steam Store</div>
-          <div className="text-xs text-[#8f98a0] mt-0.5 truncate">store.steampowered.com</div>
-        </div>
-      </a>
-    );
+    return <SteamEmbedCard appId={embed.appId} slug={embed.slug} />;
   }
 
   if (embed.type === 'twitter') {
@@ -350,33 +417,61 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
 
 /* ---------- Media hidden placeholder ---------- */
 
-const MediaPlaceholder: React.FC<{ aspectRatio?: string; maxHeight?: number; height?: number; maxWidth?: number; paddingBottom?: string; className?: string }> = ({ aspectRatio, maxHeight, height, maxWidth, paddingBottom, className = '' }) => {
-  // For padding-bottom ratio-based sizing (used by tenor/giphy which use this CSS trick)
+const PlaceholderIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
+interface MediaPlaceholderProps {
+  aspectRatio?: string;
+  maxHeight?: number;
+  height?: number;
+  maxWidth?: number;
+  paddingBottom?: string;
+  /** Original media width — used with mediaHeight + maxHeight to compute exact display size */
+  mediaWidth?: number;
+  /** Original media height */
+  mediaHeight?: number;
+  className?: string;
+}
+
+const MediaPlaceholder: React.FC<MediaPlaceholderProps> = ({ aspectRatio, maxHeight, height, maxWidth, paddingBottom, mediaWidth, mediaHeight, className = '' }) => {
+  // Strategy 1: paddingBottom ratio (for iframes like tenor/giphy)
   if (paddingBottom) {
     return (
       <div className={`relative rounded-lg ${className}`} style={{ paddingBottom, maxWidth }}>
         <div className="absolute inset-0 bg-th-elevated/60 rounded-lg flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
-            <polygon points="23 7 16 12 23 17 23 7" />
-            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-            <line x1="2" y1="2" x2="22" y2="22" />
-          </svg>
+          <PlaceholderIcon />
         </div>
       </div>
     );
   }
 
+  // Strategy 2: precise image sizing from known dimensions (matches how <img> with max-h renders)
+  if (mediaWidth && mediaHeight && maxHeight) {
+    const scale = Math.min(1, maxHeight / mediaHeight);
+    const displayW = Math.round(mediaWidth * scale);
+    return (
+      <div
+        className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
+        style={{ width: displayW, maxWidth: '100%', aspectRatio: `${mediaWidth}/${mediaHeight}`, maxHeight }}
+      >
+        <PlaceholderIcon />
+      </div>
+    );
+  }
+
+  // Strategy 3: CSS constraints (for videos, generic embeds)
   return (
     <div
       className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
       style={{ ...(aspectRatio ? { aspectRatio } : {}), ...(maxHeight ? { maxHeight } : {}), ...(height ? { height } : {}), ...(maxWidth ? { maxWidth } : {}), ...(!aspectRatio && !height ? { minHeight: 120 } : {}) }}
     >
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
-      <polygon points="23 7 16 12 23 17 23 7" />
-      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-      <line x1="2" y1="2" x2="22" y2="22" />
-    </svg>
-  </div>
+      <PlaceholderIcon />
+    </div>
   );
 };
 
@@ -543,9 +638,9 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             const e = embeds[idx];
             if (e.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
             if (e.type === 'tenor' || e.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" paddingBottom="75%" />;
-            if (e.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" aspectRatio="460/215" maxWidth={460} />;
+            if (e.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" height={240} maxWidth={460} />;
             if (e.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={48} />;
-            return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" maxHeight={200} height={150} />;
+            return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" maxHeight={200} height={150} />;
           }) : null}
 
           {showMedia && comment.media?.type === 'image' && (
@@ -559,7 +654,9 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           {!showMedia && comment.media?.type === 'image' && (
-            <MediaPlaceholder className="mb-2 w-full" maxHeight={200} height={150} />
+            comment.media.width && comment.media.height
+              ? <MediaPlaceholder className="mb-2" maxHeight={200} mediaWidth={comment.media.width} mediaHeight={comment.media.height} />
+              : <MediaPlaceholder className="mb-2" maxHeight={200} height={150} />
           )}
 
           {lightboxOpen && comment.media?.type === 'image' && (
@@ -901,14 +998,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           // Match each embed type's actual rendered dimensions
           if (embed.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
           if (embed.type === 'tenor' || embed.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" paddingBottom="75%" />;
-          if (embed.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" aspectRatio="460/215" maxWidth={460} />;
+          if (embed.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" height={280} maxWidth={460} />;
           if (embed.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={56} />;
           if (embed.type === 'twitter') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={200} />;
-          // imgur images, imgur-direct: same as attached images
-          return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" maxHeight={300} height={200} />;
+          // imgur images, imgur-direct: unknown dimensions, use reasonable default
+          return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" maxHeight={300} height={200} />;
         })}
         {shout.media?.type === 'image' && (
-          <MediaPlaceholder className="mb-3 w-full" maxHeight={300} aspectRatio={shout.media.width && shout.media.height ? `${shout.media.width}/${shout.media.height}` : undefined} height={!shout.media.width ? 200 : undefined} />
+          shout.media.width && shout.media.height
+            ? <MediaPlaceholder className="mb-3" maxHeight={300} mediaWidth={shout.media.width} mediaHeight={shout.media.height} />
+            : <MediaPlaceholder className="mb-3" maxHeight={300} height={200} />
         )}
         {shout.media?.type === 'youtube' && (
           <MediaPlaceholder className="mb-3 w-full" aspectRatio="16/9" />
