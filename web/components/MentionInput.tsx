@@ -128,7 +128,7 @@ function getCaretRect(): DOMRect | null {
 // `savedRange` is used to restore the caret when the editor had lost focus (e.g. after
 // clicking the emoji picker).
 function insertAtCursor(el: HTMLElement, text: string, savedRange?: Range | null): void {
-  el.focus();
+  el.focus({ preventScroll: true });
   const sel = window.getSelection();
   if (!sel) return;
 
@@ -373,7 +373,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       onContentChangeRef.current('');
     },
     focus() {
-      editorRef.current?.focus();
+      editorRef.current?.focus({ preventScroll: true });
     },
     insertText(text: string) {
       const el = editorRef.current;
@@ -383,7 +383,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
       if (!el) return;
-      el.focus();
+      el.focus({ preventScroll: true });
       const sel = window.getSelection()!;
       // Move cursor to end of content
       const endRange = document.createRange();
@@ -420,7 +420,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     wrapSpoiler() {
       const el = editorRef.current;
       if (!el) return;
-      el.focus();
+      el.focus({ preventScroll: true });
       const sel = window.getSelection();
       if (!sel) return;
 
