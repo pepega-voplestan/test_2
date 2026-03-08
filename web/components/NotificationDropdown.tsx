@@ -49,18 +49,24 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
     }
   }
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent) {
+    // Allow middle-click / ctrl+click / cmd+click to open in new tab natively
+    if (e.button === 1 || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
     if (n.shoutId) navigateTo(`/shout/${n.shoutId}`);
     onClose();
   }
 
+  const href = n.shoutId ? `#/shout/${n.shoutId}` : '#';
+
   return (
-    <div
+    <a
+      href={href}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
       className={[
-        'flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors duration-200',
+        'flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors duration-200 no-underline',
         n.isRead
           ? 'bg-th-card hover:bg-th-inset'
           : 'bg-th-input hover:bg-th-elevated',
@@ -80,7 +86,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
       </div>
       {/* Always rendered to avoid layout shift; invisible when read */}
       <div className={`w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5 transition-opacity ${n.isRead ? 'opacity-0' : 'opacity-100'}`} />
-    </div>
+    </a>
   );
 };
 
