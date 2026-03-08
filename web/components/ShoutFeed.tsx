@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import ShoutInput from './ShoutInput';
 import ShoutCard from './ShoutCard';
 import { Shout, Comment } from '../types';
@@ -76,6 +76,10 @@ const ShoutFeed: React.FC = () => {
 
   // Accordion: only one thread open at a time
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+
+  // Scroll-anchor: prevents viewport jump when closing one thread opens another
+  const shoutRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const scrollAnchorRef = useRef<{ id: string; top: number } | null>(null);
 
   // Cursor-based pagination for "new" tab (created_at of last loaded shout)
   const cursorRef = useRef<string | null>(null);
@@ -229,8 +233,26 @@ const ShoutFeed: React.FC = () => {
 
   // Accordion toggle: open clicked thread, close any previously open
   const handleThreadToggle = useCallback((shoutId: string) => {
+    const el = shoutRefs.current.get(shoutId);
+    if (el) {
+      scrollAnchorRef.current = { id: shoutId, top: el.getBoundingClientRect().top };
+    }
     setOpenThreadId(prev => prev === shoutId ? null : shoutId);
   }, []);
+
+  // Restore scroll position after thread toggle to prevent viewport jump
+  useLayoutEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    if (!anchor) return;
+    const el = shoutRefs.current.get(anchor.id);
+    if (el) {
+      const drift = el.getBoundingClientRect().top - anchor.top;
+      if (Math.abs(drift) > 1) {
+        window.scrollBy(0, drift);
+      }
+    }
+    scrollAnchorRef.current = null;
+  }, [openThreadId]);
 
   // --- SSE real-time updates ---
   const sseListeners = useMemo(() => ({
@@ -405,6 +427,10 @@ const ShoutFeed: React.FC = () => {
             {shouts.map((shout) => (
               <div
                 key={shout.id}
+                ref={(el) => {
+                  if (el) shoutRefs.current.set(shout.id, el);
+                  else shoutRefs.current.delete(shout.id);
+                }}
                 className="bg-th-feed rounded-xl px-5 py-4"
               >
                 <ShoutCard
