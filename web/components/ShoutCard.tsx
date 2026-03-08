@@ -42,7 +42,9 @@ type EmbedInfo =
   | { type: 'coub'; videoId: string }
   | { type: 'tenor'; url: string; tenorId: string }
   | { type: 'imgur-direct'; url: string }
-  | { type: 'twitter'; tweetId: string; url: string };
+  | { type: 'twitter'; tweetId: string; url: string }
+  | { type: 'giphy'; giphyId: string }
+  | { type: 'steam'; appId: string };
 
 function extractEmbeds(text: string): EmbedInfo[] {
   const embeds: EmbedInfo[] = [];
@@ -90,6 +92,28 @@ function extractEmbeds(text: string): EmbedInfo[] {
     const tenorDirect = url.match(/https?:\/\/media1?\.tenor\.com\/[^\s]+\.(gif|mp4)/i);
     if (tenorDirect) {
       embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+    // Giphy: giphy.com/gifs/slug-ID or giphy.com/embed/ID or media.giphy.com direct
+    const giphyPage = url.match(/https?:\/\/(?:www\.)?giphy\.com\/gifs\/(?:[\w-]+-)*([a-zA-Z0-9]+)(?:[?#]|$)/);
+    if (giphyPage) {
+      embeds.push({ type: 'giphy', giphyId: giphyPage[1] });
+      continue;
+    }
+    const giphyEmbed = url.match(/https?:\/\/(?:www\.)?giphy\.com\/embed\/([a-zA-Z0-9]+)/);
+    if (giphyEmbed) {
+      embeds.push({ type: 'giphy', giphyId: giphyEmbed[1] });
+      continue;
+    }
+    const giphyDirect = url.match(/https?:\/\/media[0-4]?\.giphy\.com\/media\/([a-zA-Z0-9]+)\//);
+    if (giphyDirect) {
+      embeds.push({ type: 'giphy', giphyId: giphyDirect[1] });
+      continue;
+    }
+    // Steam store: store.steampowered.com/app/APPID/...
+    const steam = url.match(/https?:\/\/store\.steampowered\.com\/app\/(\d+)/);
+    if (steam) {
+      embeds.push({ type: 'steam', appId: steam[1] });
       continue;
     }
   }
@@ -277,6 +301,36 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
             title="Tenor GIF"
           />
         </div>
+      </div>
+    );
+  }
+
+  if (embed.type === 'giphy') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <div className="w-full" style={{ paddingBottom: '75%', position: 'relative' }}>
+          <iframe
+            src={`https://giphy.com/embed/${embed.giphyId}`}
+            className="absolute inset-0 w-full h-full"
+            allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            title="Giphy GIF"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (embed.type === 'steam') {
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
+        <iframe
+          src={`https://store.steampowered.com/widget/${embed.appId}/`}
+          className="w-full"
+          style={{ height: '190px' }}
+          sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+          title="Steam"
+        />
       </div>
     );
   }
