@@ -342,6 +342,21 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   return null;
 };
 
+/* ---------- Media hidden placeholder ---------- */
+
+const MediaPlaceholder: React.FC<{ aspectRatio?: string; className?: string }> = ({ aspectRatio, className = '' }) => (
+  <div
+    className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
+    style={aspectRatio ? { aspectRatio } : { minHeight: 120 }}
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
+  </div>
+);
+
 /* ---------- Inline spoiler component ---------- */
 
 const InlineSpoiler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -499,9 +514,11 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             </div>
           )}
 
-          {showMedia && embeds.map((embed, idx) => (
+          {showMedia ? embeds.map((embed, idx) => (
             <EmbedCard key={`embed-${idx}`} embed={embed} />
-          ))}
+          )) : embeds.length > 0 ? embeds.map((_embed, idx) => (
+            <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />
+          )) : null}
 
           {showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
@@ -511,6 +528,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
                 className="block cursor-pointer max-h-[200px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
               />
             </div>
+          )}
+
+          {!showMedia && comment.media?.type === 'image' && (
+            <MediaPlaceholder className="mb-2 w-full" />
           )}
 
           {lightboxOpen && comment.media?.type === 'image' && (
@@ -545,6 +566,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
                 </div>
               )}
             </div>
+          )}
+
+          {!showMedia && comment.media?.type === 'youtube' && (
+            <MediaPlaceholder className="mb-2 w-full" aspectRatio="16/9" />
           )}
 
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-1">
@@ -784,8 +809,26 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     : (shout.media?.type === 'image' ? shout.media.url : undefined);
 
   // Render media section (reused in normal and NSFW-only blur mode)
+  const hasMediaContent = embeds.length > 0 || !!shout.media;
+
   const renderMediaSection = () => {
-    if (!showMedia) return null;
+    if (!showMedia) {
+      if (!hasMediaContent) return null;
+      // Show placeholder(s) for hidden media
+      return (
+        <>
+          {embeds.map((_embed, idx) => (
+            <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />
+          ))}
+          {shout.media?.type === 'image' && (
+            <MediaPlaceholder className="mb-3 w-full" aspectRatio={shout.media.width && shout.media.height ? `${shout.media.width}/${shout.media.height}` : undefined} />
+          )}
+          {shout.media?.type === 'youtube' && (
+            <MediaPlaceholder className="mb-3 w-full" aspectRatio="16/9" />
+          )}
+        </>
+      );
+    }
 
     return (
       <>
