@@ -322,16 +322,19 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   }
 
   if (embed.type === 'steam') {
+    const headerImg = `https://cdn.akamai.steamstatic.com/steam/apps/${embed.appId}/capsule_616x353.jpg`;
+    const storeUrl = `https://store.steampowered.com/app/${embed.appId}/`;
     return (
-      <div className="mb-2 rounded-lg overflow-hidden border border-th-border/50">
-        <iframe
-          src={`https://store.steampowered.com/widget/${embed.appId}/`}
-          className="w-full"
-          style={{ height: '190px' }}
-          sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
-          title="Steam"
-        />
-      </div>
+      <a href={storeUrl} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-lg overflow-hidden border border-th-border/50 bg-th-elevated/50 hover:border-th-text-4 transition-colors group">
+        <img src={headerImg} alt="Steam" loading="lazy" className="w-full object-cover" style={{ maxHeight: 200 }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        <div className="flex items-center gap-2 px-3 py-2">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 text-th-text-3 shrink-0" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.15 9.43 7.6 11.22l3.44-4.97c-.24-.01-.49-.03-.74-.08-1.79-.33-3.14-1.73-3.36-3.41l-2.34-3.38c-.24-1.04.03-2.14.73-2.95.95-1.1 2.48-1.45 3.82-.89l5.05 2.1c.67-.05 1.36.04 2.02.27 2.09.71 3.4 2.72 3.17 4.87-.22 2.15-1.93 3.83-4.09 4.05-.66.07-1.31-.01-1.92-.22L10.66 24c.43.02.87.03 1.34.03 6.63 0 12-5.37 12-12S18.63 0 12 0z"/>
+          </svg>
+          <span className="text-sm text-th-text-2 font-medium group-hover:underline">Steam Store</span>
+          <svg viewBox="0 0 20 20" className="w-3.5 h-3.5 text-th-text-4 shrink-0 ml-auto group-hover:text-th-text-2 transition-colors" fill="currentColor"><path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5zm7.25-.75a.75.75 0 01.75-.75h3.5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0V6.31l-5.47 5.47a.75.75 0 01-1.06-1.06l5.47-5.47H12.25a.75.75 0 01-.75-.75z" clipRule="evenodd"/></svg>
+        </div>
+      </a>
     );
   }
 
@@ -344,10 +347,10 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
 
 /* ---------- Media hidden placeholder ---------- */
 
-const MediaPlaceholder: React.FC<{ aspectRatio?: string; className?: string }> = ({ aspectRatio, className = '' }) => (
+const MediaPlaceholder: React.FC<{ aspectRatio?: string; maxHeight?: number; height?: number; className?: string }> = ({ aspectRatio, maxHeight, height, className = '' }) => (
   <div
     className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
-    style={aspectRatio ? { aspectRatio } : { minHeight: 120 }}
+    style={{ ...(aspectRatio ? { aspectRatio } : {}), ...(maxHeight ? { maxHeight } : {}), ...(height ? { height } : {}), ...(!aspectRatio && !height ? { minHeight: 120 } : {}) }}
   >
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
       <polygon points="23 7 16 12 23 17 23 7" />
@@ -516,9 +519,14 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {showMedia ? embeds.map((embed, idx) => (
             <EmbedCard key={`embed-${idx}`} embed={embed} />
-          )) : embeds.length > 0 ? embeds.map((_embed, idx) => (
-            <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />
-          )) : null}
+          )) : embeds.length > 0 ? embeds.map((_embed, idx) => {
+            const e = embeds[idx];
+            if (e.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
+            if (e.type === 'tenor' || e.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={150} />;
+            if (e.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={150} />;
+            if (e.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={48} />;
+            return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" maxHeight={200} height={150} />;
+          }) : null}
 
           {showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
@@ -531,7 +539,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           {!showMedia && comment.media?.type === 'image' && (
-            <MediaPlaceholder className="mb-2 w-full" />
+            <MediaPlaceholder className="mb-2 w-full" maxHeight={200} height={150} />
           )}
 
           {lightboxOpen && comment.media?.type === 'image' && (
@@ -814,14 +822,22 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const renderMediaSection = () => {
     if (!showMedia) {
       if (!hasMediaContent) return null;
-      // Show placeholder(s) for hidden media
+      // Show placeholder(s) for hidden media, matching actual rendered sizes
       return (
         <>
-          {embeds.map((_embed, idx) => (
-            <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />
-          ))}
+          {embeds.map((_embed, idx) => {
+            const e = embeds[idx];
+            // Match each embed type's actual rendered dimensions
+            if (e.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
+            if (e.type === 'tenor' || e.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={200} />;
+            if (e.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={200} />;
+            if (e.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={56} />;
+            if (e.type === 'twitter') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={200} />;
+            // imgur images, imgur-direct: same as attached images
+            return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" maxHeight={300} height={200} />;
+          })}
           {shout.media?.type === 'image' && (
-            <MediaPlaceholder className="mb-3 w-full" aspectRatio={shout.media.width && shout.media.height ? `${shout.media.width}/${shout.media.height}` : undefined} />
+            <MediaPlaceholder className="mb-3 w-full" maxHeight={300} aspectRatio={shout.media.width && shout.media.height ? `${shout.media.width}/${shout.media.height}` : undefined} height={!shout.media.width ? 200 : undefined} />
           )}
           {shout.media?.type === 'youtube' && (
             <MediaPlaceholder className="mb-3 w-full" aspectRatio="16/9" />
