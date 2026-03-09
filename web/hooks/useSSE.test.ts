@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import React from "react";
 import { renderHook, act } from "@testing-library/react";
 import { useSSE } from "./useSSE";
+import { SSEProvider } from "../context/SSEContext";
 
 // ── Controllable EventSource mock ─────────────────────────────────────────────
 
@@ -48,6 +50,10 @@ class MockEventSource {
 
 // ── Setup / teardown ──────────────────────────────────────────────────────────
 
+function wrapper({ children }: { children: React.ReactNode }) {
+  return React.createElement(SSEProvider, null, children);
+}
+
 beforeEach(() => {
   MockEventSource.instances = [];
   vi.useFakeTimers();
@@ -65,13 +71,13 @@ describe("useSSE", () => {
   // ── Connection lifecycle ────────────────────────────────────────────────
 
   it("creates an EventSource at /api/v1/events on mount", () => {
-    renderHook(() => useSSE({}));
+    renderHook(() => useSSE({}), { wrapper });
     expect(MockEventSource.instances).toHaveLength(1);
     expect(MockEventSource.instances[0].url).toBe("/api/v1/events");
   });
 
   it("closes the EventSource on unmount", () => {
-    const { unmount } = renderHook(() => useSSE({}));
+    const { unmount } = renderHook(() => useSSE({}), { wrapper });
     const es = MockEventSource.instances[0];
     unmount();
     expect(es.closed).toBe(true);
@@ -81,7 +87,7 @@ describe("useSSE", () => {
 
   it("calls the matching listener with parsed JSON data", () => {
     const onNewShout = vi.fn();
-    renderHook(() => useSSE({ new_shout: onNewShout }));
+    renderHook(() => useSSE({ new_shout: onNewShout }), { wrapper });
     const es = MockEventSource.instances[0];
 
     act(() => es.triggerMessage("new_shout", { id: "s1", content: "hello" }));
@@ -100,7 +106,7 @@ describe("useSSE", () => {
     ];
     const listeners = Object.fromEntries(types.map((t) => [t, vi.fn()]));
 
-    renderHook(() => useSSE(listeners));
+    renderHook(() => useSSE(listeners), { wrapper });
     const es = MockEventSource.instances[0];
 
     for (const type of types) {
@@ -111,7 +117,7 @@ describe("useSSE", () => {
 
   it("does not call a listener for an unregistered event type", () => {
     const onNewShout = vi.fn();
-    renderHook(() => useSSE({ new_shout: onNewShout }));
+    renderHook(() => useSSE({ new_shout: onNewShout }), { wrapper });
     const es = MockEventSource.instances[0];
 
     act(() => es.triggerMessage("delete_shout", { id: "s1" }));
@@ -121,7 +127,7 @@ describe("useSSE", () => {
 
   it("does not crash on malformed JSON — listener is not called", () => {
     const onNewShout = vi.fn();
-    renderHook(() => useSSE({ new_shout: onNewShout }));
+    renderHook(() => useSSE({ new_shout: onNewShout }), { wrapper });
     const es = MockEventSource.instances[0];
 
     act(() => es.triggerRawMessage("new_shout", "{not valid json"));
@@ -132,7 +138,7 @@ describe("useSSE", () => {
   // ── Reconnect / backoff ─────────────────────────────────────────────────
 
   it("reconnects after an error once the backoff timer fires", () => {
-    renderHook(() => useSSE({}));
+    renderHook(() => useSSE({}), { wrapper });
     const es = MockEventSource.instances[0];
 
     act(() => es.triggerError());
@@ -143,7 +149,7 @@ describe("useSSE", () => {
   });
 
   it("doubles the backoff on each consecutive error", () => {
-    renderHook(() => useSSE({}));
+    renderHook(() => useSSE({}), { wrapper });
 
     // First error → reconnect after 1 000 ms
     act(() => MockEventSource.instances[0].triggerError());
@@ -161,7 +167,7 @@ describe("useSSE", () => {
   });
 
   it("caps backoff at 30 000 ms", () => {
-    renderHook(() => useSSE({}));
+    renderHook(() => useSSE({}), { wrapper });
 
     // Trigger enough errors to exceed the 30 000 ms cap
     // backoff doubles: 1000 → 2000 → 4000 → 8000 → 16000 → 30000 (cap)
@@ -181,7 +187,7 @@ describe("useSSE", () => {
   });
 
   it("resets backoff to 1 000 ms after a successful connection", () => {
-    renderHook(() => useSSE({}));
+    renderHook(() => useSSE({}), { wrapper });
 
     // Error → doubled backoff
     act(() => MockEventSource.instances[0].triggerError());
@@ -201,7 +207,7 @@ describe("useSSE", () => {
   // ── Cleanup on unmount ──────────────────────────────────────────────────
 
   it("does not reconnect after unmount", () => {
-    const { unmount } = renderHook(() => useSSE({}));
+    const { unmount } = renderHook(() => useSSE({}), { wrapper });
     const es = MockEventSource.instances[0];
 
     unmount();
@@ -212,7 +218,7 @@ describe("useSSE", () => {
   });
 
   it("cancels a pending reconnect timer on unmount", () => {
-    const { unmount } = renderHook(() => useSSE({}));
+    const { unmount } = renderHook(() => useSSE({}), { wrapper });
     const es = MockEventSource.instances[0];
 
     // Arm reconnect timer

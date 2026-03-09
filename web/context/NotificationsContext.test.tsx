@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { NotificationsProvider, useNotifications } from "./NotificationsContext";
+import { SSEProvider } from "./SSEContext";
 import type { Notification } from "../types";
 
 // ── Mock useAuth ──────────────────────────────────────────────────────────────
@@ -59,7 +60,11 @@ const notif1: Notification = {
 const notif2: Notification = { ...notif1, id: "n2" };
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <NotificationsProvider>{children}</NotificationsProvider>;
+  return (
+    <SSEProvider>
+      <NotificationsProvider>{children}</NotificationsProvider>
+    </SSEProvider>
+  );
 }
 
 /** Queue a successful GET /notifications response. */
@@ -100,10 +105,9 @@ describe("NotificationsContext — logged out", () => {
     expect(result.current.unreadCount).toBe(0);
   });
 
-  it("does not fetch or connect SSE when user is null", () => {
+  it("does not fetch notifications when user is null", () => {
     renderHook(() => useNotifications(), { wrapper });
     expect(fetch).not.toHaveBeenCalled();
-    expect(MockEventSource.instances).toHaveLength(0);
   });
 });
 
@@ -138,7 +142,7 @@ describe("NotificationsContext — user login", () => {
     });
   });
 
-  it("opens an SSE connection when user logs in", async () => {
+  it("SSE connection is open on mount", async () => {
     mockNotifFetch();
     mockUseAuth.mockReturnValue({ user: mockUser });
 
