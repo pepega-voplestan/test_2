@@ -50,7 +50,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
   }
 
   function handleClick(e: React.MouseEvent) {
-    // Allow middle-click / ctrl+click / cmd+click to open in new tab natively
+    markAsRead(n.id);
     if (e.button === 1 || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
     if (n.shoutId) navigateTo(`/shout/${n.shoutId}`);
@@ -91,16 +91,43 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
 };
 
 const NotificationDropdown: React.FC = () => {
-  const { notifications, unreadCount, markAllAsRead, flushReads } = useNotifications();
+  const { sortedNotifications, unreadCount, hasMore, isLoadingMore, loadMore, markAllAsRead, flushReads } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [frozenList, setFrozenList] = useState(sortedNotifications);
+  const frozenIds = useRef(new Set<string>());
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Flush buffered reads when dropdown closes — batches everything from the session
+  // Snapshot the list on open; flush buffered reads on close; lock body scroll
   useEffect(() => {
-    if (!isOpen) flushReads();
-  }, [isOpen]);
+    if (isOpen) {
+      setFrozenList(sortedNotifications);
+      frozenIds.current = new Set(sortedNotifications.map((n) => n.id));
+      document.body.style.overflow = 'hidden';
+    } else {
+      flushReads();
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // While open: update isRead in-place (visual feedback) + append pages from loadMore
+  useEffect(() => {
+    if (!isOpen) return;
+    const updatedMap = new Map(sortedNotifications.map((n) => [n.id, n]));
+    const newItems = sortedNotifications.filter((n) => !frozenIds.current.has(n.id));
+    newItems.forEach((n) => frozenIds.current.add(n.id));
+    setFrozenList((prev) => {
+      const patched = prev.map((item) => {
+        const fresh = updatedMap.get(item.id);
+        return fresh && fresh.isRead !== item.isRead ? { ...item, isRead: fresh.isRead } : item;
+      });
+      return newItems.length > 0 ? [...patched, ...newItems] : patched;
+    });
+  }, [isOpen, sortedNotifications]);
 
   // Close on outside click
   useEffect(() => {
@@ -116,11 +143,25 @@ const NotificationDropdown: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
 
+  // IntersectionObserver on sentinel — triggers loadMore when scrolled near bottom
+  useEffect(() => {
+    if (!isOpen || !sentinelRef.current || !scrollRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          loadMore();
+        }
+      },
+      { root: scrollRef.current, threshold: 0.1 }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [isOpen, hasMore, isLoadingMore, loadMore]);
+
   function handleBellClick() {
     if (!isOpen && buttonRef.current) {
-      // Compute position before the dropdown mounts so it renders correctly on the first paint
       const rect = buttonRef.current.getBoundingClientRect();
-      const DROPDOWN_W = 320; // w-80
+      const DROPDOWN_W = 320;
       const PAD = 8;
       let right = window.innerWidth - rect.right;
       right = Math.max(PAD, right);
@@ -141,12 +182,10 @@ const NotificationDropdown: React.FC = () => {
         className="relative p-2 hover:text-th-text transition-colors"
         title="Уведомления"
       >
-        {/* Bell icon */}
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
           <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zm0 16a2 2 0 01-2-2h4a2 2 0 01-2 2z" />
         </svg>
 
-        {/* Unread badge */}
         {unreadCount > 0 && (
           <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full leading-none">
             {unreadCount > 9 ? '9+' : unreadCount}
@@ -173,19 +212,26 @@ const NotificationDropdown: React.FC = () => {
             )}
           </div>
 
-          {notifications.length === 0 ? (
+          {frozenList.length === 0 ? (
             <div className="py-8 text-center text-sm text-th-text-3">
               Нет уведомлений
             </div>
           ) : (
-            <div className="max-h-[420px] overflow-y-auto divide-y divide-th-border-2">
-              {notifications.map((n) => (
+            <div ref={scrollRef} className="max-h-[420px] overflow-y-auto divide-y divide-th-border-2">
+              {frozenList.map((n) => (
                 <NotificationItem
                   key={n.id}
                   notification={n}
                   onClose={() => setIsOpen(false)}
                 />
               ))}
+              {/* Sentinel for IntersectionObserver — triggers next page load */}
+              <div ref={sentinelRef} className="h-px" />
+              {isLoadingMore && (
+                <div className="py-3 text-center text-xs text-th-text-3">
+                  Загрузка...
+                </div>
+              )}
             </div>
           )}
         </div>

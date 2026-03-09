@@ -224,7 +224,7 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP variants; GIFs also store original) |
 | POST | `/upload/avatar` | Yes | Upload avatar (≤2MB JPG/PNG/WebP; generates 64/128/256px square WebP) |
 | GET | `/avatars/:userId/:size.webp` | No | Serve avatar with immutable cache headers |
-| GET | `/notifications` | Yes | Fetch unread notifications from the past 7 days |
+| GET | `/notifications?cursor=&limit=` | Yes | Fetch notifications (read + unread) from the past 14 days, cursor-paginated. `cursor` = ISO timestamp of last item (fetch older items); `limit` default 20, max 50. Response: `{ notifications, nextCursor }` |
 | PATCH | `/notifications/read-batch` | Yes | Mark a batch of notifications as read (max 50 at once) |
 | PATCH | `/notifications/read-all` | Yes | Mark all unread notifications as read |
 
@@ -305,12 +305,12 @@ Notifications are triggered server-side and delivered in real-time via targeted 
 - `helpers/mentions.js` provides `extractMentionedUserIds(content, actorId)` to parse `@[username:userId]` tokens and `buildSnippet(content, maxLen=60)` to generate truncated previews for notification text. Snippets apply spoiler-awareness: inline spoiler markers (`||…||`) are replaced with asterisks masking only the hidden part; shouts tagged `politics` replace the entire snippet with "ПОЛИТИКА"; `spoiler`/`nsfw` tags replace it with "СПОЙЛЕР".
 - Self-mentions are excluded — the actor never receives their own notification.
 - Server-side cleanup: `server.js` runs a task every 24 hours that hard-deletes notifications older than 14 days.
-- Frontend: `NotificationsContext.tsx` fetches unread notifications on login (past 7 days only), listens for real-time `notification` SSE events, and batches mark-as-read requests.
-- Read marking: hovering a notification item for 800ms queues it for batch-read. When the dropdown closes (or after a 5-second safety flush), the batch is sent via `PATCH /notifications/read-batch`.
+- Frontend: `NotificationsContext.tsx` fetches all notifications (read + unread) on login with cursor-based pagination (14-day window, page size 20). New notifications arrive via SSE and are prepended. Read and unread notifications are both shown, sorted purely chronologically (newest first). Deduplication by `id` prevents duplicates from SSE replays or page overlaps.
+- Read marking: hovering a notification item for 800ms queues it for batch-read. When the dropdown closes (or after a 5-second safety flush), the batch is sent via `PATCH /notifications/read-batch`. The dropdown list is frozen while open — read-status changes (optimistic updates) do not affect item order until the dropdown is reopened.
 
 **Frontend components:**
-- `NotificationsContext.tsx` — state management, SSE subscription, batched read marking logic
-- `NotificationDropdown.tsx` — bell icon with unread badge in `Header.tsx`; dropdown lists notifications with actor avatar, text, snippet, and relative timestamp; "mark all read" button; clicking a notification navigates to the associated shout
+- `NotificationsContext.tsx` — state management, SSE subscription, cursor-paginated fetching (`loadMore`), dedup, sort (`sortedNotifications`), batched read marking. Exposes: `sortedNotifications`, `unreadCount`, `hasMore`, `isLoadingMore`, `loadMore`, `markAsRead`, `markAllAsRead`, `flushReads`.
+- `NotificationDropdown.tsx` — bell icon with unread badge in `Header.tsx`; dropdown lists notifications with actor avatar, text, snippet, and relative timestamp; "mark all read" button; clicking a notification navigates to the associated shout; infinite scroll via `IntersectionObserver` on a sentinel element at the bottom of the scroll container
 
 ## Database
 
@@ -476,7 +476,7 @@ Uses `jsdom` environment with `@testing-library/react`.
 **Context tests (co-located with source files):**
 - `web/context/AuthContext.test.tsx` — Login/logout, registration flow, password reset, modal state, error handling
 - `web/context/ThemeContext.test.tsx` — Theme toggling and `localStorage` persistence
-- `web/context/NotificationsContext.test.tsx` — SSE subscription, real-time notification updates, batched mark-as-read, cleanup on unmount
+- `web/context/NotificationsContext.test.tsx` — SSE subscription, real-time updates, cursor pagination (`hasMore`/`loadMore`/`isLoadingMore`), sort order (chronological desc, read/unread agnostic), dedup, batched mark-as-read, safety timer, cleanup on unmount
 - `web/context/ContentPreferencesContext.test.tsx` — Content visibility preference toggles
 
 **Hook tests (co-located with source files):**

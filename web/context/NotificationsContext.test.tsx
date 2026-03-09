@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { NotificationsProvider, useNotifications } from "./NotificationsContext";
+import { SSEProvider } from "./SSEContext";
 import type { Notification } from "../types";
 
 // ── Mock useAuth ──────────────────────────────────────────────────────────────
@@ -59,14 +60,18 @@ const notif1: Notification = {
 const notif2: Notification = { ...notif1, id: "n2" };
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <NotificationsProvider>{children}</NotificationsProvider>;
+  return (
+    <SSEProvider>
+      <NotificationsProvider>{children}</NotificationsProvider>
+    </SSEProvider>
+  );
 }
 
 /** Queue a successful GET /notifications response. */
-function mockNotifFetch(notifications: Notification[] = []) {
+function mockNotifFetch(notifications: Notification[] = [], nextCursor: string | null = null) {
   vi.mocked(fetch).mockResolvedValueOnce({
     ok: true,
-    json: () => Promise.resolve({ notifications }),
+    json: () => Promise.resolve({ notifications, nextCursor }),
   } as Response);
 }
 
@@ -96,14 +101,13 @@ afterEach(() => {
 describe("NotificationsContext — logged out", () => {
   it("starts with empty notifications and unreadCount=0", () => {
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    expect(result.current.notifications).toEqual([]);
+    expect(result.current.sortedNotifications).toEqual([]);
     expect(result.current.unreadCount).toBe(0);
   });
 
-  it("does not fetch or connect SSE when user is null", () => {
+  it("does not fetch notifications when user is null", () => {
     renderHook(() => useNotifications(), { wrapper });
     expect(fetch).not.toHaveBeenCalled();
-    expect(MockEventSource.instances).toHaveLength(0);
   });
 });
 
@@ -113,8 +117,8 @@ describe("NotificationsContext — user login", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
-    expect(result.current.notifications[0]).toEqual(notif1);
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+    expect(result.current.sortedNotifications[0]).toEqual(notif1);
   });
 
   it("sets unreadCount based on fetched notifications", async () => {
@@ -122,7 +126,7 @@ describe("NotificationsContext — user login", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
     expect(result.current.unreadCount).toBe(1);
   });
 
@@ -133,12 +137,12 @@ describe("NotificationsContext — user login", () => {
     renderHook(() => useNotifications(), { wrapper });
     await waitFor(() => expect(fetch).toHaveBeenCalled());
 
-    expect(fetch).toHaveBeenCalledWith("/api/v1/notifications", {
+    expect(fetch).toHaveBeenCalledWith("/api/v1/notifications?limit=20", {
       credentials: "include",
     });
   });
 
-  it("opens an SSE connection when user logs in", async () => {
+  it("SSE connection is open on mount", async () => {
     mockNotifFetch();
     mockUseAuth.mockReturnValue({ user: mockUser });
 
@@ -155,12 +159,12 @@ describe("NotificationsContext — user logout", () => {
     const { result, rerender } = renderHook(() => useNotifications(), {
       wrapper,
     });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
 
     mockUseAuth.mockReturnValue({ user: null });
     rerender();
 
-    await waitFor(() => expect(result.current.notifications).toEqual([]));
+    await waitFor(() => expect(result.current.sortedNotifications).toEqual([]));
   });
 });
 
@@ -174,8 +178,8 @@ describe("NotificationsContext — SSE events", () => {
 
     act(() => MockEventSource.instances[0].triggerMessage("notification", notif1));
 
-    expect(result.current.notifications).toHaveLength(1);
-    expect(result.current.notifications[0].id).toBe("n1");
+    expect(result.current.sortedNotifications).toHaveLength(1);
+    expect(result.current.sortedNotifications[0].id).toBe("n1");
   });
 
   it("SSE-pushed notifications always arrive with isRead=false", async () => {
@@ -192,7 +196,7 @@ describe("NotificationsContext — SSE events", () => {
       })
     );
 
-    expect(result.current.notifications[0].isRead).toBe(false);
+    expect(result.current.sortedNotifications[0].isRead).toBe(false);
   });
 
   it("prepends SSE notification before existing ones", async () => {
@@ -200,14 +204,14 @@ describe("NotificationsContext — SSE events", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
 
     act(() =>
       MockEventSource.instances[0].triggerMessage("notification", notif2)
     );
 
-    expect(result.current.notifications[0].id).toBe("n2"); // new first
-    expect(result.current.notifications[1].id).toBe("n1");
+    expect(result.current.sortedNotifications[0].id).toBe("n2"); // new first
+    expect(result.current.sortedNotifications[1].id).toBe("n1");
   });
 
   it("closes SSE connection on unmount", async () => {
@@ -228,11 +232,11 @@ describe("NotificationsContext — markAsRead", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
 
     act(() => result.current.markAsRead("n1"));
 
-    expect(result.current.notifications[0].isRead).toBe(true);
+    expect(result.current.sortedNotifications[0].isRead).toBe(true);
     expect(result.current.unreadCount).toBe(0);
   });
 
@@ -241,12 +245,12 @@ describe("NotificationsContext — markAsRead", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
 
     act(() => result.current.markAsRead("n1"));
 
-    expect(result.current.notifications.find((n) => n.id === "n1")!.isRead).toBe(true);
-    expect(result.current.notifications.find((n) => n.id === "n2")!.isRead).toBe(false);
+    expect(result.current.sortedNotifications.find((n) => n.id === "n1")!.isRead).toBe(true);
+    expect(result.current.sortedNotifications.find((n) => n.id === "n2")!.isRead).toBe(false);
   });
 });
 
@@ -257,12 +261,12 @@ describe("NotificationsContext — markAllAsRead", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
 
     act(() => result.current.markAllAsRead());
 
     expect(result.current.unreadCount).toBe(0);
-    expect(result.current.notifications.every((n) => n.isRead)).toBe(true);
+    expect(result.current.sortedNotifications.every((n) => n.isRead)).toBe(true);
   });
 
   it("calls PATCH /api/v1/notifications/read-all", async () => {
@@ -271,7 +275,7 @@ describe("NotificationsContext — markAllAsRead", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
 
     act(() => result.current.markAllAsRead());
 
@@ -289,7 +293,7 @@ describe("NotificationsContext — flushReads", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
 
     act(() => {
       result.current.markAsRead("n1");
@@ -330,7 +334,7 @@ describe("NotificationsContext — safety timer", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
 
     // Switch to fake timers only after async setup is done
     vi.useFakeTimers();
@@ -362,7 +366,7 @@ describe("NotificationsContext — safety timer", () => {
     mockUseAuth.mockReturnValue({ user: mockUser });
 
     const { result } = renderHook(() => useNotifications(), { wrapper });
-    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
 
     // Switch to fake timers only after async setup is done
     vi.useFakeTimers();
@@ -383,6 +387,160 @@ describe("NotificationsContext — safety timer", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("NotificationsContext — pagination (hasMore / loadMore)", () => {
+  it("hasMore is false when nextCursor is null", async () => {
+    mockNotifFetch([notif1], null);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it("hasMore is true when nextCursor is a string", async () => {
+    mockNotifFetch([notif1], "2026-01-01T00:00:00.000Z");
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("loadMore fetches next page with cursor and limit params", async () => {
+    const cursor = "2026-01-01T00:00:00.000Z";
+    mockNotifFetch([notif1], cursor);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+    // Queue the second-page response
+    mockNotifFetch([notif2], null);
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.hasMore).toBe(false));
+
+    const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(calls.some(url => url.includes("cursor=") && url.includes("limit=20"))).toBe(true);
+  });
+
+  it("loadMore merges next page items after existing ones", async () => {
+    mockNotifFetch([notif1], "2026-01-01T00:00:00.000Z");
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+
+    mockNotifFetch([notif2], null);
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
+  });
+
+  it("loadMore deduplicates: an item present on both pages appears only once", async () => {
+    mockNotifFetch([notif1], "2026-01-01T00:00:00.000Z");
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+
+    // Page 2 returns notif1 again (e.g. due to SSE prepend race) plus notif2
+    mockNotifFetch([notif1, notif2], null);
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
+  });
+
+  it("loadMore sets hasMore=false when nextCursor is null in response", async () => {
+    mockNotifFetch([notif1], "2026-01-01T00:00:00.000Z");
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+    mockNotifFetch([], null);
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.hasMore).toBe(false));
+  });
+
+  it("loadMore does nothing when hasMore is false", async () => {
+    mockNotifFetch([notif1], null); // nextCursor=null → hasMore=false
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.hasMore).toBe(false));
+
+    const callsBefore = vi.mocked(fetch).mock.calls.length;
+    act(() => result.current.loadMore());
+    expect(vi.mocked(fetch).mock.calls.length).toBe(callsBefore);
+  });
+
+  it("isLoadingMore is true while fetching and false after", async () => {
+    mockNotifFetch([notif1], "2026-01-01T00:00:00.000Z");
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+    // Delay the page-2 response so we can observe isLoadingMore=true
+    let resolvePage2!: (v: Response | PromiseLike<Response>) => void;
+    vi.mocked(fetch).mockReturnValueOnce(
+      new Promise(resolve => { resolvePage2 = resolve; }) as Promise<Response>
+    );
+    act(() => result.current.loadMore());
+    expect(result.current.isLoadingMore).toBe(true);
+
+    // Resolve the request
+    resolvePage2({ ok: true, json: () => Promise.resolve({ notifications: [notif2], nextCursor: null }) } as unknown as Response);
+    await waitFor(() => expect(result.current.isLoadingMore).toBe(false));
+  });
+});
+
+describe("NotificationsContext — sortedNotifications order", () => {
+  it("sorts notifications by timestamp desc regardless of read status", async () => {
+    const older: Notification = { ...notif1, id: "older", isRead: false, timestamp: "2026-01-01T00:00:00Z" };
+    const newer: Notification = { ...notif1, id: "newer", isRead: true, timestamp: "2026-01-03T00:00:00Z" };
+    mockNotifFetch([older, newer], null);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
+
+    // newer timestamp first, read/unread status does not affect order
+    expect(result.current.sortedNotifications[0].id).toBe("newer");
+    expect(result.current.sortedNotifications[1].id).toBe("older");
+  });
+
+  it("markAsRead does not change the position of a notification in the list", async () => {
+    const older: Notification = { ...notif1, id: "older", isRead: false, timestamp: "2026-01-01T00:00:00Z" };
+    const newer: Notification = { ...notif1, id: "newer", isRead: true, timestamp: "2026-01-03T00:00:00Z" };
+    mockNotifFetch([older, newer], null);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(2));
+
+    act(() => result.current.markAsRead("older"));
+
+    // Order unchanged — timestamp order is preserved
+    expect(result.current.sortedNotifications[0].id).toBe("newer");
+    expect(result.current.sortedNotifications[1].id).toBe("older");
+  });
+});
+
+describe("NotificationsContext — SSE deduplication", () => {
+  it("does not add a duplicate when SSE pushes an already-loaded notification", async () => {
+    mockNotifFetch([notif1], null);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(MockEventSource.instances).toHaveLength(1));
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+
+    // SSE fires the same notification again (e.g. reconnect replay)
+    act(() => MockEventSource.instances[0].triggerMessage("notification", notif1));
+
+    expect(result.current.sortedNotifications).toHaveLength(1);
   });
 });
 
