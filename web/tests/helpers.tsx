@@ -1,6 +1,7 @@
 import { render, type RenderOptions } from "@testing-library/react";
 import { ThemeProvider } from "../context/ThemeContext";
 import { AuthProvider } from "../context/AuthContext";
+import { SSEProvider } from "../context/SSEContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
 import { type ReactElement } from "react";
 
@@ -19,7 +20,9 @@ function renderWithProviders(
     return (
       <ThemeProvider>
         <AuthProvider>
-          <NotificationsProvider>{children}</NotificationsProvider>
+          <SSEProvider>
+            <NotificationsProvider>{children}</NotificationsProvider>
+          </SSEProvider>
         </AuthProvider>
       </ThemeProvider>
     );
