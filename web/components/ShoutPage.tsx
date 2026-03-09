@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Shout, Comment } from '../types';
 import { navigateTo } from '../hooks/useRoute';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
+import { useAuth } from '../context/AuthContext';
+import { useSSE } from '../hooks/useSSE';
 import ShoutCard from './ShoutCard';
 
 interface ShoutPageProps {
@@ -10,9 +12,12 @@ interface ShoutPageProps {
 
 const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
   const { prefs } = useContentPreferences();
+  const { user } = useAuth();
   const [shout, setShout] = useState<Shout | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
 
   useEffect(() => {
     setLoading(true);
@@ -51,6 +56,55 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
       prev ? { ...prev, isDeleted: true, content: '', media: undefined, user: null } : prev
     );
   }
+
+  const sseListeners = useMemo(() => ({
+    delete_shout: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      if (data.shoutId === shoutId) {
+        setShout((prev) =>
+          prev ? { ...prev, isDeleted: true, content: '', media: undefined, user: null } : prev
+        );
+      }
+    },
+    new_comment: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      if (data.shoutId !== shoutId) return;
+      const comment = data.comment as Comment | undefined;
+      if (comment) {
+        setShout((prev) =>
+          prev ? { ...prev, comments: [...(prev.comments || []), comment] } : prev
+        );
+      }
+    },
+    delete_comment: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      if (data.shoutId !== shoutId) return;
+      const commentId = data.commentId as string;
+      setShout((prev) =>
+        prev
+          ? { ...prev, comments: (prev.comments || []).filter((c) => c.id !== commentId) }
+          : prev
+      );
+    },
+    shout_like: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      if (data.shoutId !== shoutId) return;
+      const likes = data.likes as number;
+      setShout((prev) => prev ? { ...prev, likes } : prev);
+    },
+    comment_like: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      const commentId = data.commentId as string;
+      const likes = data.likes as number;
+      setShout((prev) =>
+        prev
+          ? { ...prev, comments: (prev.comments || []).map((c) => c.id === commentId ? { ...c, likes } : c) }
+          : prev
+      );
+    },
+  }), [shoutId]);
+
+  useSSE(sseListeners);
 
   return (
     <div>

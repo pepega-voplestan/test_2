@@ -101,14 +101,17 @@ const NotificationDropdown: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Snapshot the list on open; flush buffered reads on close
+  // Snapshot the list on open; flush buffered reads on close; lock body scroll
   useEffect(() => {
     if (isOpen) {
       setFrozenList(sortedNotifications);
       frozenIds.current = new Set(sortedNotifications.map((n) => n.id));
+      document.body.style.overflow = 'hidden';
     } else {
       flushReads();
+      document.body.style.overflow = '';
     }
+    return () => { document.body.style.overflow = ''; };
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // While open: update isRead in-place (visual feedback) + append pages from loadMore
