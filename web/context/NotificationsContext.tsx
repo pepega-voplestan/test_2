@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useMemo, useCallback, ReactNode } from "react";
 import { Notification } from "../types";
 import { useAuth } from "./AuthContext";
+import { useSSEContext } from "./SSEContext";
 
 type NotificationsContextType = {
   sortedNotifications: Notification[];
@@ -102,50 +103,20 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoadingMore(false));
   }, [nextCursor, isLoadingMore]);
 
-  // SSE connection for incoming notification events
+  // Subscribe to notification events via the shared SSE connection
+  const { subscribe } = useSSEContext();
   useEffect(() => {
     if (!user) return;
-
-    let es: EventSource | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let backoff = 1000;
-    let unmounted = false;
-
-    function connect() {
-      if (unmounted) return;
-      es = new EventSource("/api/v1/events");
-
-      es.onopen = () => {
-        backoff = 1000;
-      };
-
-      es.addEventListener("notification", (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data) as Notification;
-          // Prepend new notification, dedup in case of reconnect replay
-          setNotifications((prev) => dedupeById([{ ...data, isRead: false }, ...prev]));
-        } catch (err) {
-          console.error("[Notifications] Failed to parse SSE event:", err);
-        }
-      });
-
-      es.onerror = () => {
-        es?.close();
-        if (!unmounted) {
-          timer = setTimeout(connect, backoff);
-          backoff = Math.min(backoff * 2, 30_000);
-        }
-      };
-    }
-
-    connect();
-
-    return () => {
-      unmounted = true;
-      es?.close();
-      if (timer) clearTimeout(timer);
-    };
-  }, [user?.id]);
+    return subscribe("notification", (raw) => {
+      try {
+        const data = raw as unknown as Notification;
+        // Prepend new notification, dedup in case of reconnect replay
+        setNotifications((prev) => dedupeById([{ ...data, isRead: false }, ...prev]));
+      } catch (err) {
+        console.error("[Notifications] Failed to handle SSE notification:", err);
+      }
+    });
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function markAsRead(id: string) {
     // Optimistic update — the sort will move it to the read section
