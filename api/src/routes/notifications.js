@@ -6,23 +6,37 @@ import { buildSnippet } from "../helpers/mentions.js";
 
 const router = Router();
 
-/* GET /notifications — unread notifications for the current user from the past 7 days */
+/* GET /notifications — notifications for the current user from the past 14 days, paginated
+ *   Query params:
+ *     cursor  — ISO timestamp; fetch items older than this (for next-page requests)
+ *     limit   — page size, default 20, max 50
+ *   Response: { notifications: [...], nextCursor: string | null }
+ */
 router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
   const userId = req.session.user.id;
-  const sevenDaysAgo = toSqliteDatetime(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  const fourteenDaysAgo = toSqliteDatetime(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 50);
+
+  // Convert ISO cursor to SQLite datetime format for comparison
+  const cursor = req.query.cursor ? toSqliteDatetime(new Date(req.query.cursor)) : null;
+
+  const where = {
+    user_id: userId,
+    created_at: { gte: fourteenDaysAgo },
+  };
+  if (cursor) {
+    where.created_at = { gte: fourteenDaysAgo, lt: cursor };
+  }
 
   const rows = await prisma.notification.findMany({
-    where: {
-      user_id: userId,
-      is_read: 0,
-      created_at: { gte: sevenDaysAgo },
-    },
+    where,
     include: {
       actor: { select: { username: true, avatar: true } },
       shout: { select: { content: true, visibility_tag: true } },
       comment: { select: { content: true } },
     },
     orderBy: { created_at: "desc" },
+    take: limit,
   });
 
   const notifications = rows.map(n => ({
@@ -38,8 +52,11 @@ router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
       : buildSnippet(n.shout?.content ?? "", { spoiler: n.shout?.visibility_tag || false }),
   }));
 
-  console.log(`[Notifications] ${userId} fetched ${notifications.length} unread`);
-  res.json({ notifications });
+  // If we got a full page, there may be more — return the cursor for the next request
+  const nextCursor = rows.length === limit ? utcTimestamp(rows[rows.length - 1].created_at) : null;
+
+  console.log(`[Notifications] ${userId} fetched ${notifications.length} (cursor=${cursor ?? "none"})`);
+  res.json({ notifications, nextCursor });
 }));
 
 /* PATCH /notifications/read-batch — mark a batch of notifications as read */
