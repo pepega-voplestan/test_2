@@ -481,7 +481,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                 </button>
                 <button
                   onClick={openIgnoreList}
-                  className="text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 px-4 py-1.5 rounded-lg transition-colors"
+                  className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
                 >
                   Список игнора
                 </button>
@@ -494,7 +494,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   <button
                     onClick={() => setConfirmUnignore(true)}
                     disabled={ignoreLoading}
-                    className="text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border border-red-400/50 dark:border-red-500/40 hover:border-red-500 dark:hover:border-red-400/60 bg-red-50 dark:bg-red-500/10 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                   >
                     Убрать из игнора
                   </button>
@@ -502,7 +502,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   <button
                     onClick={() => setConfirmIgnore(true)}
                     disabled={ignoreLoading}
-                    className="text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                   >
                     Добавить в игнор
                   </button>
@@ -862,7 +862,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                     </a>
                     <button
                       onClick={() => handleRemoveFromIgnoreList(u.id)}
-                      className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-3 py-1 rounded-lg transition-colors shrink-0"
+                      className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border border-red-400/50 dark:border-red-500/40 hover:border-red-500 dark:hover:border-red-400/60 bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-lg transition-colors shrink-0"
                     >
                       Убрать
                     </button>
