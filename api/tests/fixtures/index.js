@@ -167,6 +167,25 @@ export async function createCommentLike(overrides = {}) {
 }
 
 /**
+ * Create an ignored user relationship.
+ */
+export async function createIgnoredUser(overrides = {}) {
+  const prisma = getTestPrisma();
+  if (!overrides.ownerUserId) throw new Error("createIgnoredUser requires ownerUserId");
+  if (!overrides.targetUserId) throw new Error("createIgnoredUser requires targetUserId");
+
+  return prisma.ignoredUser.create({
+    data: {
+      id: overrides.id || uuid(),
+      owner_user_id: overrides.ownerUserId,
+      target_user_id: overrides.targetUserId,
+      created_at: overrides.created_at || now(),
+      updated_at: overrides.updated_at || now(),
+    },
+  });
+}
+
+/**
  * Create a verification code.
  */
 export async function createVerificationCode(overrides = {}) {
