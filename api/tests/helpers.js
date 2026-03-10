@@ -78,6 +78,7 @@ export async function authenticatedAgent(user) {
 
 /** Table names in dependency-safe deletion order */
 const TABLES = [
+  "ignoredUser",
   "notification",
   "commentLike",
   "shoutLike",

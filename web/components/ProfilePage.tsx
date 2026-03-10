@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { UserProfile, Shout, Comment } from '../types';
+import { UserProfile, Shout, Comment, User } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
+import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
 
@@ -13,8 +14,9 @@ const PAGE_SIZE = 10;
 const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
-  const { refresh } = useAuth();
+  const { user, refresh } = useAuth();
   const { prefs } = useContentPreferences();
+  const { isIgnored, addIgnoredUser, removeIgnoredUser, ignoredUserIds } = useIgnoredUsers();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -48,6 +50,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   // Password visibility toggles
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+
+  // Ignore user state
+  const [ignoreLoading, setIgnoreLoading] = useState(false);
+  const [ignoreError, setIgnoreError] = useState<string | null>(null);
+  const [confirmIgnore, setConfirmIgnore] = useState(false);
+  const [confirmUnignore, setConfirmUnignore] = useState(false);
+  const [showIgnoreList, setShowIgnoreList] = useState(false);
+  const [ignoreListUsers, setIgnoreListUsers] = useState<User[]>([]);
+  const [ignoreListLoading, setIgnoreListLoading] = useState(false);
 
   // Email change verification flow
   const [emailStep, setEmailStep] = useState<'idle' | 'sending' | 'code'>('idle');
@@ -169,6 +180,62 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const handleThreadToggle = useCallback((shoutId: string) => {
     setOpenThreadId(prev => prev === shoutId ? null : shoutId);
   }, []);
+
+  // Ignore/unignore handlers
+  const handleIgnore = async () => {
+    setIgnoreLoading(true);
+    setIgnoreError(null);
+    try {
+      await addIgnoredUser(userId);
+      setConfirmIgnore(false);
+    } catch (err: unknown) {
+      setIgnoreError(err instanceof Error ? err.message : 'Ошибка');
+    } finally {
+      setIgnoreLoading(false);
+    }
+  };
+
+  const handleUnignore = async () => {
+    setIgnoreLoading(true);
+    setIgnoreError(null);
+    try {
+      await removeIgnoredUser(userId);
+      setConfirmUnignore(false);
+    } catch (err: unknown) {
+      setIgnoreError(err instanceof Error ? err.message : 'Ошибка');
+    } finally {
+      setIgnoreLoading(false);
+    }
+  };
+
+  const handleRemoveFromIgnoreList = async (targetUserId: string) => {
+    try {
+      await removeIgnoredUser(targetUserId);
+      setIgnoreListUsers(prev => prev.filter(u => u.id !== targetUserId));
+    } catch {
+      // silently fail
+    }
+  };
+
+  const openIgnoreList = async () => {
+    setShowIgnoreList(true);
+    setIgnoreListLoading(true);
+    try {
+      const users: User[] = [];
+      for (const uid of ignoredUserIds) {
+        const res = await fetch(`/api/v1/users/${uid}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          users.push({ id: data.profile.id, name: data.profile.name, avatar: data.profile.avatar });
+        }
+      }
+      setIgnoreListUsers(users);
+    } catch {
+      // silently fail
+    } finally {
+      setIgnoreListLoading(false);
+    }
+  };
 
   // Handle email change: send verification code
   const handleEmailSendCode = async () => {
@@ -405,12 +472,45 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
             {/* Owner actions */}
             {profile.isOwner && !isEditing && (
-              <button
-                onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setAvatarUploadError(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
-                className="text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 px-4 py-1.5 rounded-lg transition-colors"
-              >
-                Редактировать профиль
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setAvatarUploadError(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
+                  className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
+                >
+                  Редактировать профиль
+                </button>
+                <button
+                  onClick={openIgnoreList}
+                  className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
+                >
+                  Список игнора
+                </button>
+              </div>
+            )}
+            {/* Ignore button for non-owner */}
+            {!profile.isOwner && user && (
+              <div className="flex items-center gap-2">
+                {isIgnored(userId) ? (
+                  <button
+                    onClick={() => setConfirmUnignore(true)}
+                    disabled={ignoreLoading}
+                    className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border border-red-400/50 dark:border-red-500/40 hover:border-red-500 dark:hover:border-red-400/60 bg-red-50 dark:bg-red-500/10 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Убрать из игнора
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmIgnore(true)}
+                    disabled={ignoreLoading}
+                    className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Добавить в игнор
+                  </button>
+                )}
+                {ignoreError && (
+                  <span className="text-xs text-red-400">{ignoreError}</span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -624,7 +724,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   });
                 }}
                 disabled={isSaving}
-                className="px-5 py-2 text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 rounded-lg transition-colors"
+                className="px-5 py-2 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 rounded-lg transition-colors"
               >
                 Отмена
               </button>
@@ -686,6 +786,91 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               'Загрузить ещё'
             )}
           </button>
+        </div>
+      )}
+
+      {/* Confirm ignore modal */}
+      {confirmIgnore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !ignoreLoading && setConfirmIgnore(false)}>
+          <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-th-text font-medium mb-2">Добавить в игнор?</div>
+            <div className="text-th-text-3 text-sm mb-4">Контент пользователя <span className="font-medium text-th-text-2">{profile.name}</span> будет скрыт в ленте и комментариях.</div>
+            {ignoreError && <div className="text-xs text-red-400 mb-3">{ignoreError}</div>}
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setConfirmIgnore(false); setIgnoreError(null); }} disabled={ignoreLoading} className="px-4 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors rounded">Отмена</button>
+              <button onClick={handleIgnore} disabled={ignoreLoading} className="px-4 py-1.5 text-sm bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900 rounded font-medium disabled:opacity-50 transition-colors hover:opacity-90">
+                {ignoreLoading ? 'Добавление...' : 'Добавить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm unignore modal */}
+      {confirmUnignore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !ignoreLoading && setConfirmUnignore(false)}>
+          <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-th-text font-medium mb-2">Убрать из игнора?</div>
+            <div className="text-th-text-3 text-sm mb-4">Контент пользователя <span className="font-medium text-th-text-2">{profile.name}</span> снова будет отображаться.</div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setConfirmUnignore(false); setIgnoreError(null); }} disabled={ignoreLoading} className="px-4 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors rounded">Отмена</button>
+              <button onClick={handleUnignore} disabled={ignoreLoading} className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded font-medium disabled:opacity-50 transition-colors">
+                {ignoreLoading ? 'Убираем...' : 'Убрать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ignore list modal */}
+      {showIgnoreList && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowIgnoreList(false)}>
+          <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-md w-full mx-4 shadow-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-th-text font-bold text-lg">Список игнора</h3>
+              <button onClick={() => setShowIgnoreList(false)} className="text-th-text-4 hover:text-th-text transition-colors p-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            {ignoreListLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+              </div>
+            ) : ignoreListUsers.length === 0 ? (
+              <div className="text-center text-th-text-4 text-sm py-8">
+                Вы никого не игнорируете
+              </div>
+            ) : (
+              <div className="overflow-y-auto flex flex-col gap-2">
+                {ignoreListUsers.map(u => (
+                  <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-th-ring/5">
+                    <a href={`#/profile/${u.id}`} className="shrink-0" onClick={() => setShowIgnoreList(false)}>
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-th-input">
+                        {u.avatar ? (
+                          <img src={u.avatar} alt={u.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-th-text-4 text-xs font-bold">
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    </a>
+                    <a href={`#/profile/${u.id}`} className="text-sm text-th-text-2 font-medium hover:underline flex-1 min-w-0 truncate" onClick={() => setShowIgnoreList(false)}>
+                      {u.name}
+                    </a>
+                    <button
+                      onClick={() => handleRemoveFromIgnoreList(u.id)}
+                      className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border border-red-400/50 dark:border-red-500/40 hover:border-red-500 dark:hover:border-red-400/60 bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-lg transition-colors shrink-0"
+                    >
+                      Убрать
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

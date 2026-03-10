@@ -3,6 +3,8 @@ import { ThemeProvider } from "../context/ThemeContext";
 import { AuthProvider } from "../context/AuthContext";
 import { SSEProvider } from "../context/SSEContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
+import { ContentPreferencesProvider } from "../context/ContentPreferencesContext";
+import { IgnoredUsersProvider } from "../context/IgnoredUsersContext";
 import { type ReactElement } from "react";
 
 /**
@@ -21,7 +23,11 @@ function renderWithProviders(
       <ThemeProvider>
         <AuthProvider>
           <SSEProvider>
-            <NotificationsProvider>{children}</NotificationsProvider>
+            <ContentPreferencesProvider>
+              <IgnoredUsersProvider>
+                <NotificationsProvider>{children}</NotificationsProvider>
+              </IgnoredUsersProvider>
+            </ContentPreferencesProvider>
           </SSEProvider>
         </AuthProvider>
       </ThemeProvider>

@@ -8,6 +8,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { SSEProvider } from './context/SSEContext';
 import { NotificationsProvider } from './context/NotificationsContext';
 import { ContentPreferencesProvider } from './context/ContentPreferencesContext';
+import { IgnoredUsersProvider } from './context/IgnoredUsersContext';
 import AuthModal from './components/AuthModal';
 import { useRoute } from './hooks/useRoute';
 
@@ -19,6 +20,7 @@ const App: React.FC = () => {
       <AuthProvider>
       <SSEProvider>
       <ContentPreferencesProvider>
+        <IgnoredUsersProvider>
         <NotificationsProvider>
           <div className="min-h-screen font-sans bg-th-page transition-colors">
             <Header />
@@ -38,6 +40,7 @@ const App: React.FC = () => {
             <AuthModal />
           </div>
         </NotificationsProvider>
+        </IgnoredUsersProvider>
       </ContentPreferencesProvider>
       </SSEProvider>
       </AuthProvider>
