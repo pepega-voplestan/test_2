@@ -766,7 +766,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
       {isCommentAuthorIgnored && ignoreRevealed ? (
         <div
           className="rounded-lg bg-th-text-4/20 p-2 cursor-pointer transition-all duration-200 hover:bg-th-text-4/30"
-          onClick={() => setIgnoreRevealed(false)}
+          onClick={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('a, button, [role="button"]')) setIgnoreRevealed(false); }}
           title="Нажмите, чтобы скрыть"
         >
           {commentInner}
@@ -1100,7 +1100,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       <>
       <div
         className={`flex gap-4${isShoutAuthorIgnored && ignoreRevealed ? ' rounded-lg bg-th-text-4/20 p-3 cursor-pointer transition-all duration-200 hover:bg-th-text-4/30' : ''}`}
-        {...(isShoutAuthorIgnored && ignoreRevealed ? { onClick: () => setIgnoreRevealed(false), title: 'Нажмите, чтобы скрыть' } : {})}
+        {...(isShoutAuthorIgnored && ignoreRevealed ? { onClick: (e: React.MouseEvent) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('a, button, [role="button"]')) setIgnoreRevealed(false); }, title: 'Нажмите, чтобы скрыть' } : {})}
       >
         {!isDeleted && shout.user ? (
           <a href={`#/profile/${shout.user.id}`} className="shrink-0">
