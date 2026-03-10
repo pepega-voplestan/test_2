@@ -7,6 +7,7 @@ import usersRouter from "./users.js";
 import uploadRouter from "./upload.js";
 import announcementsRouter from "./announcements.js";
 import notificationsRouter from "./notifications.js";
+import ignoredUsersRouter from "./ignored-users.js";
 
 export function mountRoutes(app) {
   /* health */
@@ -29,4 +30,5 @@ export function mountRoutes(app) {
   app.use("/api/v1", uploadRouter);
   app.use("/api/v1", announcementsRouter);
   app.use("/api/v1", notificationsRouter);
+  app.use("/api/v1", ignoredUsersRouter);
 }
