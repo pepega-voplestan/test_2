@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
+import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
@@ -548,6 +549,7 @@ interface CommentCardProps {
 
 const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, onDelete, onReply }) => {
   const { user, openModal } = useAuth();
+  const { isIgnored } = useIgnoredUsers();
   const [likes, setLikes] = useState(comment.likes);
   const [isLiked, setIsLiked] = useState(
     user && comment.likedBy ? comment.likedBy.includes(user.id) : false
@@ -556,7 +558,9 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const [ytLoaded, setYtLoaded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [ignoreRevealed, setIgnoreRevealed] = useState(false);
   const isOwner = user && user.id === comment.user.id;
+  const isCommentIgnored = isIgnored(comment.user.id) && !ignoreRevealed;
 
   // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
@@ -626,6 +630,22 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             )}
           </div>
 
+          {isCommentIgnored ? (
+            <div className="relative rounded-lg overflow-hidden my-1">
+              <div className="blur-xl select-none pointer-events-none opacity-30" aria-hidden="true">
+                <div className="text-th-text-2 text-sm">Контент скрыт</div>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-start" data-testid="ignored-comment-overlay">
+                <button
+                  onClick={() => setIgnoreRevealed(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-3"
+                >
+                  Контент от этого пользователя скрыт · <span className="font-bold">Показать</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
           {comment.content && (
             <div className="text-th-text-2 text-sm leading-relaxed break-words whitespace-pre-wrap mb-2">
               {renderContent(comment.content)}
@@ -696,6 +716,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           {!showMedia && comment.media?.type === 'youtube' && (
             <MediaPlaceholder className="mb-2 w-full" aspectRatio="16/9" />
           )}
+            </>
+          )}
 
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-1">
             <button onClick={() => onReply?.({ id: comment.user.id, name: comment.user.name })} className="hover:text-th-text-2 transition-colors">Ответить</button>
@@ -733,6 +755,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 }) => {
   const { user, openModal } = useAuth();
   const { prefs } = useContentPreferences();
+  const { isIgnored } = useIgnoredUsers();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -776,8 +799,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
   const [nsfwRevealed, setNsfwRevealed] = useState(false);
   const [politicsRevealed, setPoliticsRevealed] = useState(false);
+  const [ignoreRevealed, setIgnoreRevealed] = useState(false);
 
   const isDeleted = !!shout.isDeleted;
+  const isShoutIgnored = !isDeleted && !!shout.user && isIgnored(shout.user.id) && !ignoreRevealed;
   const tag = shout.visibilityTag || '';
   const isSpoilerHidden = tag === 'spoiler' && !spoilerRevealed;
   const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed && !prefs.showNsfw;
@@ -1055,6 +1080,31 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               </div>
               <div className="text-th-text-4 text-sm italic mb-3">
                 Этот вопль был удалён
+              </div>
+            </>
+          ) : isShoutIgnored ? (
+            /* --- Ignored user shout: spoiler overlay --- */
+            <>
+              <div className="flex items-baseline gap-2 mb-1">
+                {shout.user && (
+                  <a href={`#/profile/${shout.user.id}`} className="font-bold text-sm hover:underline text-th-text-4">
+                    {shout.user.name}
+                  </a>
+                )}
+                <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
+              </div>
+              <div className="relative rounded-lg overflow-hidden my-1" data-testid="ignored-shout-overlay">
+                <div className="blur-xl select-none pointer-events-none opacity-30" aria-hidden="true">
+                  <div className="text-th-text-2 text-[15px]">Контент скрыт</div>
+                </div>
+                <div className="absolute inset-0 flex items-center justify-start">
+                  <button
+                    onClick={() => setIgnoreRevealed(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-3"
+                  >
+                    Контент от этого пользователя скрыт · <span className="font-bold">Показать</span>
+                  </button>
+                </div>
               </div>
             </>
           ) : (
