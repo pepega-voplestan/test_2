@@ -61,27 +61,28 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step with email verification)
 │   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates; popular tab has dual sort buttons (likes/comments)
 │   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit; spoiler/nsfw tags require media
-│   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete
+│   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete; inline embed rendering for Twitter/X, Steam, Imgur, Coub, Tenor, Giphy, YouTube
 │   │   ├── ShoutPage.tsx     # Single shout detail view (route: #/shout/:id)
 │   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
 │   │   ├── NotificationDropdown.tsx # Bell icon + unread badge + hover-to-read notification list
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
-│   │   ├── EmojiPicker.tsx   # Emoji picker with grouped categories
+│   │   ├── EmojiPicker.tsx   # Emoji picker: 500+ emojis, 13 categories (faces, gestures, people, hearts, nature, food, activities, travel, objects, symbols, flags + frequent), search (Russian + English keywords), sticky headers, quick-nav bar
 │   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss, pinch/scroll-to-zoom, pan when zoomed, scroll lock
 │   ├── context/
 │   │   ├── AuthContext.tsx               # Auth state via React Context + API helper
 │   │   ├── AuthContext.test.tsx          # Tests: login/logout, registration, password reset, modal state
 │   │   ├── ThemeContext.tsx              # Dark/light theme toggle with localStorage persistence
 │   │   ├── ThemeContext.test.tsx         # Tests: theme toggling and localStorage persistence
-│   │   ├── NotificationsContext.tsx      # Notification state, batched read marking, SSE subscription
+│   │   ├── SSEContext.tsx                # Centralized SSE connection; subscribe(event, handler) pattern; all consumers share one EventSource
+│   │   ├── NotificationsContext.tsx      # Notification state, batched read marking; subscribes via SSEContext; sets browser tab title/favicon badge
 │   │   ├── NotificationsContext.test.tsx # Tests: SSE events, batching, mark-as-read, cleanup
 │   │   ├── ContentPreferencesContext.tsx # Content visibility prefs (showMedia, showNsfw, showPolitics)
 │   │   └── ContentPreferencesContext.test.tsx # Tests: preference toggles
 │   ├── hooks/
 │   │   ├── useRoute.ts           # Hash-based client-side routing
 │   │   ├── useRoute.test.ts      # Unit tests for hash-based routing hook
-│   │   ├── useSSE.ts             # SSE client hook with auto-reconnect + exponential backoff
+│   │   ├── useSSE.ts             # Thin wrapper around SSEContext.subscribe; pass a listeners map to subscribe to named SSE events
 │   │   ├── useSSE.test.ts        # Tests: reconnect logic, backoff (1s → 30s cap)
 │   │   ├── useMentionUsers.ts    # Module-level singleton cache for mention user list (lazy-loaded on first @)
 │   │   └── useMentionUsers.test.ts # Tests: lazy loading and module-level caching
@@ -264,7 +265,7 @@ The Swagger spec covers all endpoints and their request/response schemas, making
 
 ## SSE Real-Time Events
 
-The `/api/v1/events` endpoint streams Server-Sent Events to all connected clients. The backend broadcasts on all write operations. The frontend subscribes via `useSSE` hook in `ShoutFeed`.
+The `/api/v1/events` endpoint streams Server-Sent Events to all connected clients. The backend broadcasts on all write operations. The frontend manages a **single shared EventSource** via `SSEContext.tsx` — all consumers (feed, ShoutPage, NotificationsContext) subscribe to named events through the `subscribe(event, handler)` API rather than creating separate connections. The `useSSE` hook is a thin convenience wrapper around `useSSEContext().subscribe`.
 
 **Events emitted (broadcast to all clients):**
 
@@ -283,9 +284,9 @@ The `/api/v1/events` endpoint streams Server-Sent Events to all connected client
 |-------|---------|---------|
 | `notification` | `{ id, type, actor, shoutId, commentId, isRead, timestamp, snippet }` | @mention or reply to a shout the user authored |
 
-The SSE module (`api/src/sse.js`) exports both `broadcast(event, data)` (all clients) and `broadcastToUser(userId, event, data)` (targeted). A heartbeat ping is sent every 30 seconds to keep connections alive through proxies. The `useSSE` hook reconnects with exponential backoff (1s → 30s max) on error.
+The SSE module (`api/src/sse.js`) exports both `broadcast(event, data)` (all clients) and `broadcastToUser(userId, event, data)` (targeted). A heartbeat ping is sent every 30 seconds to keep connections alive through proxies. `SSEContext.tsx` manages the single `EventSource` with exponential backoff reconnect (1s → 30s max) on error.
 
-`NotificationsContext.tsx` maintains its own SSE connection to receive `notification` events in real-time and appends them to the client-side notification list.
+`NotificationsContext.tsx` subscribes to `notification` events via `SSEContext` (no separate connection) and prepends incoming notifications to the client-side list, deduplicating by ID to handle reconnect replays.
 
 **Important**: SSE real-time updates only apply to the `new` (newest) tab. The `popular` and `announcements` tabs load on demand and do not react to live events.
 
@@ -307,10 +308,11 @@ Notifications are triggered server-side and delivered in real-time via targeted 
 - Server-side cleanup: `server.js` runs a task every 24 hours that hard-deletes notifications older than 14 days.
 - Frontend: `NotificationsContext.tsx` fetches all notifications (read + unread) on login with cursor-based pagination (14-day window, page size 20). New notifications arrive via SSE and are prepended. Read and unread notifications are both shown, sorted purely chronologically (newest first). Deduplication by `id` prevents duplicates from SSE replays or page overlaps.
 - Read marking: hovering a notification item for 800ms queues it for batch-read. When the dropdown closes (or after a 5-second safety flush), the batch is sent via `PATCH /notifications/read-batch`. The dropdown list is frozen while open — read-status changes (optimistic updates) do not affect item order until the dropdown is reopened.
+- **Browser tab indicator**: `NotificationsContext.tsx` sets `document.title` to `(N) Вопли` when there are unread notifications (capped at `9+`), and dynamically draws a red dot badge onto the favicon using the Canvas API. Both are cleared when `unreadCount` returns to 0.
 
 **Frontend components:**
-- `NotificationsContext.tsx` — state management, SSE subscription, cursor-paginated fetching (`loadMore`), dedup, sort (`sortedNotifications`), batched read marking. Exposes: `sortedNotifications`, `unreadCount`, `hasMore`, `isLoadingMore`, `loadMore`, `markAsRead`, `markAllAsRead`, `flushReads`.
-- `NotificationDropdown.tsx` — bell icon with unread badge in `Header.tsx`; dropdown lists notifications with actor avatar, text, snippet, and relative timestamp; "mark all read" button; clicking a notification navigates to the associated shout; infinite scroll via `IntersectionObserver` on a sentinel element at the bottom of the scroll container
+- `NotificationsContext.tsx` — state management, SSE subscription via `SSEContext`, cursor-paginated fetching (`loadMore`), dedup, sort (`sortedNotifications`), batched read marking, browser tab title + favicon badge. Exposes: `sortedNotifications`, `unreadCount`, `hasMore`, `isLoadingMore`, `loadMore`, `markAsRead`, `markAllAsRead`, `flushReads`.
+- `NotificationDropdown.tsx` — bell icon with unread badge in `Header.tsx`; dropdown lists notifications as `<a>` elements (enabling right-click "open in new tab") with actor avatar, text, snippet, and relative timestamp; "mark all read" button; clicking a notification navigates to the associated shout; infinite scroll via `IntersectionObserver` on a sentinel element at the bottom of the scroll container
 
 ## Database
 
@@ -564,6 +566,7 @@ cd web && npm run lint
 - Source files live directly under `web/` (no `src/` subdirectory)
 - React Context for auth state — use `useAuth()` hook from `AuthContext.tsx`
 - React Context for theme — use `useTheme()` hook from `ThemeContext.tsx`; theme stored in `localStorage`
+- React Context for SSE — `SSEContext.tsx` manages the single shared `EventSource`; use `useSSEContext()` directly or the `useSSE(listeners)` convenience hook to subscribe to events
 - React Context for notifications — use `useNotifications()` hook from `NotificationsContext.tsx`
 - React Context for content preferences — use `useContentPreferences()` hook from `ContentPreferencesContext.tsx`
 - Auth flow: 2-step registration (send code → verify), password reset (send code → verify → new password)
@@ -587,7 +590,7 @@ cd web && npm run lint
 - @mentions are supported in shouts and comments. The composer (`MentionInput.tsx`) is a `contenteditable` div. Typing `@` opens a dropdown of up to 5 matching users (filtered client-side from a module-level cached list). Selected mentions are serialized as `@[username:userId]` tokens in the stored content string. `renderContent` in `ShoutCard.tsx` parses these tokens and renders them as `#/profile/:id` links. Character counting normalizes `@[name:id]` back to `@name` before applying the 400-char limit. The user list is fetched lazily (only on first `@` trigger) via `GET /users/mentions` and cached for the browser session.
 - Mentions automatically trigger `mention` notifications to the mentioned users. Comments also trigger a `reply` notification to the shout author (unless they are the commenter, or already received a mention notification for that comment). Both are handled in `routes/shouts.js` and `routes/comments.js` using `helpers/mentions.js`.
 - Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
-- YouTube URLs in shout content are auto-detected via regex and metadata is fetched from the oEmbed API (5s timeout, graceful fallback).
+- **Embed system**: `ShoutCard.tsx` auto-detects URLs in shout/comment text via `extractEmbeds(text)` and renders rich embed cards inline. Supported platforms: **YouTube** (iframe via oEmbed API, 5s timeout), **Twitter/X** (fetches from `api.fxtwitter.com`, module-level `tweetCache`, shows author, text, photos, video thumbnails, likes/retweets; uses `pbs.fxtwitter.com` proxy for images), **Steam** (fetches from `store.steampowered.com/api/appdetails`, module-level `steamCache`, shows game name, description, header image, price, recommendation count in Russian), **Imgur** (direct images, image pages, and albums), **Coub** (iframe embed), **Tenor** (iframe embed), **Giphy** (iframe embed, multiple URL patterns). Embeds are rendered in the order they are found in the text.
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
 - Animated GIFs skip re-encoding; the original GIF is stored as `original.gif` alongside WebP thumbnail variants. The `animated: true` flag and `gif` URL are included in the media DTO.
 - Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling. Supports pinch-to-zoom (mobile) and scroll-to-zoom (desktop), pan when zoomed, and double-tap/click to toggle zoom.
@@ -597,8 +600,9 @@ cd web && npm run lint
 - Password reset follows the same email verification pattern.
 - Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
 - The `web/package.json` dev script runs both the API and Vite concurrently for local development.
-- `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<NotificationsProvider>` (inner).
-- Nginx CSP headers allow embeds from YouTube (nocookie), Coub, and Tenor; images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, and fxTwitter; and connect-src to fxTwitter API.
+- `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<SSEProvider>` → `<ContentPreferencesProvider>` → `<NotificationsProvider>` (inner). `SSEProvider` must wrap both `NotificationsProvider` and any component that calls `useSSE` or `useSSEContext`.
+- When content preferences hide media (nsfw/politics/showMedia off), `ShoutFeed.tsx` renders a same-size placeholder div (crossed-camera icon) instead of removing the element from the DOM — this prevents layout jumps when toggling content preferences.
+- Nginx CSP headers allow embeds from YouTube (nocookie), Coub, Tenor, Steam (`store.steampowered.com`); images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, fxTwitter (`pbs.fxtwitter.com`), Steam CDN (`cdn.akamai.steamstatic.com`); and connect-src to fxTwitter API (`api.fxtwitter.com`) and Steam store API.
 
 ## Backup & Restore
 
