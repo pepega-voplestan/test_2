@@ -560,7 +560,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const [isDeleting, setIsDeleting] = useState(false);
   const [ignoreRevealed, setIgnoreRevealed] = useState(false);
   const isOwner = user && user.id === comment.user.id;
-  const isCommentIgnored = isIgnored(comment.user.id) && !ignoreRevealed;
+  const isCommentAuthorIgnored = isIgnored(comment.user.id);
+  const isCommentIgnored = isCommentAuthorIgnored && !ignoreRevealed;
 
   // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
@@ -600,6 +601,30 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
   const embeds = comment.content ? extractEmbeds(comment.content) : [];
 
+  if (isCommentIgnored) {
+    return (
+      <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
+        <div className="flex items-center gap-3 py-1" data-testid="ignored-comment-overlay">
+          <div className="shrink-0">
+            <div className="w-8 h-8 rounded-full bg-th-border/40 dark:bg-th-border/30 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-th-text-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+              </svg>
+            </div>
+          </div>
+          <button
+            onClick={() => setIgnoreRevealed(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors text-xs text-neutral-500 dark:text-neutral-400"
+          >
+            Контент от этого пользователя скрыт
+            <span className="font-semibold text-neutral-700 dark:text-neutral-300 ml-1">Показать</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
       <div className="flex gap-3">
@@ -630,22 +655,6 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             )}
           </div>
 
-          {isCommentIgnored ? (
-            <div className="relative rounded-lg overflow-hidden my-1">
-              <div className="blur-xl select-none pointer-events-none opacity-30" aria-hidden="true">
-                <div className="text-th-text-2 text-sm">Контент скрыт</div>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-start" data-testid="ignored-comment-overlay">
-                <button
-                  onClick={() => setIgnoreRevealed(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-3"
-                >
-                  Контент от этого пользователя скрыт · <span className="font-bold">Показать</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
           {comment.content && (
             <div className="text-th-text-2 text-sm leading-relaxed break-words whitespace-pre-wrap mb-2">
               {renderContent(comment.content)}
@@ -716,15 +725,24 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           {!showMedia && comment.media?.type === 'youtube' && (
             <MediaPlaceholder className="mb-2 w-full" aspectRatio="16/9" />
           )}
-            </>
-          )}
 
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-1">
-            <button onClick={() => onReply?.({ id: comment.user.id, name: comment.user.name })} className="hover:text-th-text-2 transition-colors">Ответить</button>
-            <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
-              <span className="text-[10px] font-bold">{likes}</span>
-              <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
-            </button>
+            {isCommentAuthorIgnored ? (
+              <span className="opacity-30 cursor-default" title="Вы игнорируете этого пользователя">Ответить</span>
+            ) : (
+              <button onClick={() => onReply?.({ id: comment.user.id, name: comment.user.name })} className="hover:text-th-text-2 transition-colors">Ответить</button>
+            )}
+            {isCommentAuthorIgnored ? (
+              <span className="flex items-center gap-1 opacity-30 cursor-default" title="Вы игнорируете этого пользователя">
+                <span className="text-[10px] font-bold">{likes}</span>
+                <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
+              </span>
+            ) : (
+              <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+                <span className="text-[10px] font-bold">{likes}</span>
+                <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -802,7 +820,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [ignoreRevealed, setIgnoreRevealed] = useState(false);
 
   const isDeleted = !!shout.isDeleted;
-  const isShoutIgnored = !isDeleted && !!shout.user && isIgnored(shout.user.id) && !ignoreRevealed;
+  const isShoutAuthorIgnored = !isDeleted && !!shout.user && isIgnored(shout.user.id);
+  const isShoutIgnored = isShoutAuthorIgnored && !ignoreRevealed;
   const tag = shout.visibilityTag || '';
   const isSpoilerHidden = tag === 'spoiler' && !spoilerRevealed;
   const isNsfwHidden = tag === 'nsfw' && !nsfwRevealed && !prefs.showNsfw;
@@ -1048,6 +1067,27 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   return (
     <div className="flex flex-col">
+      {isShoutIgnored ? (
+        /* --- Ignored user shout: fully hidden behind spoiler overlay --- */
+        <div className="flex items-center gap-3 py-1" data-testid="ignored-shout-overlay">
+          <div className="shrink-0">
+            <div className="w-10 h-10 rounded-full bg-th-border/40 dark:bg-th-border/30 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-th-text-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+              </svg>
+            </div>
+          </div>
+          <button
+            onClick={() => setIgnoreRevealed(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors text-sm text-neutral-500 dark:text-neutral-400"
+          >
+            Контент от этого пользователя скрыт
+            <span className="font-semibold text-neutral-700 dark:text-neutral-300 ml-1">Показать</span>
+          </button>
+        </div>
+      ) : (
+      <>
       <div className="flex gap-4">
         {!isDeleted && shout.user ? (
           <a href={`#/profile/${shout.user.id}`} className="shrink-0">
@@ -1080,31 +1120,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               </div>
               <div className="text-th-text-4 text-sm italic mb-3">
                 Этот вопль был удалён
-              </div>
-            </>
-          ) : isShoutIgnored ? (
-            /* --- Ignored user shout: spoiler overlay --- */
-            <>
-              <div className="flex items-baseline gap-2 mb-1">
-                {shout.user && (
-                  <a href={`#/profile/${shout.user.id}`} className="font-bold text-sm hover:underline text-th-text-4">
-                    {shout.user.name}
-                  </a>
-                )}
-                <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
-              </div>
-              <div className="relative rounded-lg overflow-hidden my-1" data-testid="ignored-shout-overlay">
-                <div className="blur-xl select-none pointer-events-none opacity-30" aria-hidden="true">
-                  <div className="text-th-text-2 text-[15px]">Контент скрыт</div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-start">
-                  <button
-                    onClick={() => setIgnoreRevealed(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-3"
-                  >
-                    Контент от этого пользователя скрыт · <span className="font-bold">Показать</span>
-                  </button>
-                </div>
               </div>
             </>
           ) : (
@@ -1196,7 +1211,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           {/* Action bar — always visible, even for deleted shouts */}
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-2">
             <div className="flex items-center gap-4">
-              <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>
+              {isShoutAuthorIgnored ? (
+                <span className="opacity-30 cursor-default" title="Вы игнорируете этого пользователя">Ответить</span>
+              ) : (
+                <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>
+              )}
               {hasComments ? (
                 <button onClick={toggleThread} className={`transition-colors ${repliesOpen ? 'text-th-text' : 'hover:text-th-text-2'}`}>
                   {repliesOpen ? 'Закрыть' : `${commentCount} ${getReplyDeclension(commentCount)}`}
@@ -1207,10 +1226,17 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
             </div>
             {!isDeleted && (
               <div className="flex items-center">
+                {isShoutAuthorIgnored ? (
+                  <span className="flex items-center gap-1 opacity-30 cursor-default" title="Вы игнорируете этого пользователя">
+                      <span className="text-xs font-bold">{likes}</span>
+                      <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
+                  </span>
+                ) : (
                   <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
                       <span className="text-xs font-bold">{likes}</span>
                       <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
                   </button>
+                )}
               </div>
             )}
           </div>
@@ -1237,7 +1263,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
            {hasComments && shout.comments!.map(comment => (
                <CommentCard key={comment.id} comment={comment} showMedia={showMedia} onDelete={handleCommentDelete} onReply={handleMentionReply} />
            ))}
-           {user && (
+           {user && !isShoutAuthorIgnored && (
              <div className="mt-4">
                <div className="bg-th-card p-3 rounded flex gap-3">
                  <div className="w-8 h-8 bg-th-elevated rounded-full shrink-0 flex items-center justify-center overflow-hidden">
@@ -1309,7 +1335,17 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                {replyError && <div className="mt-1 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{replyError}</div>}
              </div>
            )}
+           {user && isShoutAuthorIgnored && (
+             <div className="mt-4">
+               <div className="bg-th-card/50 p-3 rounded flex items-center gap-3 opacity-40 cursor-default select-none" title="Вы игнорируете этого пользователя">
+                 <div className="w-8 h-8 bg-th-elevated rounded-full shrink-0" />
+                 <div className="text-sm text-th-text-4">Ответы заблокированы — пользователь в игноре</div>
+               </div>
+             </div>
+           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );
