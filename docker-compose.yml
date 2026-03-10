@@ -32,6 +32,12 @@ services:
       - media:/media
     expose:
       - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
 
   worker:
     build:
@@ -49,7 +55,10 @@ services:
     expose:
       - "3001"
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      api:
+        condition: service_healthy
     networks:
       - vopli
 
