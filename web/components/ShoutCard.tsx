@@ -604,42 +604,26 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   if (isCommentIgnored) {
     return (
       <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
-        <div className="flex items-center gap-3 py-1" data-testid="ignored-comment-overlay">
+        <div
+          className="flex items-center gap-3 py-1 cursor-pointer rounded-lg bg-th-text-4/40 hover:bg-th-text-4/50 px-3 transition-all duration-200 select-none"
+          onClick={() => setIgnoreRevealed(true)}
+          title="Нажмите, чтобы показать"
+          data-testid="ignored-comment-overlay"
+        >
           <div className="shrink-0">
-            <div className="w-8 h-8 rounded-full bg-th-border/40 dark:bg-th-border/30 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-th-text-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-              </svg>
-            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-th-text-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+              <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+            </svg>
           </div>
-          <button
-            onClick={() => setIgnoreRevealed(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors text-xs text-neutral-500 dark:text-neutral-400"
-          >
-            Контент от этого пользователя скрыт
-            <span className="font-semibold text-neutral-700 dark:text-neutral-300 ml-1">Показать</span>
-          </button>
+          <span className="text-xs text-th-text-4">Контент от этого пользователя скрыт</span>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
-      {/* Hide-back bar for revealed ignored comment */}
-      {isCommentAuthorIgnored && ignoreRevealed && (
-        <button
-          onClick={() => setIgnoreRevealed(false)}
-          className="flex items-center gap-1.5 mb-1 px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors text-xs text-neutral-500 dark:text-neutral-400 self-start"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-            <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-          </svg>
-          <span className="font-semibold text-neutral-700 dark:text-neutral-300">Скрыть</span>
-        </button>
-      )}
+  const commentInner = (
+    <>
       <div className="flex gap-3">
         <a href={`#/profile/${comment.user.id}`} className="shrink-0">
           <div className="w-8 h-8 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
@@ -773,6 +757,22 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             </div>
           </div>
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
+      {isCommentAuthorIgnored && ignoreRevealed ? (
+        <div
+          className="rounded-lg bg-th-text-4/20 p-2 cursor-pointer transition-all duration-200 hover:bg-th-text-4/30"
+          onClick={() => setIgnoreRevealed(false)}
+          title="Нажмите, чтобы скрыть"
+        >
+          {commentInner}
+        </div>
+      ) : (
+        commentInner
       )}
     </div>
   );
@@ -1082,39 +1082,26 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     <div className="flex flex-col">
       {isShoutIgnored ? (
         /* --- Ignored user shout: fully hidden behind spoiler overlay --- */
-        <div className="flex items-center gap-3 py-1" data-testid="ignored-shout-overlay">
+        <div
+          className="flex items-center gap-3 py-2 cursor-pointer rounded-lg bg-th-text-4/40 hover:bg-th-text-4/50 px-4 transition-all duration-200 select-none"
+          onClick={() => setIgnoreRevealed(true)}
+          title="Нажмите, чтобы показать"
+          data-testid="ignored-shout-overlay"
+        >
           <div className="shrink-0">
-            <div className="w-10 h-10 rounded-full bg-th-border/40 dark:bg-th-border/30 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-th-text-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-              </svg>
-            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-th-text-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+              <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+            </svg>
           </div>
-          <button
-            onClick={() => setIgnoreRevealed(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors text-sm text-neutral-500 dark:text-neutral-400"
-          >
-            Контент от этого пользователя скрыт
-            <span className="font-semibold text-neutral-700 dark:text-neutral-300 ml-1">Показать</span>
-          </button>
+          <span className="text-sm text-th-text-4">Контент от этого пользователя скрыт</span>
         </div>
       ) : (
       <>
-      {/* Hide-back bar for revealed ignored content */}
-      {isShoutAuthorIgnored && ignoreRevealed && (
-        <button
-          onClick={() => setIgnoreRevealed(false)}
-          className="flex items-center gap-1.5 mb-2 px-3 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors text-xs text-neutral-500 dark:text-neutral-400 self-start"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-            <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-          </svg>
-          <span className="font-semibold text-neutral-700 dark:text-neutral-300">Скрыть</span>
-        </button>
-      )}
-      <div className="flex gap-4">
+      <div
+        className={`flex gap-4${isShoutAuthorIgnored && ignoreRevealed ? ' rounded-lg bg-th-text-4/20 p-3 cursor-pointer transition-all duration-200 hover:bg-th-text-4/30' : ''}`}
+        {...(isShoutAuthorIgnored && ignoreRevealed ? { onClick: () => setIgnoreRevealed(false), title: 'Нажмите, чтобы скрыть' } : {})}
+      >
         {!isDeleted && shout.user ? (
           <a href={`#/profile/${shout.user.id}`} className="shrink-0">
             <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
