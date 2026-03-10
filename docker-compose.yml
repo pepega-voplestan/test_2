@@ -1,6 +1,15 @@
 version: "3.8"
 
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    networks:
+      - vopli
+
   api:
     build:
       context: ./api
@@ -18,12 +27,31 @@ services:
       ADMIN_COOKIE_SECRET: ${ADMIN_COOKIE_SECRET}
     networks:
       - vopli
-
     volumes:
       - appdata:/data
       - media:/media
     expose:
       - "3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+      target: app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NODE_ENV: ${NODE_ENV}
+      REDIS_HOST: redis
+      BULL_BOARD_BASE_PATH: /workers
+    volumes:
+      - appdata:/data
+    expose:
+      - "3001"
+    depends_on:
+      - redis
+    networks:
+      - vopli
 
   media:
     image: nginx:alpine
@@ -40,6 +68,7 @@ services:
     depends_on:
       - api
       - media
+      - worker
     ports:
       - "3005:80"
     volumes:
@@ -66,3 +95,4 @@ volumes:
   appdata:
   webdist:
   media:
+  redis-data:
