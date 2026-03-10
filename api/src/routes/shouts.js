@@ -215,8 +215,17 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
 
   const mentionedIds = extractMentionedUserIds(content, req.session.user.id);
   if (mentionedIds.length > 0) {
+    // Filter out users who have ignored the actor
+    const ignoreRows = await prisma.ignoredUser.findMany({
+      where: { owner_user_id: { in: mentionedIds }, target_user_id: req.session.user.id },
+      select: { owner_user_id: true },
+    });
+    const ignoringSet = new Set(ignoreRows.map(r => r.owner_user_id));
+    const filteredIds = mentionedIds.filter(uid => !ignoringSet.has(uid));
+
+    if (filteredIds.length > 0) {
     const now = toSqliteDatetime();
-    const notificationRows = mentionedIds.map(uid => ({
+    const notificationRows = filteredIds.map(uid => ({
       id: crypto.randomUUID(),
       user_id: uid,
       actor_id: req.session.user.id,
@@ -240,7 +249,8 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
         snippet,
       });
     }
-    console.log(`[Shouts] Sent mention notifications for shout ${id} to ${mentionedIds.length} user(s)`);
+    console.log(`[Shouts] Sent mention notifications for shout ${id} to ${filteredIds.length} user(s)`);
+    }
   }
 
   res.json({ ok: true, id, shout: shoutDto });
