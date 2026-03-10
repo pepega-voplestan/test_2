@@ -34,6 +34,12 @@ services:
       - "3000"
     networks:
       - vopli-dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
 
   worker-dev:
     build:
@@ -48,10 +54,15 @@ services:
     volumes:
       - appdata-dev:/data
       - ./workers/src:/app/src:ro
+    ports:
+      - "3001:3001"
     expose:
       - "3001"
     depends_on:
-      - redis-dev
+      redis-dev:
+        condition: service_started
+      api-dev:
+        condition: service_healthy
     networks:
       - vopli-dev
 
