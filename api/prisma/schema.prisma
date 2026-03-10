@@ -25,6 +25,8 @@ model User {
   commentLikes          CommentLike[]
   receivedNotifications Notification[] @relation("ReceivedNotifications")
   sentNotifications     Notification[] @relation("SentNotifications")
+  ignoredByMe           IgnoredUser[]  @relation("IgnoredByUser")
+  ignoredByOthers       IgnoredUser[]  @relation("IgnoredTarget")
 
   @@map("users")
 }
@@ -150,6 +152,20 @@ model Setting {
   value String
 
   @@map("settings")
+}
+
+model IgnoredUser {
+  id             String @id @default(uuid())
+  owner_user_id  String
+  target_user_id String
+  created_at     String @default(dbgenerated("(datetime('now'))"))
+  updated_at     String @default(dbgenerated("(datetime('now'))"))
+
+  owner  User @relation("IgnoredByUser", fields: [owner_user_id], references: [id], onDelete: Cascade)
+  target User @relation("IgnoredTarget", fields: [target_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([owner_user_id, target_user_id])
+  @@map("ignored_users")
 }
 
 model Notification {

@@ -135,8 +135,20 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   // the parent shout's visibility_tag does NOT spoiler comment notifications
   const snippet = buildSnippet(content);
 
-  if (mentionedIds.length > 0) {
-    const notificationRows = mentionedIds.map(uid => ({
+  // Collect all potential notification recipients and filter out those who ignore the actor
+  const allRecipientIds = [...new Set([...mentionedIds, ...((!shoutDeleted && parent.user_id !== req.session.user.id) ? [parent.user_id] : [])])];
+  const ignoreRows = allRecipientIds.length > 0
+    ? await prisma.ignoredUser.findMany({
+        where: { owner_user_id: { in: allRecipientIds }, target_user_id: req.session.user.id },
+        select: { owner_user_id: true },
+      })
+    : [];
+  const ignoringSet = new Set(ignoreRows.map(r => r.owner_user_id));
+
+  const filteredMentionIds = mentionedIds.filter(uid => !ignoringSet.has(uid));
+
+  if (filteredMentionIds.length > 0) {
+    const notificationRows = filteredMentionIds.map(uid => ({
       id: crypto.randomUUID(),
       user_id: uid,
       actor_id: req.session.user.id,
@@ -158,12 +170,12 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
         snippet,
       });
     }
-    console.log(`[Comments] Sent mention notifications for comment ${id} to ${mentionedIds.length} user(s)`);
+    console.log(`[Comments] Sent mention notifications for comment ${id} to ${filteredMentionIds.length} user(s)`);
   }
 
-  // Notify shout author of the reply (skip if deleted, commenter is author, or already mentioned)
+  // Notify shout author of the reply (skip if deleted, commenter is author, already mentioned, or ignoring actor)
   const shoutAuthorId = parent.user_id;
-  if (!shoutDeleted && shoutAuthorId !== req.session.user.id && !mentionedIds.includes(shoutAuthorId)) {
+  if (!shoutDeleted && shoutAuthorId !== req.session.user.id && !mentionedIds.includes(shoutAuthorId) && !ignoringSet.has(shoutAuthorId)) {
     const replyNotifId = crypto.randomUUID();
     await prisma.notification.create({
       data: {
