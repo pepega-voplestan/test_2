@@ -106,12 +106,16 @@ const NotificationDropdown: React.FC = () => {
     if (isOpen) {
       setFrozenList(sortedNotifications);
       frozenIds.current = new Set(sortedNotifications.map((n) => n.id));
+      // Lock scroll but keep scrollbar visible to prevent layout jump
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
       document.body.style.overflow = 'hidden';
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
     } else {
       flushReads();
       document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
     }
-    return () => { document.body.style.overflow = ''; };
+    return () => { document.body.style.overflow = ''; document.body.style.paddingRight = ''; };
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // While open: update isRead in-place (visual feedback) + append pages from loadMore
@@ -144,6 +148,8 @@ const NotificationDropdown: React.FC = () => {
   }, [isOpen]);
 
   // IntersectionObserver on sentinel — triggers loadMore when scrolled near bottom
+  // frozenList.length is a dep so the observer is re-created when the list populates
+  // (on first open after page refresh, the sentinel ref may not exist until the list renders)
   useEffect(() => {
     if (!isOpen || !sentinelRef.current || !scrollRef.current) return;
     const observer = new IntersectionObserver(
@@ -156,7 +162,7 @@ const NotificationDropdown: React.FC = () => {
     );
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [isOpen, hasMore, isLoadingMore, loadMore]);
+  }, [isOpen, hasMore, isLoadingMore, loadMore, frozenList.length]);
 
   function handleBellClick() {
     if (!isOpen && buttonRef.current) {
