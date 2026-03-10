@@ -475,7 +475,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setAvatarUploadError(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
-                  className="text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 px-4 py-1.5 rounded-lg transition-colors"
+                  className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
                 >
                   Редактировать профиль
                 </button>
@@ -724,7 +724,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   });
                 }}
                 disabled={isSaving}
-                className="px-5 py-2 text-sm text-th-text-3 hover:text-th-text border border-th-border hover:border-th-text-3 rounded-lg transition-colors"
+                className="px-5 py-2 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 rounded-lg transition-colors"
               >
                 Отмена
               </button>
@@ -797,8 +797,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             <div className="text-th-text-3 text-sm mb-4">Контент пользователя <span className="font-medium text-th-text-2">{profile.name}</span> будет скрыт в ленте и комментариях.</div>
             {ignoreError && <div className="text-xs text-red-400 mb-3">{ignoreError}</div>}
             <div className="flex gap-3 justify-end">
-              <button onClick={() => { setConfirmIgnore(false); setIgnoreError(null); }} disabled={ignoreLoading} className="px-4 py-1.5 text-sm text-th-text-3 hover:text-th-text transition-colors rounded">Отмена</button>
-              <button onClick={handleIgnore} disabled={ignoreLoading} className="px-4 py-1.5 text-sm bg-th-text text-th-page rounded font-medium disabled:opacity-50 transition-colors hover:opacity-90">
+              <button onClick={() => { setConfirmIgnore(false); setIgnoreError(null); }} disabled={ignoreLoading} className="px-4 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors rounded">Отмена</button>
+              <button onClick={handleIgnore} disabled={ignoreLoading} className="px-4 py-1.5 text-sm bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900 rounded font-medium disabled:opacity-50 transition-colors hover:opacity-90">
                 {ignoreLoading ? 'Добавление...' : 'Добавить'}
               </button>
             </div>
@@ -813,7 +813,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             <div className="text-th-text font-medium mb-2">Убрать из игнора?</div>
             <div className="text-th-text-3 text-sm mb-4">Контент пользователя <span className="font-medium text-th-text-2">{profile.name}</span> снова будет отображаться.</div>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => { setConfirmUnignore(false); setIgnoreError(null); }} disabled={ignoreLoading} className="px-4 py-1.5 text-sm text-th-text-3 hover:text-th-text transition-colors rounded">Отмена</button>
+              <button onClick={() => { setConfirmUnignore(false); setIgnoreError(null); }} disabled={ignoreLoading} className="px-4 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors rounded">Отмена</button>
               <button onClick={handleUnignore} disabled={ignoreLoading} className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded font-medium disabled:opacity-50 transition-colors">
                 {ignoreLoading ? 'Убираем...' : 'Убрать'}
               </button>
