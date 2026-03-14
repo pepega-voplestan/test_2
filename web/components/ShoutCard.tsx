@@ -1080,7 +1080,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   return (
     <div className="flex flex-col relative">
-      {shout.isFixed && !isDeleted && (
+      {shout.isPinned && !isDeleted && (
         <div className="absolute top-0 right-0" title="Закреплено">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
             <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
