@@ -110,8 +110,9 @@ test-coverage:
 test-web-coverage:
 	cd web && npm run test:coverage
 
-# Install all dependencies (root + api + web) and set up git hooks
+# Install all dependencies (root + api + web + workers) and set up git hooks
 install:
 	npm install
 	cd api && npm install
 	cd web && npm install
+	cd workers && npm install
