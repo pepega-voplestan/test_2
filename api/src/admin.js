@@ -152,6 +152,10 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
+            is_fixed: {
+              type: "number",
+              description: "1 = закреплённый вопль (отображается первым в ленте)",
+            },
             // Hide reverse relations to unregistered resources
             likes: { isVisible: false },
             notifications: { isVisible: false },
