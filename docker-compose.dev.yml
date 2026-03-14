@@ -1,6 +1,15 @@
 version: "3.8"
 
 services:
+  redis-dev:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data-dev:/data
+    networks:
+      - vopli-dev
+
   api-dev:
     build:
       context: ./api
@@ -25,6 +34,37 @@ services:
       - "3000"
     networks:
       - vopli-dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  worker-dev:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+      target: dev
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NODE_ENV: ${NODE_ENV}
+      REDIS_HOST: redis-dev
+      BULL_BOARD_BASE_PATH: /workers
+    volumes:
+      - appdata-dev:/data
+      - ./workers/src:/app/src:ro
+    ports:
+      - "3001:3001"
+    expose:
+      - "3001"
+    depends_on:
+      redis-dev:
+        condition: service_started
+      api-dev:
+        condition: service_healthy
+    networks:
+      - vopli-dev
 
   media-dev:
     image: nginx:alpine
@@ -41,6 +81,7 @@ services:
     depends_on:
       - api-dev
       - media-dev
+      - worker-dev
     ports:
       - "3006:80"
     volumes:
@@ -59,7 +100,6 @@ services:
     networks:
       - vopli-dev
 
-
 networks:
   vopli-dev:
     driver: bridge
@@ -68,3 +108,4 @@ volumes:
   appdata-dev:
   webdist-dev:
   media-dev:
+  redis-data-dev:
