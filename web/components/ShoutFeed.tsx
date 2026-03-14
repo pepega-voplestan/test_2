@@ -41,7 +41,7 @@ const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading
 
   return (
     <div className="bg-th-card rounded-lg p-6 border border-th-border-2">
-      <div className="text-th-text whitespace-pre-wrap break-words">{announcement.content}</div>
+      <div className="text-th-text whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: announcement.content }} />
       <div className="mt-4 text-xs text-th-text-4">
         {new Date(announcement.createdAt).toLocaleString('ru-RU', {
           day: 'numeric',
