@@ -61,4 +61,5 @@ export interface Shout {
   comments?: Comment[];
   visibilityTag?: '' | 'spoiler' | 'nsfw' | 'politics';
   isDeleted?: boolean;
+  isFixed?: boolean;
 }
