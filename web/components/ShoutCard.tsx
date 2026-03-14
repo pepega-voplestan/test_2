@@ -19,11 +19,13 @@ interface ShoutCardProps {
 
 const SHOUT_MAX_LENGTH = 400;
 const NEWLINE_CHAR_COST = 40;
-const MEDIA_MAX_MB = 5;
+const MEDIA_MAX_MB = 10;
 
 const YT_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]{11})/,
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
   /(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
 ];
 
@@ -71,8 +73,8 @@ function extractEmbeds(text: string): EmbedInfo[] {
       embeds.push({ type: 'imgur-album', albumId, url });
       continue;
     }
-    // Twitter/X: twitter.com/user/status/123 or x.com/user/status/123
-    const tweet = url.match(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
+    // Twitter/X: twitter.com, x.com, fxtwitter.com, vxtwitter.com, fixupx.com
+    const tweet = url.match(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com|fxtwitter\.com|vxtwitter\.com|fixupx\.com)\/\w+\/status\/(\d+)/);
     if (tweet) {
       embeds.push({ type: 'twitter', tweetId: tweet[1], url });
       continue;
@@ -89,9 +91,15 @@ function extractEmbeds(text: string): EmbedInfo[] {
       embeds.push({ type: 'tenor', url, tenorId: tenor[1] });
       continue;
     }
-    // Direct tenor media
-    const tenorDirect = url.match(/https?:\/\/media1?\.tenor\.com\/[^\s]+\.(gif|mp4)/i);
+    // Direct tenor media (media.tenor.com or media1.tenor.com)
+    const tenorDirect = url.match(/https?:\/\/media\d?\.tenor\.com\/[^\s]+\.(gif|mp4)/i);
     if (tenorDirect) {
+      embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+    // Giphy short direct: i.giphy.com/ID.gif or i.giphy.com/media/ID/giphy.gif
+    const giphyShortDirect = url.match(/https?:\/\/i\.giphy\.com\/(?:media\/)?([a-zA-Z0-9]+)(?:\/[^\s]*)?\.(gif|webp)/i);
+    if (giphyShortDirect) {
       embeds.push({ type: 'imgur-direct', url });
       continue;
     }
@@ -106,7 +114,13 @@ function extractEmbeds(text: string): EmbedInfo[] {
       embeds.push({ type: 'giphy', giphyId: giphyEmbed[1] });
       continue;
     }
-    const giphyDirect = url.match(/https?:\/\/media[0-4]?\.giphy\.com\/media\/([a-zA-Z0-9]+)\//);
+    // Giphy direct media: media0-4.giphy.com/media/ID/... or media0-4.giphy.com/media/v1.xxx/ID/giphy.gif
+    const giphyDirectGif = url.match(/https?:\/\/media[0-4]?\.giphy\.com\/media\/(?:v1\.[^\s/]+\/)?([a-zA-Z0-9]+)\/[^\s]*\.gif/i);
+    if (giphyDirectGif) {
+      embeds.push({ type: 'imgur-direct', url });
+      continue;
+    }
+    const giphyDirect = url.match(/https?:\/\/media[0-4]?\.giphy\.com\/media\/(?:v1\.[^\s/]+\/)?([a-zA-Z0-9]+)\//);
     if (giphyDirect) {
       embeds.push({ type: 'giphy', giphyId: giphyDirect[1] });
       continue;
@@ -250,7 +264,7 @@ const SteamEmbedCard: React.FC<{ appId: string; slug?: string }> = ({ appId, slu
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=russian`);
+        const res = await fetch(`/api/v1/steam/app/${appId}`, { credentials: 'include' });
         if (!res.ok) throw new Error();
         const json = await res.json();
         const entry = json[appId];
@@ -419,7 +433,7 @@ const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
 /* ---------- Media hidden placeholder ---------- */
 
 const PlaceholderIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-4/50">
     <polygon points="23 7 16 12 23 17 23 7" />
     <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
     <line x1="2" y1="2" x2="22" y2="22" />
@@ -427,49 +441,14 @@ const PlaceholderIcon = () => (
 );
 
 interface MediaPlaceholderProps {
-  aspectRatio?: string;
-  maxHeight?: number;
-  height?: number;
-  maxWidth?: number;
-  paddingBottom?: string;
-  /** Original media width — used with mediaHeight + maxHeight to compute exact display size */
-  mediaWidth?: number;
-  /** Original media height */
-  mediaHeight?: number;
   className?: string;
 }
 
-const MediaPlaceholder: React.FC<MediaPlaceholderProps> = ({ aspectRatio, maxHeight, height, maxWidth, paddingBottom, mediaWidth, mediaHeight, className = '' }) => {
-  // Strategy 1: paddingBottom ratio (for iframes like tenor/giphy)
-  if (paddingBottom) {
-    return (
-      <div className={`relative rounded-lg ${className}`} style={{ paddingBottom, maxWidth }}>
-        <div className="absolute inset-0 bg-th-elevated/60 rounded-lg flex items-center justify-center">
-          <PlaceholderIcon />
-        </div>
-      </div>
-    );
-  }
-
-  // Strategy 2: precise image sizing from known dimensions (matches how <img> with max-h renders)
-  if (mediaWidth && mediaHeight && maxHeight) {
-    const scale = Math.min(1, maxHeight / mediaHeight);
-    const displayW = Math.round(mediaWidth * scale);
-    return (
-      <div
-        className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
-        style={{ width: displayW, maxWidth: '100%', aspectRatio: `${mediaWidth}/${mediaHeight}`, maxHeight }}
-      >
-        <PlaceholderIcon />
-      </div>
-    );
-  }
-
-  // Strategy 3: CSS constraints (for videos, generic embeds)
+const MediaPlaceholder: React.FC<MediaPlaceholderProps> = ({ className = '' }) => {
   return (
     <div
       className={`bg-th-elevated/60 rounded-lg flex items-center justify-center ${className}`}
-      style={{ ...(aspectRatio ? { aspectRatio } : {}), ...(maxHeight ? { maxHeight } : {}), ...(height ? { height } : {}), ...(maxWidth ? { maxWidth } : {}), ...(!aspectRatio && !height ? { minHeight: 120 } : {}) }}
+      style={{ height: 48, maxWidth: 160 }}
     >
       <PlaceholderIcon />
     </div>
@@ -660,14 +639,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {showMedia ? embeds.map((embed, idx) => (
             <EmbedCard key={`embed-${idx}`} embed={embed} />
-          )) : embeds.length > 0 ? embeds.map((_embed, idx) => {
-            const e = embeds[idx];
-            if (e.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
-            if (e.type === 'tenor' || e.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" paddingBottom="75%" />;
-            if (e.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" height={240} maxWidth={460} />;
-            if (e.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={48} />;
-            return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" maxHeight={200} height={150} />;
-          }) : null}
+          )) : embeds.length > 0 ? <MediaPlaceholder className="mb-2" /> : null}
 
           {showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
@@ -680,9 +652,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           {!showMedia && comment.media?.type === 'image' && (
-            comment.media.width && comment.media.height
-              ? <MediaPlaceholder className="mb-2" maxHeight={200} mediaWidth={comment.media.width} mediaHeight={comment.media.height} />
-              : <MediaPlaceholder className="mb-2" maxHeight={200} height={150} />
+            <MediaPlaceholder className="mb-2" />
           )}
 
           {lightboxOpen && comment.media?.type === 'image' && (
@@ -690,6 +660,16 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full}
               onClose={() => setLightboxOpen(false)}
             />
+          )}
+
+          {showMedia && comment.media?.type === 'video' && (
+            <div className="mb-2 rounded-lg overflow-hidden">
+              <video src={comment.media.url} controls loop className="max-h-[200px] max-w-full rounded-lg" ref={el => { if (el) el.volume = 0.3; }} />
+            </div>
+          )}
+
+          {!showMedia && comment.media?.type === 'video' && (
+            <MediaPlaceholder className="mb-2" />
           )}
 
           {showMedia && comment.media?.type === 'youtube' && (
@@ -720,7 +700,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           )}
 
           {!showMedia && comment.media?.type === 'youtube' && (
-            <MediaPlaceholder className="mb-2 w-full" aspectRatio="16/9" />
+            <MediaPlaceholder className="mb-2" />
           )}
 
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-1">
@@ -797,6 +777,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const [replyMediaId, setReplyMediaId] = useState<string | null>(null);
   const [replyMediaPreview, setReplyMediaPreview] = useState<string | null>(null);
+  const [replyMediaIsVideo, setReplyMediaIsVideo] = useState(false);
   const [isReplyUploading, setIsReplyUploading] = useState(false);
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
@@ -885,9 +866,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const uploadReplyFile = async (file: File) => {
     if (file.size > MEDIA_MAX_MB * 1024 * 1024) { setReplyError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`); return; }
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP, GIF'); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP, GIF, MP4'); return; }
     setReplyError(null);
     setIsReplyUploading(true);
+    const isVideo = file.type === 'video/mp4';
+    setReplyMediaIsVideo(isVideo);
     const localUrl = URL.createObjectURL(file);
     setReplyMediaPreview(localUrl);
     try {
@@ -897,8 +880,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Ошибка ${res.status}`); }
       const data = await res.json();
       setReplyMediaId(data.mediaId);
-      setReplyMediaPreview(data.urls.thumb);
-      URL.revokeObjectURL(localUrl);
+      if (!isVideo) {
+        setReplyMediaPreview(data.urls.thumb);
+        URL.revokeObjectURL(localUrl);
+      }
     } catch (err: unknown) {
       setReplyError(err instanceof Error ? err.message : 'Ошибка загрузки');
       setReplyMediaPreview(null); URL.revokeObjectURL(localUrl);
@@ -914,7 +899,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const removeReplyMedia = () => {
     if (replyMediaPreview) URL.revokeObjectURL(replyMediaPreview);
-    setReplyMediaId(null); setReplyMediaPreview(null); setReplyError(null);
+    setReplyMediaId(null); setReplyMediaPreview(null); setReplyMediaIsVideo(false); setReplyError(null);
   };
 
   const submitReply = async () => {
@@ -1017,6 +1002,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
         />
       )}
 
+      {shout.media?.type === 'video' && (
+        <div className="mb-3 rounded-lg overflow-hidden">
+          <video src={shout.media.url} controls loop className="max-h-[300px] max-w-full rounded-lg" ref={el => { if (el) el.volume = 0.3; }} />
+        </div>
+      )}
+
       {shout.media?.type === 'youtube' && (
           <div className="mb-3 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
             <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
@@ -1051,24 +1042,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!hasMediaContent) return null;
     return (
       <>
-        {embeds.map((embed, idx) => {
-          // Match each embed type's actual rendered dimensions
-          if (embed.type === 'coub') return <MediaPlaceholder key={`embed-ph-${idx}`} aspectRatio="16/9" className="mb-2 w-full" />;
-          if (embed.type === 'tenor' || embed.type === 'giphy') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" paddingBottom="75%" />;
-          if (embed.type === 'steam') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" height={280} maxWidth={460} />;
-          if (embed.type === 'imgur-album') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={56} />;
-          if (embed.type === 'twitter') return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2 w-full" height={200} />;
-          // imgur images, imgur-direct: unknown dimensions, use reasonable default
-          return <MediaPlaceholder key={`embed-ph-${idx}`} className="mb-2" maxHeight={300} height={200} />;
-        })}
-        {shout.media?.type === 'image' && (
-          shout.media.width && shout.media.height
-            ? <MediaPlaceholder className="mb-3" maxHeight={300} mediaWidth={shout.media.width} mediaHeight={shout.media.height} />
-            : <MediaPlaceholder className="mb-3" maxHeight={300} height={200} />
-        )}
-        {shout.media?.type === 'youtube' && (
-          <MediaPlaceholder className="mb-3 w-full" aspectRatio="16/9" />
-        )}
+        {embeds.length > 0 && <MediaPlaceholder className="mb-2" />}
+        {shout.media && <MediaPlaceholder className="mb-3" />}
       </>
     );
   };
@@ -1336,7 +1311,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                             </svg>
                           </button>
                         </div>
-                        <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleReplyFileSelect} />
+                        <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4" className="hidden" onChange={handleReplyFileSelect} />
                         {(replyContent.trim() || replyHasMedia) && (
                           <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
                             {replyCharCount}/{SHOUT_MAX_LENGTH}
@@ -1348,7 +1323,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       </div>
                       {replyMediaPreview && (
                         <div className="relative inline-block mt-1">
-                          <img src={replyMediaPreview} alt="preview" className="max-h-24 rounded border border-th-border" />
+                          {replyMediaIsVideo ? (
+                            <video src={replyMediaPreview} className="max-h-24 rounded border border-th-border" muted preload="metadata" />
+                          ) : (
+                            <img src={replyMediaPreview} alt="preview" className="max-h-24 rounded border border-th-border" />
+                          )}
                           {isReplyUploading && <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center"><div className="w-4 h-4 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" /></div>}
                           {!isReplyUploading && <button type="button" onClick={removeReplyMedia} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-[10px]">X</button>}
                         </div>
