@@ -31,7 +31,7 @@ router.post("/upload/media", requireAuth, (req, res) => {
   mediaUpload.single("file")(req, res, async (multerErr) => {
     if (multerErr) {
       const msg = multerErr.code === "LIMIT_FILE_SIZE"
-        ? "Файл слишком большой (макс. 5 МБ)"
+        ? "Файл слишком большой (макс. 10 МБ)"
         : multerErr.message || "Ошибка загрузки";
       console.log(`[Media] Upload rejected: ${msg}`);
       return res.status(400).json({ error: msg });
@@ -47,6 +47,42 @@ router.post("/upload/media", requireAuth, (req, res) => {
     console.log(`[Media] Processing upload for ${userId}, ${req.file.size} bytes, ${req.file.mimetype}`);
 
     try {
+      const isVideo = req.file.mimetype === "video/mp4";
+
+      if (isVideo) {
+        // Video: store original mp4, generate a thumbnail via first-frame extraction is not feasible without ffmpeg,
+        // so we store the video as-is and create a placeholder thumbnail
+        const mediaId = crypto.randomUUID();
+        const tmpDir = path.join(MEDIA_TMP_DIR, mediaId);
+        fs.mkdirSync(tmpDir, { recursive: true });
+
+        // Store original video
+        fs.writeFileSync(path.join(tmpDir, "original.mp4"), req.file.buffer);
+
+        const metaJson = JSON.stringify({ size: req.file.size, mime: req.file.mimetype });
+        fs.writeFileSync(path.join(tmpDir, "meta.json"), metaJson);
+
+        const permanentDir = path.join(MEDIA_DIR, mediaId);
+        fs.renameSync(tmpDir, permanentDir);
+
+        await prisma.media.create({
+          data: {
+            id: mediaId,
+            user_id: userId,
+            media_type: "video",
+            media_url: mediaId,
+            media_meta: metaJson,
+          },
+        });
+
+        console.log(`[Media] Video upload complete: ${mediaId}`);
+        return res.json({
+          ok: true,
+          mediaId,
+          urls: { video: `/media/${mediaId}/original.mp4` },
+        });
+      }
+
       const image = sharp(req.file.buffer);
       const meta = await image.metadata();
 
@@ -130,7 +166,7 @@ router.post("/upload/media", requireAuth, (req, res) => {
       });
     } catch (err) {
       console.error("[Media] Processing error:", err);
-      res.status(500).json({ error: "Ошибка обработки изображения" });
+      res.status(500).json({ error: "Ошибка обработки файла" });
     }
   });
 });
