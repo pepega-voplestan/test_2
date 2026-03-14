@@ -40,16 +40,6 @@ export async function setupAdmin() {
             password_hash: { isVisible: false },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations
-            shouts: { isVisible: false },
-            comments: { isVisible: false },
-            media: { isVisible: false },
-            shoutLikes: { isVisible: false },
-            commentLikes: { isVisible: false },
-            receivedNotifications: { isVisible: false },
-            sentNotifications: { isVisible: false },
-            ignoredByMe: { isVisible: false },
-            ignoredByOthers: { isVisible: false },
           },
           actions: {
             new: { isAccessible: false },
@@ -170,15 +160,8 @@ export async function setupAdmin() {
             media_type: { isVisible: false },
             media_url: { isVisible: false },
             media_meta: { isVisible: false },
-            // Hide reverse relations
-            likes: { isVisible: false },
-            comments: { isVisible: false },
-            children: { isVisible: false },
-            parent: { isVisible: false },
-            notifications: { isVisible: false },
           },
           actions: {
-            new: { isAccessible: false },
             bulkDelete: { isAccessible: false },
             // Default delete → soft-delete
             delete: {
@@ -244,12 +227,8 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations
-            likes: { isVisible: false },
-            notifications: { isVisible: false },
           },
           actions: {
-            new: { isAccessible: false },
             bulkDelete: { isAccessible: false },
             delete: {
               handler: async (request, response, context) => {
@@ -308,13 +287,8 @@ export async function setupAdmin() {
           properties: {
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations
-            shouts: { isVisible: false },
-            comments: { isVisible: false },
           },
           actions: {
-            new: { isAccessible: false },
-            edit: { isAccessible: false },
             delete: { isAccessible: false },
             bulkDelete: { isAccessible: false },
           },
