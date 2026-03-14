@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { ApiClient, Box, H2, H4, Text, Button, Icon } from "adminjs";
+import { ApiClient } from "adminjs";
+import { Box, H2, H4, Text, Button, Icon } from "@adminjs/design-system";
 
 const api = new ApiClient();
 
