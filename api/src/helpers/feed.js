@@ -108,6 +108,7 @@ export async function enrichFeed(topShouts, currentUserId) {
       comments: children,
       visibilityTag: row.visibility_tag || "",
       isDeleted,
+      isPinned: !!row.is_pinned,
     };
   }
 
