@@ -5,6 +5,7 @@ import { Box, H2, H4, Text, Button, Icon } from "@adminjs/design-system";
 const api = new ApiClient();
 
 const PERIOD_OPTIONS = [
+  { label: "Сегодня", value: 1 },
   { label: "7 дней", value: 7 },
   { label: "30 дней", value: 30 },
   { label: "90 дней", value: 90 },
@@ -48,6 +49,26 @@ const TimelineSection = ({ title, data }) => {
       <H4 mb="lg">{title}</H4>
       {data.map((d) => (
         <TimelineRow key={d.date} label={d.date} count={d.count} maxCount={maxCount} />
+      ))}
+    </Box>
+  );
+};
+
+const TopCreatorsSection = ({ data }) => {
+  if (!data || data.length === 0) return null;
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  return (
+    <Box variant="card" p="xl" mb="lg">
+      <H4 mb="lg">Топ авторов воплей</H4>
+      {data.map((d, i) => (
+        <Box key={d.name} flex alignItems="center" mb="sm" style={{ gap: 8 }}>
+          <Text style={{ width: 20, flexShrink: 0, fontSize: 12, textAlign: "right" }} color="grey60">{i + 1}.</Text>
+          <Text style={{ width: 120, flexShrink: 0, fontSize: 13 }} fontWeight="bold">{d.name}</Text>
+          <Box style={{ flex: 1, height: 18, background: "var(--grey20, #f0f0f0)", borderRadius: 4, overflow: "hidden" }}>
+            <Box style={{ width: `${(d.count / maxCount) * 100}%`, height: "100%", background: "var(--primary100, #3040d6)", borderRadius: 4, transition: "width 0.3s" }} />
+          </Box>
+          <Text style={{ width: 50, textAlign: "right", fontSize: 12, flexShrink: 0 }} fontWeight="bold">{d.count}</Text>
+        </Box>
       ))}
     </Box>
   );
@@ -111,6 +132,9 @@ const Dashboard = () => {
         <StatCard label="Лайки" value={stats.totals.shoutLikes + stats.totals.commentLikes} icon="ThumbsUp" />
         <StatCard label="Медиа" value={stats.totals.media} icon="Image" />
       </Box>
+
+      {/* Top creators */}
+      <TopCreatorsSection data={stats.topCreators} />
 
       {/* Timelines */}
       <Box flex flexWrap="wrap" style={{ gap: 16 }}>

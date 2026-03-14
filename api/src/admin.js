@@ -302,7 +302,10 @@ export async function setupAdmin() {
           navigation: { name: "Контент", icon: "Document" },
           sort: { sortBy: "created_at", direction: "desc" },
           properties: {
-            content: { type: "textarea" },
+            content: {
+              type: "textarea",
+              description: "Поддерживается HTML-разметка для форматированных объявлений",
+            },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
           },
@@ -365,9 +368,16 @@ export async function setupAdmin() {
       component: Components.Dashboard,
       handler: async (request) => {
         const days = parseInt(request.query?.days, 10) || 30;
-        const since = days > 0
-          ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
-          : null;
+
+        // days=1 means "today UTC", days=7/30/90 means last N days, days=0 means all time
+        let since;
+        if (days === 1) {
+          since = new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
+        } else if (days > 0) {
+          since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+        } else {
+          since = null;
+        }
 
         const dateFilter = since ? { created_at: { gte: since } } : {};
 
@@ -381,10 +391,12 @@ export async function setupAdmin() {
         ]);
 
         // Timeline: group by date (last N days, or last 30 if "all time")
-        const timelineDays = days > 0 ? Math.min(days, 90) : 30;
-        const timelineSince = new Date(Date.now() - timelineDays * 24 * 60 * 60 * 1000).toISOString();
+        const timelineDays = days > 1 ? Math.min(days, 90) : (days === 1 ? 1 : 30);
+        const timelineSince = days === 1
+          ? since
+          : new Date(Date.now() - timelineDays * 24 * 60 * 60 * 1000).toISOString();
 
-        const [shoutsTimeline, commentsTimeline, shoutLikesTimeline, commentLikesTimeline, usersTimeline] = await Promise.all([
+        const [shoutsTimeline, commentsTimeline, shoutLikesTimeline, commentLikesTimeline, usersTimeline, topCreators] = await Promise.all([
           prisma.$queryRawUnsafe(
             `SELECT date(created_at) as date, COUNT(*) as count FROM shouts WHERE is_deleted = 0 AND created_at >= ? GROUP BY date(created_at) ORDER BY date`,
             timelineSince,
@@ -405,6 +417,10 @@ export async function setupAdmin() {
             `SELECT date(created_at) as date, COUNT(*) as count FROM users WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
             timelineSince,
           ),
+          prisma.$queryRawUnsafe(
+            `SELECT u.username as name, COUNT(*) as count FROM shouts s JOIN users u ON s.user_id = u.id WHERE s.is_deleted = 0${since ? " AND s.created_at >= ?" : ""} GROUP BY s.user_id ORDER BY count DESC LIMIT 10`,
+            ...(since ? [since] : []),
+          ),
         ]);
 
         const toTimeline = (rows) => rows.map((r) => ({ date: r.date, count: Number(r.count) }));
@@ -423,6 +439,7 @@ export async function setupAdmin() {
             likes: mergeLikes(shoutLikesTimeline, commentLikesTimeline),
             users: toTimeline(usersTimeline),
           },
+          topCreators: topCreators.map((r) => ({ name: r.name, count: Number(r.count) })),
         };
       },
     },
