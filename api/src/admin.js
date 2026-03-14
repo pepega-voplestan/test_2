@@ -152,7 +152,7 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            is_fixed: {
+            is_pinned: {
               type: "number",
               description: "1 = закреплённый вопль (отображается первым в ленте)",
             },

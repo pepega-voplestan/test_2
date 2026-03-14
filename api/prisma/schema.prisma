@@ -38,7 +38,7 @@ model Shout {
   content    String
   media_id   String?
   is_deleted      Int     @default(0)
-  is_fixed        Int     @default(0)
+  is_pinned       Int     @default(0)
   visibility_tag  String  @default("")
   created_at String  @default(dbgenerated("(datetime('now'))"))
 
