@@ -26,7 +26,10 @@ vi.mock("adminjs", () => {
     capturedConfig.value = config;
   }
   AdminJS.registerAdapter = vi.fn();
-  return { default: AdminJS };
+  class ComponentLoader {
+    add(name, path) { return name; }
+  }
+  return { default: AdminJS, ComponentLoader };
 });
 
 vi.mock("@adminjs/express", () => ({

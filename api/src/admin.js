@@ -1,10 +1,18 @@
-import AdminJS from "adminjs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import AdminJS, { ComponentLoader } from "adminjs";
 import AdminJSExpress from "@adminjs/express";
 import { Database, Resource, getModelByName } from "@adminjs/prisma";
 import { prisma } from "./db.js";
 import { verifyPassword } from "./auth.js";
 
 AdminJS.registerAdapter({ Database, Resource });
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const componentLoader = new ComponentLoader();
+const Components = {
+  Dashboard: componentLoader.add("Dashboard", join(__dirname, "admin-dashboard")),
+};
 
 export async function setupAdmin() {
   // ── Validate required env vars ──
@@ -40,6 +48,8 @@ export async function setupAdmin() {
             commentLikes: { isVisible: false },
             receivedNotifications: { isVisible: false },
             sentNotifications: { isVisible: false },
+            ignoredByMe: { isVisible: false },
+            ignoredByOthers: { isVisible: false },
           },
           actions: {
             new: { isAccessible: false },
@@ -156,11 +166,19 @@ export async function setupAdmin() {
               type: "number",
               description: "1 = закреплённый вопль (отображается первым в ленте)",
             },
-            // Hide reverse relations to unregistered resources
+            // Hide legacy inline media columns
+            media_type: { isVisible: false },
+            media_url: { isVisible: false },
+            media_meta: { isVisible: false },
+            // Hide reverse relations
             likes: { isVisible: false },
+            comments: { isVisible: false },
+            children: { isVisible: false },
+            parent: { isVisible: false },
             notifications: { isVisible: false },
           },
           actions: {
+            new: { isAccessible: false },
             bulkDelete: { isAccessible: false },
             // Default delete → soft-delete
             delete: {
@@ -226,11 +244,12 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations to unregistered resources
+            // Hide reverse relations
             likes: { isVisible: false },
             notifications: { isVisible: false },
           },
           actions: {
+            new: { isAccessible: false },
             bulkDelete: { isAccessible: false },
             delete: {
               handler: async (request, response, context) => {
@@ -289,6 +308,9 @@ export async function setupAdmin() {
           properties: {
             id: { isDisabled: true },
             created_at: { isDisabled: true },
+            // Hide reverse relations
+            shouts: { isVisible: false },
+            comments: { isVisible: false },
           },
           actions: {
             new: { isAccessible: false },
@@ -364,6 +386,72 @@ export async function setupAdmin() {
       },
 
     ],
+    componentLoader,
+    dashboard: {
+      component: Components.Dashboard,
+      handler: async (request) => {
+        const days = parseInt(request.query?.days, 10) || 30;
+        const since = days > 0
+          ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+          : null;
+
+        const dateFilter = since ? { created_at: { gte: since } } : {};
+
+        const [users, shouts, comments, shoutLikes, commentLikes, media] = await Promise.all([
+          prisma.user.count({ where: dateFilter }),
+          prisma.shout.count({ where: { is_deleted: 0, ...dateFilter } }),
+          prisma.comment.count({ where: { is_deleted: 0, ...dateFilter } }),
+          prisma.shoutLike.count({ where: dateFilter }),
+          prisma.commentLike.count({ where: dateFilter }),
+          prisma.media.count({ where: dateFilter }),
+        ]);
+
+        // Timeline: group by date (last N days, or last 30 if "all time")
+        const timelineDays = days > 0 ? Math.min(days, 90) : 30;
+        const timelineSince = new Date(Date.now() - timelineDays * 24 * 60 * 60 * 1000).toISOString();
+
+        const [shoutsTimeline, commentsTimeline, shoutLikesTimeline, commentLikesTimeline, usersTimeline] = await Promise.all([
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM shouts WHERE is_deleted = 0 AND created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM comments WHERE is_deleted = 0 AND created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM shout_likes WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM comment_likes WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM users WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+        ]);
+
+        const toTimeline = (rows) => rows.map((r) => ({ date: r.date, count: Number(r.count) }));
+        const mergeLikes = (sl, cl) => {
+          const map = new Map();
+          for (const r of sl) map.set(r.date, (map.get(r.date) || 0) + Number(r.count));
+          for (const r of cl) map.set(r.date, (map.get(r.date) || 0) + Number(r.count));
+          return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, count]) => ({ date, count }));
+        };
+
+        return {
+          totals: { users, shouts, comments, shoutLikes, commentLikes, media },
+          timeline: {
+            shouts: toTimeline(shoutsTimeline),
+            comments: toTimeline(commentsTimeline),
+            likes: mergeLikes(shoutLikesTimeline, commentLikesTimeline),
+            users: toTimeline(usersTimeline),
+          },
+        };
+      },
+    },
     branding: {
       companyName: "Вопли — Админ-панель",
       softwareBrothers: false,
