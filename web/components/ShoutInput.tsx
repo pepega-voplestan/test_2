@@ -10,11 +10,13 @@ interface ShoutInputProps {
 
 const SHOUT_MAX_LENGTH = 400;
 const NEWLINE_CHAR_COST = 40;
-const MEDIA_MAX_MB = 5;
+const MEDIA_MAX_MB = 10;
 
 const YT_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]{11})/,
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
   /(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
 ];
 
@@ -35,6 +37,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   // Media state
   const [mediaId, setMediaId] = useState<string | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaIsVideo, setMediaIsVideo] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionInputRef = useRef<MentionInputHandle>(null);
@@ -92,13 +95,15 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       return;
     }
 
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
-      setError('Допустимые форматы: JPG, PNG, WebP, GIF');
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4'].includes(file.type)) {
+      setError('Допустимые форматы: JPG, PNG, WebP, GIF, MP4');
       return;
     }
 
     setError(null);
     setIsUploading(true);
+    const isVideo = file.type === 'video/mp4';
+    setMediaIsVideo(isVideo);
 
     const localUrl = URL.createObjectURL(file);
     setMediaPreview(localUrl);
@@ -120,8 +125,10 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
       const data = await res.json();
       setMediaId(data.mediaId);
-      setMediaPreview(data.urls.thumb);
-      URL.revokeObjectURL(localUrl);
+      if (!isVideo) {
+        setMediaPreview(data.urls.thumb);
+        URL.revokeObjectURL(localUrl);
+      }
       console.log('[ShoutInput] Media uploaded:', data.mediaId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка загрузки';
@@ -183,6 +190,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     if (mediaPreview) URL.revokeObjectURL(mediaPreview);
     setMediaId(null);
     setMediaPreview(null);
+    setMediaIsVideo(false);
     setError(null);
     // NSFW and СПОЙЛЕР only make sense with media — clear them
     if (activeTag === 'nsfw' || activeTag === 'spoiler') setActiveTag(null);
@@ -354,7 +362,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                           <input
                             ref={fileInputRef}
                             type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4"
                             className="hidden"
                             onChange={handleFileSelect}
                           />
@@ -382,10 +390,14 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
               </div>
             </div>
 
-            {/* Image preview */}
+            {/* Media preview */}
             {mediaPreview && (
               <div className="mt-3 ml-14 relative inline-block">
-                <img src={mediaPreview} alt="preview" className="max-h-40 rounded-lg border border-th-border" />
+                {mediaIsVideo ? (
+                  <video src={mediaPreview} className="max-h-40 rounded-lg border border-th-border" muted preload="metadata" />
+                ) : (
+                  <img src={mediaPreview} alt="preview" className="max-h-40 rounded-lg border border-th-border" />
+                )}
                 {isUploading && (
                   <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
                     <div className="w-6 h-6 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" />

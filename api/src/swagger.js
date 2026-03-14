@@ -631,8 +631,8 @@ export const swaggerSpec = {
     "/api/v1/upload/media": {
       post: {
         tags: ["upload"],
-        summary: "Upload image or GIF",
-        description: "Requires auth. Accepts JPG, PNG, WebP, or GIF up to 5 MB. Generates 320/960/1600px WebP variants. GIFs also preserve the original. Rate limited to 100 req/10min per user.",
+        summary: "Upload image, GIF, or video",
+        description: "Requires auth. Accepts JPG, PNG, WebP, GIF, or MP4 up to 10 MB. Images generate 320/960/1600px WebP variants. GIFs preserve the original. MP4 videos are stored as-is. Rate limited to 100 req/10min per user.",
         requestBody: {
           required: true,
           content: {
