@@ -48,7 +48,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
     let fixedShouts = [];
     if (!cursor) {
       fixedShouts = await prisma.shout.findMany({
-        where: { parent_id: null, is_deleted: 0, is_fixed: 1 },
+        where: { parent_id: null, is_deleted: 0, is_pinned: 1 },
         include: {
           user: { select: { username: true, avatar: true, is_banned: true } },
           media: true,
@@ -61,7 +61,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
     topRaw = await prisma.shout.findMany({
       where: {
         parent_id: null,
-        is_fixed: 0,
+        is_pinned: 0,
         ...(cursor ? { created_at: { lt: cursor } } : {}),
       },
       include: {
@@ -227,7 +227,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     comments: [],
     visibilityTag: shout.visibility_tag || "",
     isDeleted: false,
-    isFixed: false,
+    isPinned: false,
     ...(shout.media ? { media: buildMedia(shout.media) } : {}),
   };
 
