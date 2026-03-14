@@ -394,7 +394,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
             {mediaPreview && (
               <div className="mt-3 ml-14 relative inline-block">
                 {mediaIsVideo ? (
-                  <video src={mediaPreview} className="max-h-40 rounded-lg border border-th-border" muted />
+                  <video src={mediaPreview} className="max-h-40 rounded-lg border border-th-border" muted preload="metadata" />
                 ) : (
                   <img src={mediaPreview} alt="preview" className="max-h-40 rounded-lg border border-th-border" />
                 )}

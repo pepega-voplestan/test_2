@@ -777,6 +777,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const [replyMediaId, setReplyMediaId] = useState<string | null>(null);
   const [replyMediaPreview, setReplyMediaPreview] = useState<string | null>(null);
+  const [replyMediaIsVideo, setReplyMediaIsVideo] = useState(false);
   const [isReplyUploading, setIsReplyUploading] = useState(false);
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
@@ -868,6 +869,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP, GIF, MP4'); return; }
     setReplyError(null);
     setIsReplyUploading(true);
+    const isVideo = file.type === 'video/mp4';
+    setReplyMediaIsVideo(isVideo);
     const localUrl = URL.createObjectURL(file);
     setReplyMediaPreview(localUrl);
     try {
@@ -877,8 +880,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Ошибка ${res.status}`); }
       const data = await res.json();
       setReplyMediaId(data.mediaId);
-      setReplyMediaPreview(data.urls.thumb);
-      URL.revokeObjectURL(localUrl);
+      if (!isVideo) {
+        setReplyMediaPreview(data.urls.thumb);
+        URL.revokeObjectURL(localUrl);
+      }
     } catch (err: unknown) {
       setReplyError(err instanceof Error ? err.message : 'Ошибка загрузки');
       setReplyMediaPreview(null); URL.revokeObjectURL(localUrl);
@@ -894,7 +899,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const removeReplyMedia = () => {
     if (replyMediaPreview) URL.revokeObjectURL(replyMediaPreview);
-    setReplyMediaId(null); setReplyMediaPreview(null); setReplyError(null);
+    setReplyMediaId(null); setReplyMediaPreview(null); setReplyMediaIsVideo(false); setReplyError(null);
   };
 
   const submitReply = async () => {
@@ -1318,7 +1323,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       </div>
                       {replyMediaPreview && (
                         <div className="relative inline-block mt-1">
-                          <img src={replyMediaPreview} alt="preview" className="max-h-24 rounded border border-th-border" />
+                          {replyMediaIsVideo ? (
+                            <video src={replyMediaPreview} className="max-h-24 rounded border border-th-border" muted preload="metadata" />
+                          ) : (
+                            <img src={replyMediaPreview} alt="preview" className="max-h-24 rounded border border-th-border" />
+                          )}
                           {isReplyUploading && <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center"><div className="w-4 h-4 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" /></div>}
                           {!isReplyUploading && <button type="button" onClick={removeReplyMedia} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-[10px]">X</button>}
                         </div>
