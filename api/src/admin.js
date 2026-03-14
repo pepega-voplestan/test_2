@@ -1,10 +1,18 @@
-import AdminJS from "adminjs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import AdminJS, { ComponentLoader } from "adminjs";
 import AdminJSExpress from "@adminjs/express";
 import { Database, Resource, getModelByName } from "@adminjs/prisma";
 import { prisma } from "./db.js";
 import { verifyPassword } from "./auth.js";
 
 AdminJS.registerAdapter({ Database, Resource });
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const componentLoader = new ComponentLoader();
+const Components = {
+  Dashboard: componentLoader.add("Dashboard", join(__dirname, "admin-dashboard")),
+};
 
 export async function setupAdmin() {
   // ── Validate required env vars ──
@@ -32,14 +40,6 @@ export async function setupAdmin() {
             password_hash: { isVisible: false },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations
-            shouts: { isVisible: false },
-            comments: { isVisible: false },
-            media: { isVisible: false },
-            shoutLikes: { isVisible: false },
-            commentLikes: { isVisible: false },
-            receivedNotifications: { isVisible: false },
-            sentNotifications: { isVisible: false },
           },
           actions: {
             new: { isAccessible: false },
@@ -152,9 +152,14 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations to unregistered resources
-            likes: { isVisible: false },
-            notifications: { isVisible: false },
+            is_pinned: {
+              type: "number",
+              description: "1 = закреплённый вопль (отображается первым в ленте)",
+            },
+            // Hide legacy inline media columns
+            media_type: { isVisible: false },
+            media_url: { isVisible: false },
+            media_meta: { isVisible: false },
           },
           actions: {
             bulkDelete: { isAccessible: false },
@@ -222,9 +227,6 @@ export async function setupAdmin() {
             content: { type: "textarea" },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
-            // Hide reverse relations to unregistered resources
-            likes: { isVisible: false },
-            notifications: { isVisible: false },
           },
           actions: {
             bulkDelete: { isAccessible: false },
@@ -287,8 +289,6 @@ export async function setupAdmin() {
             created_at: { isDisabled: true },
           },
           actions: {
-            new: { isAccessible: false },
-            edit: { isAccessible: false },
             delete: { isAccessible: false },
             bulkDelete: { isAccessible: false },
           },
@@ -302,7 +302,10 @@ export async function setupAdmin() {
           navigation: { name: "Контент", icon: "Document" },
           sort: { sortBy: "created_at", direction: "desc" },
           properties: {
-            content: { type: "textarea" },
+            content: {
+              type: "textarea",
+              description: "Поддерживается HTML-разметка для форматированных объявлений",
+            },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
           },
@@ -360,6 +363,86 @@ export async function setupAdmin() {
       },
 
     ],
+    componentLoader,
+    dashboard: {
+      component: Components.Dashboard,
+      handler: async (request) => {
+        const days = parseInt(request.query?.days, 10) || 30;
+
+        // days=1 means "today UTC", days=7/30/90 means last N days, days=0 means all time
+        let since;
+        if (days === 1) {
+          since = new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
+        } else if (days > 0) {
+          since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+        } else {
+          since = null;
+        }
+
+        const dateFilter = since ? { created_at: { gte: since } } : {};
+
+        const [users, shouts, comments, shoutLikes, commentLikes, media] = await Promise.all([
+          prisma.user.count({ where: dateFilter }),
+          prisma.shout.count({ where: { is_deleted: 0, ...dateFilter } }),
+          prisma.comment.count({ where: { is_deleted: 0, ...dateFilter } }),
+          prisma.shoutLike.count({ where: dateFilter }),
+          prisma.commentLike.count({ where: dateFilter }),
+          prisma.media.count({ where: dateFilter }),
+        ]);
+
+        // Timeline: group by date (last N days, or last 30 if "all time")
+        const timelineDays = days > 1 ? Math.min(days, 90) : (days === 1 ? 1 : 30);
+        const timelineSince = days === 1
+          ? since
+          : new Date(Date.now() - timelineDays * 24 * 60 * 60 * 1000).toISOString();
+
+        const [shoutsTimeline, commentsTimeline, shoutLikesTimeline, commentLikesTimeline, usersTimeline, topCreators] = await Promise.all([
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM shouts WHERE is_deleted = 0 AND created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM comments WHERE is_deleted = 0 AND created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM shout_likes WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM comment_likes WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT date(created_at) as date, COUNT(*) as count FROM users WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
+            timelineSince,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT u.username as name, COUNT(*) as count FROM shouts s JOIN users u ON s.user_id = u.id WHERE s.is_deleted = 0${since ? " AND s.created_at >= ?" : ""} GROUP BY s.user_id ORDER BY count DESC LIMIT 10`,
+            ...(since ? [since] : []),
+          ),
+        ]);
+
+        const toTimeline = (rows) => rows.map((r) => ({ date: r.date, count: Number(r.count) }));
+        const mergeLikes = (sl, cl) => {
+          const map = new Map();
+          for (const r of sl) map.set(r.date, (map.get(r.date) || 0) + Number(r.count));
+          for (const r of cl) map.set(r.date, (map.get(r.date) || 0) + Number(r.count));
+          return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, count]) => ({ date, count }));
+        };
+
+        return {
+          totals: { users, shouts, comments, shoutLikes, commentLikes, media },
+          timeline: {
+            shouts: toTimeline(shoutsTimeline),
+            comments: toTimeline(commentsTimeline),
+            likes: mergeLikes(shoutLikesTimeline, commentLikesTimeline),
+            users: toTimeline(usersTimeline),
+          },
+          topCreators: topCreators.map((r) => ({ name: r.name, count: Number(r.count) })),
+        };
+      },
+    },
     branding: {
       companyName: "Вопли — Админ-панель",
       softwareBrothers: false,

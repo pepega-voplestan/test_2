@@ -61,6 +61,7 @@ const ShoutDto = {
     likedBy: { type: "array", items: { type: "string", format: "uuid" }, description: "IDs of users who liked this shout (only current user's ID is included)" },
     media: { $ref: "#/components/schemas/MediaDto" },
     comments: { type: "array", items: { $ref: "#/components/schemas/CommentDto" } },
+    isPinned: { type: "boolean", description: "Whether this shout is pinned to the top of the feed" },
   },
 };
 

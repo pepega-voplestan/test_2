@@ -44,9 +44,24 @@ router.get("/shouts", asyncHandler(async (req, res) => {
     // Cursor-based pagination for "new" tab — stable under list mutations
     const cursor = req.query.cursor || null; // created_at of last seen shout
     console.log(`[Shouts] Fetching new shouts: limit=${limit}, cursor=${cursor || "none"}, user=${currentUserId || "anon"}`);
+    // On first page (no cursor), fetch fixed shouts separately so they always appear at the top
+    let fixedShouts = [];
+    if (!cursor) {
+      fixedShouts = await prisma.shout.findMany({
+        where: { parent_id: null, is_deleted: 0, is_pinned: 1 },
+        include: {
+          user: { select: { username: true, avatar: true, is_banned: true } },
+          media: true,
+        },
+        orderBy: { created_at: "desc" },
+      });
+    }
+    const fixedIds = new Set(fixedShouts.map(s => s.id));
+
     topRaw = await prisma.shout.findMany({
       where: {
         parent_id: null,
+        is_pinned: 0,
         ...(cursor ? { created_at: { lt: cursor } } : {}),
       },
       include: {
@@ -56,6 +71,11 @@ router.get("/shouts", asyncHandler(async (req, res) => {
       orderBy: { created_at: "desc" },
       take: limit + 1,
     });
+
+    // Prepend fixed shouts on the first page only (they don't count toward pagination)
+    if (!cursor && fixedShouts.length > 0) {
+      topRaw = [...fixedShouts, ...topRaw.filter(s => !fixedIds.has(s.id))];
+    }
   }
 
   const hasMore = topRaw.length > limit;
@@ -207,6 +227,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     comments: [],
     visibilityTag: shout.visibility_tag || "",
     isDeleted: false,
+    isPinned: false,
     ...(shout.media ? { media: buildMedia(shout.media) } : {}),
   };
 
