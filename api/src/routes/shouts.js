@@ -135,7 +135,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { content, mediaId, youtubeUrl, visibilityTag: rawTag } = parsed.data;
+  const { content, mediaId, youtubeUrl, visibilityTag: rawTag, poll: pollData } = parsed.data;
   const visibilityTag = rawTag || "";
 
   // Must have content or media
@@ -212,6 +212,37 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     },
   });
 
+  // Create poll if provided
+  let pollDto = null;
+  if (pollData) {
+    const pollId = crypto.randomUUID();
+    await prisma.poll.create({
+      data: {
+        id: pollId,
+        shout_id: id,
+        multi: pollData.multi ? 1 : 0,
+        options: {
+          create: pollData.options.map(text => ({
+            id: crypto.randomUUID(),
+            text,
+            votes: 0,
+          })),
+        },
+      },
+      include: { options: true },
+    });
+    const createdPoll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { options: true },
+    });
+    pollDto = {
+      id: createdPoll.id,
+      multi: !!createdPoll.multi,
+      options: createdPoll.options.map(o => ({ id: o.id, text: o.text, votes: 0 })),
+      userVotes: [],
+    };
+  }
+
   const shoutDto = {
     id: shout.id,
     user: {
@@ -229,6 +260,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     isDeleted: false,
     isPinned: false,
     ...(shout.media ? { media: buildMedia(shout.media) } : {}),
+    ...(pollDto ? { poll: pollDto } : {}),
   };
 
   console.log(`[Shouts] New shout ${id} by ${req.session.user.name}, media=${finalMediaId || "none"}`);

@@ -61,6 +61,31 @@ export async function enrichFeed(topShouts, currentUserId) {
     for (const r of rows) commentLikedSet.add(r.comment_id);
   }
 
+  // Fetch polls for these shouts
+  const polls = topIds.length
+    ? await prisma.poll.findMany({
+        where: { shout_id: { in: topIds } },
+        include: { options: true },
+      })
+    : [];
+
+  const pollsByShout = new Map();
+  for (const p of polls) pollsByShout.set(p.shout_id, p);
+
+  // Fetch current user's poll votes
+  const userPollVotes = new Map(); // pollId → Set<optionId>
+  if (currentUserId && polls.length) {
+    const pollIds = polls.map(p => p.id);
+    const votes = await prisma.pollVote.findMany({
+      where: { user_id: currentUserId, option: { poll_id: { in: pollIds } } },
+      select: { option_id: true, option: { select: { poll_id: true } } },
+    });
+    for (const v of votes) {
+      if (!userPollVotes.has(v.option.poll_id)) userPollVotes.set(v.option.poll_id, new Set());
+      userPollVotes.get(v.option.poll_id).add(v.option_id);
+    }
+  }
+
   // Group comments by shout
   const commentsByShout = new Map();
   for (const c of comments) {
@@ -90,6 +115,15 @@ export async function enrichFeed(topShouts, currentUserId) {
   function mapShout(row, children) {
     const isDeleted = !!row.is_deleted;
     const media = isDeleted ? undefined : buildMedia(row.media);
+    const poll = pollsByShout.get(row.id);
+    const pollDto = poll && !isDeleted
+      ? {
+          id: poll.id,
+          multi: !!poll.multi,
+          options: poll.options.map(o => ({ id: o.id, text: o.text, votes: o.votes })),
+          userVotes: [...(userPollVotes.get(poll.id) || [])],
+        }
+      : undefined;
     return {
       id: row.id,
       user: isDeleted
@@ -105,6 +139,7 @@ export async function enrichFeed(topShouts, currentUserId) {
       likes: shoutLikesCount.get(row.id) || 0,
       likedBy: currentUserId && shoutLikedSet.has(row.id) ? [currentUserId] : [],
       ...(media ? { media } : {}),
+      ...(pollDto ? { poll: pollDto } : {}),
       comments: children,
       visibilityTag: row.visibility_tag || "",
       isDeleted,
