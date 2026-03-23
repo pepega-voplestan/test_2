@@ -102,6 +102,23 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
           : prev
       );
     },
+    poll_update: (data: Record<string, unknown>) => {
+      const pollId = data.pollId as string;
+      const options = data.options as { id: string; votes: number }[];
+      setShout((prev) => {
+        if (!prev?.poll || prev.poll.id !== pollId) return prev;
+        return {
+          ...prev,
+          poll: {
+            ...prev.poll,
+            options: prev.poll.options.map(o => {
+              const updated = options.find(u => u.id === o.id);
+              return updated ? { ...o, votes: updated.votes } : o;
+            }),
+          },
+        };
+      });
+    },
   }), [shoutId]);
 
   useSSE(sseListeners);
