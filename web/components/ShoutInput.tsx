@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
+import PollEditor, { PollPayload } from './PollEditor';
 import { Shout } from '../types';
 
 interface ShoutInputProps {
@@ -58,6 +59,10 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const isNsfw = activeTag === 'nsfw';
   const isPolitics = activeTag === 'politics';
 
+  // Poll state
+  const [showPollEditor, setShowPollEditor] = useState(false);
+  const [pollPayload, setPollPayload] = useState<PollPayload | null>(null);
+
   // Close tag menu on outside click
   useEffect(() => {
     if (!tagMenuOpen) return;
@@ -76,7 +81,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const charCount = effectiveLength(content, NEWLINE_CHAR_COST);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = !!mediaId || !!detectedYtId;
-  const canSubmit = (content.trim() || hasMedia) && !isOverLimit && !isSubmitting && !isUploading;
+  const hasPoll = !!pollPayload && pollPayload.options.length > 0;
+  const canSubmit = (content.trim() || hasMedia || hasPoll) && !isOverLimit && !isSubmitting && !isUploading;
 
   // Detect YouTube URLs in content (only when no image is attached)
   useEffect(() => {
@@ -212,6 +218,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
         if (ytMatch) body.youtubeUrl = ytMatch[0];
       }
       if (activeTag) body.visibilityTag = activeTag;
+      if (pollPayload && pollPayload.options.length > 0) body.poll = pollPayload;
 
       const res = await fetch('/api/v1/shouts', {
         method: 'POST',
@@ -232,6 +239,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       setDetectedYtId(null);
       setError(null);
       setActiveTag(null);
+      setShowPollEditor(false);
+      setPollPayload(null);
       onShoutCreated(result.shout as Shout);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Не удалось отправить вопль';
@@ -315,6 +324,16 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                                 <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
                               </svg>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowPollEditor(v => !v)}
+                              className={`p-1 transition-colors ${showPollEditor ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'}`}
+                              title="Опрос"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                              </svg>
+                            </button>
                             <div className="relative" ref={tagMenuRef}>
                               <button
                                 type="button"
@@ -366,7 +385,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             className="hidden"
                             onChange={handleFileSelect}
                           />
-                          {(content.trim() || hasMedia) && (
+                          {(content.trim() || hasMedia || hasPoll) && (
                               <>
                                 <span className={`text-xs whitespace-nowrap ${isOverLimit ? 'text-red-400 font-semibold' : charCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
                                   {charCount}/{SHOUT_MAX_LENGTH}
@@ -427,6 +446,14 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                   YouTube видео будет встроено в вопль
                 </div>
               </div>
+            )}
+
+            {/* Poll editor */}
+            {showPollEditor && (
+              <PollEditor
+                onClose={() => { setShowPollEditor(false); setPollPayload(null); }}
+                onChange={setPollPayload}
+              />
             )}
           </>
         )}

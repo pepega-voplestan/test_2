@@ -51,6 +51,19 @@ export interface Notification {
   snippet?: string;
 }
 
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number;
+}
+
+export interface Poll {
+  id: string;
+  multi: boolean;
+  options: PollOption[];
+  userVotes: string[];
+}
+
 export interface Shout {
   id: string;
   user: User | null;
@@ -61,6 +74,7 @@ export interface Shout {
   media?: ShoutMedia;
   comments?: Comment[];
   visibilityTag?: '' | 'spoiler' | 'nsfw' | 'politics';
+  poll?: Poll;
   isDeleted?: boolean;
   isPinned?: boolean;
 }

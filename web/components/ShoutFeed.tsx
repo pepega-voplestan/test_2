@@ -312,6 +312,23 @@ const ShoutFeed: React.FC = () => {
         ),
       })));
     },
+    poll_update: (data: Record<string, unknown>) => {
+      const pollId = data.pollId as string;
+      const options = data.options as { id: string; votes: number }[];
+      setShouts(prev => prev.map(s => {
+        if (!s.poll || s.poll.id !== pollId) return s;
+        return {
+          ...s,
+          poll: {
+            ...s.poll,
+            options: s.poll.options.map(o => {
+              const updated = options.find(u => u.id === o.id);
+              return updated ? { ...o, votes: updated.votes } : o;
+            }),
+          },
+        };
+      }));
+    },
   }), []);
 
   useSSE(sseListeners);

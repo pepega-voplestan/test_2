@@ -6,6 +6,7 @@ import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
+import PollBlock from './PollBlock';
 
 interface ShoutCardProps {
   shout: Shout;
@@ -1206,6 +1207,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                     </div>
                   ) : (
                     renderMediaSection()
+                  )}
+
+                  {shout.poll && !isMediaOnlyHidden && (
+                    <PollBlock poll={shout.poll} onVote={() => {}} />
                   )}
                 </>
               )}
