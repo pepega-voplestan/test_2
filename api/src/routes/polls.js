@@ -27,6 +27,14 @@ router.post("/polls/:pollId/vote", requireAuth, asyncHandler(async (req, res) =>
   if (!poll) return res.status(404).json({ error: "Опрос не найден" });
   if (poll.shout.is_deleted) return res.status(404).json({ error: "Запись удалена" });
 
+  // Check if user already voted — no re-voting allowed
+  const existingVotes = await prisma.pollVote.findMany({
+    where: { user_id: userId, option: { poll_id: pollId } },
+  });
+  if (existingVotes.length > 0) {
+    return res.status(400).json({ error: "Вы уже проголосовали в этом опросе" });
+  }
+
   // Validate optionIds belong to this poll
   const pollOptionIds = new Set(poll.options.map(o => o.id));
   for (const oid of optionIds) {
@@ -40,60 +48,15 @@ router.post("/polls/:pollId/vote", requireAuth, asyncHandler(async (req, res) =>
     return res.status(400).json({ error: "В этом опросе можно выбрать только один вариант" });
   }
 
-  if (poll.multi) {
-    // Multi-select: toggle each option
-    for (const optionId of optionIds) {
-      const existing = await prisma.pollVote.findUnique({
-        where: { option_id_user_id: { option_id: optionId, user_id: userId } },
-      });
-
-      if (existing) {
-        await prisma.pollVote.delete({
-          where: { option_id_user_id: { option_id: optionId, user_id: userId } },
-        });
-        await prisma.pollOption.update({
-          where: { id: optionId },
-          data: { votes: { decrement: 1 } },
-        });
-      } else {
-        await prisma.pollVote.create({
-          data: { option_id: optionId, user_id: userId },
-        });
-        await prisma.pollOption.update({
-          where: { id: optionId },
-          data: { votes: { increment: 1 } },
-        });
-      }
-    }
-  } else {
-    // Single-select: delete previous vote(s), insert new
-    const previousVotes = await prisma.pollVote.findMany({
-      where: {
-        user_id: userId,
-        option: { poll_id: pollId },
-      },
+  // Create votes
+  for (const optionId of optionIds) {
+    await prisma.pollVote.create({
+      data: { option_id: optionId, user_id: userId },
     });
-
-    for (const pv of previousVotes) {
-      await prisma.pollVote.delete({ where: { id: pv.id } });
-      await prisma.pollOption.update({
-        where: { id: pv.option_id },
-        data: { votes: { decrement: 1 } },
-      });
-    }
-
-    const optionId = optionIds[0];
-    // If re-voting the same option in single-select, treat as unvote
-    const wasVotedBefore = previousVotes.some(pv => pv.option_id === optionId);
-    if (!wasVotedBefore) {
-      await prisma.pollVote.create({
-        data: { option_id: optionId, user_id: userId },
-      });
-      await prisma.pollOption.update({
-        where: { id: optionId },
-        data: { votes: { increment: 1 } },
-      });
-    }
+    await prisma.pollOption.update({
+      where: { id: optionId },
+      data: { votes: { increment: 1 } },
+    });
   }
 
   // Fetch updated options
