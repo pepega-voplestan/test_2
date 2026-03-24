@@ -36,7 +36,7 @@ export const POLL_OPTION_MAX_LENGTH = 144;
 export const pollSchema = z.object({
   multi: z.boolean().default(false),
   options: z.array(z.string().min(1).max(POLL_OPTION_MAX_LENGTH))
-    .min(1, { message: "Нужен хотя бы один вариант" })
+    .min(2, { message: "Нужно хотя бы 2 варианта" })
     .max(POLL_MAX_OPTIONS, { message: `Максимум ${POLL_MAX_OPTIONS} вариантов` }),
 });
 
