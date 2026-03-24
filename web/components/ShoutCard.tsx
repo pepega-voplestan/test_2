@@ -604,13 +604,13 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
   const commentInner = (
     <>
-      <div className="flex gap-3">
+      <div className="flex gap-4">
         <a href={`#/profile/${comment.user.id}`} className="shrink-0">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
             {comment.user.avatar ? (
               <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-th-text-4 text-xs font-bold">
+              <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
                 {comment.user.name.charAt(0).toUpperCase()}
               </div>
             )}
@@ -619,13 +619,13 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
         <div className="grow min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
-            <a href={`#/profile/${comment.user.id}`} className={`font-bold text-xs hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+            <a href={`#/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
               {comment.user.name}
             </a>
-            <span className="text-[10px] text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
+            <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
             {isOwner && (
               <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
               </button>
@@ -633,7 +633,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           </div>
 
           {comment.content && (
-            <div className="text-th-text-2 text-sm leading-relaxed break-words whitespace-pre-wrap mb-2">
+            <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2">
               {renderContent(comment.content)}
             </div>
           )}
@@ -704,7 +704,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             <MediaPlaceholder className="mb-2" />
           )}
 
-          <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-1">
+          <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-2">
             {isCommentAuthorIgnored ? (
               <span className="opacity-30 cursor-default" title="Вы игнорируете этого пользователя">Ответить</span>
             ) : (
@@ -712,13 +712,13 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             )}
             {isCommentAuthorIgnored ? (
               <span className="flex items-center gap-1 opacity-30 cursor-default" title="Вы игнорируете этого пользователя">
-                <span className="text-[10px] font-bold">{likes}</span>
-                <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
+                <span className="text-xs font-bold">{likes}</span>
+                <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
               </span>
             ) : (
               <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
-                <span className="text-[10px] font-bold">{likes}</span>
-                <span className="text-sm leading-none">{'\uD83E\uDD18'}</span>
+                <span className="text-xs font-bold">{likes}</span>
+                <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
               </button>
             )}
           </div>
@@ -1274,12 +1274,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
            ))}
            {user && !isShoutAuthorIgnored && (
              <div className="mt-4">
-               <div className="bg-th-card p-3 rounded flex gap-3">
-                 <div className="w-8 h-8 bg-th-elevated rounded-full shrink-0 flex items-center justify-center overflow-hidden">
+               <div className="bg-th-card p-3 rounded flex gap-4">
+                 <div className="w-10 h-10 bg-th-elevated rounded-full shrink-0 flex items-center justify-center overflow-hidden">
                       {user.avatar ? (
                         <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                       ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-th-text-3" viewBox="0 0 20 20" fill="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-th-text-3" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                         </svg>
                       )}
@@ -1350,8 +1350,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
            )}
            {user && isShoutAuthorIgnored && (
              <div className="mt-4">
-               <div className="bg-th-card/50 p-3 rounded flex items-center gap-3 opacity-40 cursor-default select-none" title="Вы игнорируете этого пользователя">
-                 <div className="w-8 h-8 bg-th-elevated rounded-full shrink-0" />
+               <div className="bg-th-card/50 p-3 rounded flex items-center gap-4 opacity-40 cursor-default select-none" title="Вы игнорируете этого пользователя">
+                 <div className="w-10 h-10 bg-th-elevated rounded-full shrink-0" />
                  <div className="text-sm text-th-text-4">Ответы заблокированы — пользователь в игноре</div>
                </div>
              </div>

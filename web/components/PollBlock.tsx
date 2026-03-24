@@ -11,78 +11,66 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
   const { user } = useAuth();
   const [isVoting, setIsVoting] = useState(false);
   const [localPoll, setLocalPoll] = useState(poll);
+  const [pendingVotes, setPendingVotes] = useState<string[]>([]);
 
   // Sync with parent when poll prop changes (SSE updates)
   const pollRef = React.useRef(poll);
   if (poll !== pollRef.current) {
     pollRef.current = poll;
-    setLocalPoll(poll);
+    // Preserve local userVotes if user has already voted
+    setLocalPoll(prev => ({
+      ...poll,
+      userVotes: prev.userVotes.length > 0 ? prev.userVotes : poll.userVotes,
+    }));
   }
 
   const totalVotes = localPoll.options.reduce((sum, o) => sum + o.votes, 0);
   const hasVoted = localPoll.userVotes.length > 0;
 
-  const handleVote = async (optionId: string) => {
-    if (isVoting || !user) return;
+  const togglePending = (optionId: string) => {
+    if (hasVoted || isVoting || !user) return;
+
+    if (localPoll.multi) {
+      setPendingVotes(prev =>
+        prev.includes(optionId)
+          ? prev.filter(id => id !== optionId)
+          : [...prev, optionId]
+      );
+    } else {
+      setPendingVotes(prev =>
+        prev[0] === optionId ? [] : [optionId]
+      );
+    }
+  };
+
+  const confirmVote = async () => {
+    if (isVoting || !user || pendingVotes.length === 0 || hasVoted) return;
 
     setIsVoting(true);
 
     // Optimistic update
     const prevPoll = localPoll;
-    const isSelected = localPoll.userVotes.includes(optionId);
-
-    let nextUserVotes: string[];
-    let nextOptions = localPoll.options.map(o => ({ ...o }));
-
-    if (localPoll.multi) {
-      if (isSelected) {
-        nextUserVotes = localPoll.userVotes.filter(id => id !== optionId);
-        nextOptions = nextOptions.map(o =>
-          o.id === optionId ? { ...o, votes: Math.max(0, o.votes - 1) } : o
-        );
-      } else {
-        nextUserVotes = [...localPoll.userVotes, optionId];
-        nextOptions = nextOptions.map(o =>
-          o.id === optionId ? { ...o, votes: o.votes + 1 } : o
-        );
-      }
-    } else {
-      if (isSelected) {
-        // Unvote
-        nextUserVotes = [];
-        nextOptions = nextOptions.map(o =>
-          o.id === optionId ? { ...o, votes: Math.max(0, o.votes - 1) } : o
-        );
-      } else {
-        // Switch vote
-        const prevVoteId = localPoll.userVotes[0];
-        nextUserVotes = [optionId];
-        nextOptions = nextOptions.map(o => {
-          if (o.id === prevVoteId) return { ...o, votes: Math.max(0, o.votes - 1) };
-          if (o.id === optionId) return { ...o, votes: o.votes + 1 };
-          return o;
-        });
-      }
-    }
-
-    setLocalPoll({ ...localPoll, options: nextOptions, userVotes: nextUserVotes });
+    const nextOptions = localPoll.options.map(o => ({
+      ...o,
+      votes: pendingVotes.includes(o.id) ? o.votes + 1 : o.votes,
+    }));
+    setLocalPoll({ ...localPoll, options: nextOptions, userVotes: pendingVotes });
 
     try {
       const res = await fetch(`/api/v1/polls/${localPoll.id}/vote`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optionIds: [optionId] }),
+        body: JSON.stringify({ optionIds: pendingVotes }),
       });
 
       if (!res.ok) {
-        // Rollback
         setLocalPoll(prevPoll);
+        setPendingVotes([]);
         return;
       }
 
       const data = await res.json();
-      // Apply server state
       setLocalPoll(prev => ({
         ...prev,
         options: prev.options.map(o => {
@@ -91,14 +79,20 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
         }),
         userVotes: data.userVotes,
       }));
-
+      setPendingVotes([]);
       onVote(localPoll.id, data.userVotes);
     } catch {
       setLocalPoll(prevPoll);
+      setPendingVotes([]);
     } finally {
       setIsVoting(false);
     }
   };
+
+  // Show results if user has voted or is not logged in
+  const showResults = hasVoted || !user;
+  // Calculate total including pending for preview
+  const previewTotal = showResults ? totalVotes : totalVotes + pendingVotes.length;
 
   return (
     <div className="mt-2 flex flex-col gap-1.5">
@@ -113,23 +107,30 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
         )}
       </div>
       {localPoll.options.map((option) => {
-        const isSelected = localPoll.userVotes.includes(option.id);
-        const pct = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
+        const isSelected = hasVoted
+          ? localPoll.userVotes.includes(option.id)
+          : pendingVotes.includes(option.id);
+        const displayVotes = isSelected && !hasVoted ? option.votes + 1 : option.votes;
+        const pct = showResults && totalVotes > 0
+          ? Math.round((option.votes / totalVotes) * 100)
+          : (!showResults && previewTotal > 0 && pendingVotes.length > 0)
+            ? Math.round((displayVotes / previewTotal) * 100)
+            : 0;
 
         return (
           <button
             key={option.id}
             type="button"
-            onClick={() => handleVote(option.id)}
-            disabled={isVoting || !user}
+            onClick={() => togglePending(option.id)}
+            disabled={isVoting || !user || hasVoted}
             className={`relative w-full text-left rounded-lg px-3 py-2 text-sm transition-all overflow-hidden border ${
               isSelected
                 ? 'border-[#0087ff]/40 bg-[#0087ff]/5'
                 : 'border-th-border-2/50 hover:border-th-border-2 bg-th-card/50'
-            } disabled:cursor-default`}
+            } ${hasVoted ? 'cursor-default' : ''} disabled:cursor-default`}
           >
             {/* Progress bar background */}
-            {(hasVoted || !user) && (
+            {(showResults || (pendingVotes.length > 0 && isSelected)) && (
               <div
                 className={`absolute inset-y-0 left-0 transition-all duration-300 rounded-lg ${
                   isSelected ? 'bg-[#0087ff]/10' : 'bg-th-elevated/30'
@@ -139,7 +140,7 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
             )}
             <div className="relative flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                {user && (
+                {user && !hasVoted && (
                   <span className={`w-4 h-4 shrink-0 flex items-center justify-center rounded-${localPoll.multi ? 'sm' : 'full'} border ${
                     isSelected ? 'border-[#0087ff] bg-[#0087ff] text-white' : 'border-th-text-4/30'
                   }`}>
@@ -150,19 +151,34 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                     )}
                   </span>
                 )}
+                {hasVoted && isSelected && (
+                  <span className="w-2 h-2 shrink-0 rounded-full bg-[#0087ff]" />
+                )}
                 <span className={`truncate ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
                   {option.text}
                 </span>
               </div>
-              {(hasVoted || !user) && (
-                <span className={`text-xs shrink-0 ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-4'}`}>
-                  {pct}%
+              {showResults && (
+                <span className={`text-xs shrink-0 whitespace-nowrap ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-4'}`}>
+                  {option.votes} / <span className="font-bold">{pct}%</span>
                 </span>
               )}
             </div>
           </button>
         );
       })}
+
+      {/* Confirm vote button */}
+      {user && !hasVoted && pendingVotes.length > 0 && (
+        <button
+          type="button"
+          onClick={confirmVote}
+          disabled={isVoting}
+          className="mt-1 text-[#0087ff] hover:bg-[#0087ff]/10 active:bg-[#0087ff]/20 text-sm font-bold px-3 py-1.5 rounded border border-[#0087ff]/30 transition-all disabled:opacity-50 self-start"
+        >
+          {isVoting ? '...' : 'Подтвердить голос(а)'}
+        </button>
+      )}
     </div>
   );
 };
