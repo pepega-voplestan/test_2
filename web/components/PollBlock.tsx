@@ -17,7 +17,6 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
   const pollRef = React.useRef(poll);
   if (poll !== pollRef.current) {
     pollRef.current = poll;
-    // Preserve local userVotes if user has already voted
     setLocalPoll(prev => ({
       ...poll,
       userVotes: prev.userVotes.length > 0 ? prev.userVotes : poll.userVotes,
@@ -32,7 +31,6 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
 
     setIsVoting(true);
 
-    // Optimistic update
     const prevPoll = localPoll;
     const nextOptions = localPoll.options.map(o => ({
       ...o,
@@ -83,7 +81,6 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
           : [...prev, optionId]
       );
     } else {
-      // Single-select: auto-submit immediately
       submitVote([optionId]);
     }
   };
@@ -92,21 +89,13 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
     await submitVote(pendingVotes);
   };
 
-  // When user has pending selections, preview with their votes included
   const previewTotal = pendingVotes.length > 0 ? totalVotes + pendingVotes.length : totalVotes;
   const canVote = user && !hasVoted;
 
   return (
     <div className="mt-2 flex flex-col gap-1.5">
       <div className="flex items-center gap-2 mb-0.5">
-        <span className="text-xs text-th-text-3 font-bold">
-          Опрос
-        </span>
-        {localPoll.totalVoters > 0 && (
-          <span className="text-xs text-th-text-4">
-            {localPoll.totalVoters} {getDeclension(localPoll.totalVoters, 'проголосовавший', 'проголосовавших', 'проголосовавших')}
-          </span>
-        )}
+        <span className="text-xs text-th-text-3 font-bold">Опрос</span>
       </div>
       {localPoll.options.map((option) => {
         const isSelected = hasVoted
@@ -124,24 +113,22 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
             type="button"
             onClick={() => togglePending(option.id)}
             disabled={isVoting || !user || hasVoted}
-            className={`relative w-full text-left rounded-lg px-3 py-2 text-sm transition-all overflow-hidden border ${
+            className={`relative w-full text-left rounded-lg px-3 py-2 text-sm transition-all overflow-hidden border-2 ${
               isSelected
-                ? 'border-[#0087ff]/40 bg-[#0087ff]/5'
-                : 'border-th-border-2/50 hover:border-th-border-2 bg-th-card/50'
+                ? 'border-[#0087ff]'
+                : 'border-th-border-2/40 hover:border-th-border-2'
             } ${hasVoted ? 'cursor-default' : ''} disabled:cursor-default`}
           >
-            {/* Progress bar background — always visible when there are votes */}
+            {/* Progress bar — all options use the same blue fill */}
             {(displayTotal > 0) && (
               <div
-                className={`absolute inset-y-0 left-0 transition-all duration-300 rounded-lg ${
-                  isSelected ? 'bg-[#0087ff]/20' : 'bg-th-text/10'
-                }`}
+                className="absolute inset-y-0 left-0 transition-all duration-300 rounded-md bg-[#0087ff]/15"
                 style={{ width: `${pct}%` }}
               />
             )}
-            <div className="relative flex items-start gap-2">
+            <div className="relative flex items-center gap-2">
               {canVote && localPoll.multi && (
-                <span className={`w-4 h-4 mt-0.5 shrink-0 flex items-center justify-center rounded-sm border ${
+                <span className={`w-4 h-4 shrink-0 flex items-center justify-center rounded-sm border ${
                   isSelected ? 'border-[#0087ff] bg-[#0087ff] text-white' : 'border-th-text-4/30'
                 }`}>
                   {isSelected && (
@@ -155,14 +142,24 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                 {option.text}
               </span>
               {displayTotal > 0 && (
-                <span className={`flex items-center gap-1.5 text-xs shrink-0 whitespace-nowrap mt-0.5 ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
-                  {displayVotes} / <span className="font-bold">{pct}%</span>
-                </span>
+                <>
+                  <span className="text-xs text-th-text-4 shrink-0">{displayVotes}</span>
+                  <span className={`text-sm font-bold shrink-0 whitespace-nowrap ${isSelected ? 'text-th-text' : 'text-th-text-3'}`}>
+                    {pct}%
+                  </span>
+                </>
               )}
             </div>
           </button>
         );
       })}
+
+      {/* Voter count below options */}
+      {localPoll.totalVoters > 0 && (
+        <div className="text-xs text-th-text-4 text-center mt-0.5">
+          {localPoll.totalVoters} {getDeclension(localPoll.totalVoters, 'проголосовавший', 'проголосовавших', 'проголосовавших')}
+        </div>
+      )}
 
       {/* Confirm vote button — only for multi-select */}
       {user && !hasVoted && localPoll.multi && pendingVotes.length > 0 && (
