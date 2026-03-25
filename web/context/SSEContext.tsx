@@ -13,6 +13,7 @@ const ALL_EVENTS = [
   "new_comment", "delete_comment",
   "shout_like", "comment_like",
   "notification",
+  "poll_update",
 ];
 
 export function SSEProvider({ children }: { children: ReactNode }) {
