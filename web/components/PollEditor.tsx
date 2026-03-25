@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 
 const POLL_MAX_OPTIONS = 7;
 const POLL_OPTION_MAX_LENGTH = 144;
@@ -8,12 +8,16 @@ export interface PollPayload {
   options: string[];
 }
 
+export interface PollEditorHandle {
+  validate: () => boolean;
+}
+
 interface PollEditorProps {
   onClose: () => void;
   onChange: (poll: PollPayload | null) => void;
 }
 
-const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
+const PollEditor = forwardRef<PollEditorHandle, PollEditorProps>(({ onClose, onChange }, ref) => {
   const [options, setOptions] = useState<string[]>(['', '']);
   const [multi, setMulti] = useState(false);
   const [emptyError, setEmptyError] = useState(false);
@@ -94,20 +98,20 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
     }
   };
 
-  // Validate: mark empty options
-  const validateAndShowErrors = () => {
-    const hasEmpty = options.some(o => !o.trim());
-    if (hasEmpty) {
-      setEmptyError(true);
-      return false;
-    }
-    return true;
-  };
+  // Expose validate() to parent via ref
+  useImperativeHandle(ref, () => ({
+    validate: () => {
+      const hasEmpty = options.some(o => !o.trim());
+      if (hasEmpty) {
+        setEmptyError(true);
+        return false;
+      }
+      return true;
+    },
+  }), [options]);
 
-  // Expose validation via ref-like approach: parent calls onChange which filters empties,
-  // but we show inline errors when user tries to interact with empty fields
+  // Clear error when all options are filled
   useEffect(() => {
-    // If emptyError is set, clear it after user types
     if (emptyError && options.every(o => o.trim())) {
       setEmptyError(false);
     }
@@ -179,7 +183,7 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
         {options.length < POLL_MAX_OPTIONS && (
           <button
             type="button"
-            onClick={() => { validateAndShowErrors(); addOption(); }}
+            onClick={addOption}
             className="text-sm font-bold text-th-text-3 hover:text-th-text-2 transition-colors"
           >
             + Добавить опцию
@@ -212,6 +216,6 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
       </div>
     </div>
   );
-};
+});
 
 export default PollEditor;

@@ -139,25 +139,23 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                 style={{ width: `${pct}%` }}
               />
             )}
-            <div className="relative flex flex-col gap-0.5">
-              <div className="flex items-start gap-2">
-                {canVote && localPoll.multi && (
-                  <span className={`w-4 h-4 mt-0.5 shrink-0 flex items-center justify-center rounded-sm border ${
-                    isSelected ? 'border-[#0087ff] bg-[#0087ff] text-white' : 'border-th-text-4/30'
-                  }`}>
-                    {isSelected && (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </span>
-                )}
-                <span className={`break-all ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
-                  {option.text}
+            <div className="relative flex items-start gap-2">
+              {canVote && localPoll.multi && (
+                <span className={`w-4 h-4 mt-0.5 shrink-0 flex items-center justify-center rounded-sm border ${
+                  isSelected ? 'border-[#0087ff] bg-[#0087ff] text-white' : 'border-th-text-4/30'
+                }`}>
+                  {isSelected && (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
                 </span>
-              </div>
+              )}
+              <span className={`break-all flex-1 ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
+                {option.text}
+              </span>
               {displayTotal > 0 && (
-                <span className={`flex items-center gap-1.5 text-xs self-end ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
+                <span className={`flex items-center gap-1.5 text-xs shrink-0 whitespace-nowrap mt-0.5 ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
                   {displayVotes} / <span className="font-bold">{pct}%</span>
                 </span>
               )}
