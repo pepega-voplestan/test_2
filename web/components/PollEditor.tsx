@@ -52,13 +52,7 @@ const PollEditor = forwardRef<PollEditorHandle, PollEditorProps>(({ onClose, onC
     if (options.length <= 2) return;
     const next = options.filter((_, i) => i !== index);
     setOptions(next);
-    // If dropping below 3 options, disable multi
-    if (next.length < 3 && multi) {
-      setMulti(false);
-      emitChange(next, false);
-    } else {
-      emitChange(next, multi);
-    }
+    emitChange(next, multi);
   };
 
   const toggleMulti = () => {
@@ -119,7 +113,7 @@ const PollEditor = forwardRef<PollEditorHandle, PollEditorProps>(({ onClose, onC
 
   const canRemove = options.length > 2;
   const canAddOption = options.length < POLL_MAX_OPTIONS;
-  const canToggleMulti = options.length >= 3;
+  const canToggleMulti = true;
 
   return (
     <div className="mt-3 bg-th-inset/50 rounded-lg p-3 border border-th-border-2">
