@@ -1226,7 +1226,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 <button onClick={handleReplyClick} className={`hover:text-th-text-2 transition-colors ${repliesOpen ? 'text-th-text' : ''}`}>Ответить</button>
               )}
               {hasComments ? (
-                <button onClick={toggleThread} className={`transition-colors ${repliesOpen ? 'text-th-text' : 'hover:text-th-text-2'}`}>
+                <button onClick={toggleThread} className={`transition-colors ${repliesOpen ? 'text-red-400' : 'hover:text-th-text-2'}`}>
                   {repliesOpen ? 'Закрыть' : `${commentCount} ${getReplyDeclension(commentCount)}`}
                 </button>
               ) : (
