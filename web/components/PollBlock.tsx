@@ -97,11 +97,11 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
   return (
     <div className="mt-2 flex flex-col gap-1.5">
       <div className="flex items-center gap-2 mb-0.5">
-        <span className="text-[10px] text-th-text-4 uppercase tracking-wider font-medium">
-          Опрос {localPoll.multi ? '(несколько)' : ''}
+        <span className="text-xs text-th-text-3 font-bold">
+          Опрос{localPoll.multi ? ' (несколько опций)' : ''}
         </span>
         {totalVotes > 0 && (
-          <span className="text-[10px] text-th-text-4">
+          <span className="text-xs text-th-text-4">
             {totalVotes} {getDeclension(totalVotes, 'голос', 'голоса', 'голосов')}
           </span>
         )}
@@ -133,7 +133,7 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
             {(showResults || (pendingVotes.length > 0 && isSelected)) && (
               <div
                 className={`absolute inset-y-0 left-0 transition-all duration-300 rounded-lg ${
-                  isSelected ? 'bg-[#0087ff]/10' : 'bg-th-elevated/30'
+                  isSelected ? 'bg-[#0087ff]/15' : 'bg-th-text-4/10'
                 }`}
                 style={{ width: `${pct}%` }}
               />
@@ -151,15 +151,15 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                     )}
                   </span>
                 )}
-                {hasVoted && isSelected && (
-                  <span className="w-2 h-2 shrink-0 rounded-full bg-[#0087ff]" />
-                )}
                 <span className={`truncate ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
                   {option.text}
                 </span>
               </div>
               {showResults && (
-                <span className={`text-xs shrink-0 whitespace-nowrap ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-4'}`}>
+                <span className={`flex items-center gap-1.5 text-xs shrink-0 whitespace-nowrap ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
+                  {hasVoted && isSelected && (
+                    <span className="w-2 h-2 shrink-0 rounded-full bg-[#0087ff]" />
+                  )}
                   {option.votes} / <span className="font-bold">{pct}%</span>
                 </span>
               )}
