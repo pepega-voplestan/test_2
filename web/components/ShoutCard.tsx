@@ -604,33 +604,31 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
   const commentInner = (
     <>
-      <div className="flex gap-4">
-        <a href={`#/profile/${comment.user.id}`} className="shrink-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
-            {comment.user.avatar ? (
-              <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
-                {comment.user.name.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-        </a>
-
-        <div className="grow min-w-0">
-          <div className="flex items-baseline gap-2 mb-1">
-            <a href={`#/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
-              {comment.user.name}
-            </a>
-            <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
-            {isOwner && (
-              <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </button>
-            )}
-          </div>
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <a href={`#/profile/${comment.user.id}`} className="shrink-0">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
+              {comment.user.avatar ? (
+                <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
+                  {comment.user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+          </a>
+          <a href={`#/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+            {comment.user.name}
+          </a>
+          <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
+          {isOwner && (
+            <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
 
           {comment.content && (
             <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2">
@@ -722,7 +720,6 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               </button>
             )}
           </div>
-        </div>
       </div>
 
       {confirmDelete && (
