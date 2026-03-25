@@ -92,16 +92,39 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
     <div className="mt-3 bg-th-inset/50 rounded-lg p-3 border border-th-border-2">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-th-text-3">Опрос</span>
-        <button
-          type="button"
-          onClick={handleClose}
-          className="text-th-text-4 hover:text-th-text-2 transition-colors"
-          title="Убрать опрос"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={toggleMulti}
+            className={`transition-colors p-0.5 rounded ${
+              multi
+                ? 'text-[#0087ff]'
+                : 'text-th-text-4 hover:text-th-text-2'
+            }`}
+            title={multi ? 'Несколько ответов (вкл.)' : 'Несколько ответов (выкл.)'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <path d="M5 6.5l1.5 1.5L9 5" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <path d="M5 17.5l1.5 1.5L9 16" />
+              <line x1="14" y1="6" x2="21" y2="6" />
+              <line x1="14" y1="10" x2="19" y2="10" />
+              <line x1="14" y1="17" x2="21" y2="17" />
+              <line x1="14" y1="21" x2="19" y2="21" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="text-th-text-4 hover:text-th-text-2 transition-colors"
+            title="Убрать опрос"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -141,31 +164,15 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
         ))}
       </div>
 
-      <div className="flex items-center justify-between mt-2">
-        {options.length < POLL_MAX_OPTIONS ? (
-          <button
-            type="button"
-            onClick={addOption}
-            className="text-sm font-bold text-th-text-2 px-3 py-1 rounded bg-th-card border border-th-border shadow-sm hover:bg-th-elevated active:bg-th-elevated transition-colors"
-          >
-            + Добавить опцию
-          </button>
-        ) : (
-          <div />
-        )}
-
+      {options.length < POLL_MAX_OPTIONS && (
         <button
           type="button"
-          onClick={toggleMulti}
-          className={`text-sm font-bold px-3 py-1 rounded border transition-colors ${
-            multi
-              ? 'bg-[#0087ff]/10 text-[#0087ff] border-[#0087ff]/30 hover:bg-[#0087ff]/20'
-              : 'bg-th-card text-th-text-2 border-th-border shadow-sm hover:bg-th-elevated'
-          }`}
+          onClick={addOption}
+          className="text-sm font-bold text-th-text-3 hover:text-th-text-2 transition-colors mt-1.5 self-start"
         >
-          Несколько опций
+          + Добавить опцию
         </button>
-      </div>
+      )}
     </div>
   );
 };
