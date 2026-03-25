@@ -186,6 +186,57 @@ export async function createIgnoredUser(overrides = {}) {
 }
 
 /**
+ * Create a poll attached to a shout.
+ */
+export async function createPoll(overrides = {}) {
+  const prisma = getTestPrisma();
+  if (!overrides.shoutId) throw new Error("createPoll requires shoutId");
+
+  const options = overrides.options || ["Option A", "Option B"];
+
+  return prisma.poll.create({
+    data: {
+      id: overrides.id || uuid(),
+      shout_id: overrides.shoutId,
+      multi: overrides.multi ?? 0,
+      options: {
+        create: options.map(text => ({
+          id: uuid(),
+          text,
+          votes: 0,
+        })),
+      },
+    },
+    include: { options: true },
+  });
+}
+
+/**
+ * Create a poll vote.
+ */
+export async function createPollVote(overrides = {}) {
+  const prisma = getTestPrisma();
+  if (!overrides.optionId) throw new Error("createPollVote requires optionId");
+  if (!overrides.userId) throw new Error("createPollVote requires userId");
+
+  const vote = await prisma.pollVote.create({
+    data: {
+      id: overrides.id || uuid(),
+      option_id: overrides.optionId,
+      user_id: overrides.userId,
+    },
+  });
+
+  // Increment the option vote count
+  await prisma.pollOption.update({
+    where: { id: overrides.optionId },
+    data: { votes: { increment: 1 } },
+  });
+
+  return vote;
+}
+
+/**
  * Create a verification code.
  */
 export async function createVerificationCode(overrides = {}) {

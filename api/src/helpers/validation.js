@@ -30,6 +30,16 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
+export const POLL_MAX_OPTIONS = 7;
+export const POLL_OPTION_MAX_LENGTH = 144;
+
+export const pollSchema = z.object({
+  multi: z.boolean().default(false),
+  options: z.array(z.string().min(1).max(POLL_OPTION_MAX_LENGTH))
+    .min(2, { message: "Нужно хотя бы 2 варианта" })
+    .max(POLL_MAX_OPTIONS, { message: `Максимум ${POLL_MAX_OPTIONS} вариантов` }),
+});
+
 export const shoutSchema = z.object({
   content: z.string().default("").refine(
     (val) => effectiveCharCount(val) <= SHOUT_MAX_LENGTH,
@@ -38,6 +48,7 @@ export const shoutSchema = z.object({
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
   visibilityTag: z.enum(["", "spoiler", "nsfw", "politics"]).optional(),
+  poll: pollSchema.optional(),
 });
 
 export const commentSchema = z.object({
