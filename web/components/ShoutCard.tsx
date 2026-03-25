@@ -1275,18 +1275,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
            ))}
            {user && !isShoutAuthorIgnored && (
              <div className="mt-4">
-               <div className="bg-th-card p-3 rounded">
-                 <div className="flex items-center gap-2 mb-2">
-                   <div className="w-10 h-10 bg-th-elevated rounded-full shrink-0 flex items-center justify-center overflow-hidden">
-                        {user.avatar ? (
-                          <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-th-text-3" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                   </div>
-                  </div>
+               <div className="bg-th-card p-3 rounded flex gap-4">
+                 <div className="w-10 h-10 bg-th-elevated rounded-full shrink-0 flex items-center justify-center overflow-hidden">
+                      {user.avatar ? (
+                        <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-th-text-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                 </div>
                   <form className="w-full flex flex-col gap-2 min-w-0" onSubmit={(e) => { e.preventDefault(); submitReply(); }}>
                       <MentionInput
                           ref={mentionInputRef}
@@ -1353,11 +1351,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
            )}
            {user && isShoutAuthorIgnored && (
              <div className="mt-4">
-               <div className="bg-th-card/50 p-3 rounded opacity-40 cursor-default select-none" title="Вы игнорируете этого пользователя">
-                 <div className="flex items-center gap-2">
-                   <div className="w-10 h-10 bg-th-elevated rounded-full shrink-0" />
-                   <div className="text-sm text-th-text-4">Ответы заблокированы — пользователь в игноре</div>
-                 </div>
+               <div className="bg-th-card/50 p-3 rounded flex items-center gap-4 opacity-40 cursor-default select-none" title="Вы игнорируете этого пользователя">
+                 <div className="w-10 h-10 bg-th-elevated rounded-full shrink-0" />
+                 <div className="text-sm text-th-text-4">Ответы заблокированы — пользователь в игноре</div>
                </div>
              </div>
            )}
