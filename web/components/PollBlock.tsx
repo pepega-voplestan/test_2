@@ -98,7 +98,7 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
     <div className="mt-2 flex flex-col gap-1.5">
       <div className="flex items-center gap-2 mb-0.5">
         <span className="text-xs text-th-text-3 font-bold">
-          Опрос{localPoll.multi ? ' (несколько опций)' : ''}
+          Опрос{localPoll.multi ? ' · несколько опций' : ''}
         </span>
         {totalVotes > 0 && (
           <span className="text-xs text-th-text-4">
@@ -174,7 +174,7 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
           type="button"
           onClick={confirmVote}
           disabled={isVoting}
-          className="mt-1 text-[#0087ff] hover:bg-[#0087ff]/10 active:bg-[#0087ff]/20 text-sm font-bold px-3 py-1.5 rounded border border-[#0087ff]/30 transition-all disabled:opacity-50 self-start"
+          className="mt-1 text-sm font-bold px-3 py-1 rounded bg-th-card text-th-text-2 border border-th-border shadow-sm hover:bg-th-elevated active:bg-th-elevated transition-colors disabled:opacity-50 self-start"
         >
           {isVoting ? '...' : 'Подтвердить голос(а)'}
         </button>
