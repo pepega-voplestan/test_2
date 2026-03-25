@@ -146,7 +146,7 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
           <button
             type="button"
             onClick={addOption}
-            className="text-xs font-bold text-th-text-2 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated active:bg-th-elevated transition-colors"
+            className="text-sm font-bold text-th-text-2 px-3 py-1 rounded bg-th-card border border-th-border shadow-sm hover:bg-th-elevated active:bg-th-elevated transition-colors"
           >
             + Добавить вариант
           </button>
