@@ -54,6 +54,7 @@ model Shout {
   likes         ShoutLike[]
   comments      Comment[]
   notifications Notification[]
+  poll          Poll?
 
   @@index([parent_id, created_at], name: "idx_shouts_parent_created")
   @@index([created_at], name: "idx_shouts_created")
@@ -167,6 +168,43 @@ model IgnoredUser {
 
   @@unique([owner_user_id, target_user_id])
   @@map("ignored_users")
+}
+
+model Poll {
+  id       String @id @default(uuid())
+  shout_id String @unique
+  multi    Int    @default(0) // 0 = single-select, 1 = multi-select
+
+  shout   Shout        @relation(fields: [shout_id], references: [id], onDelete: Cascade)
+  options PollOption[]
+
+  @@map("polls")
+}
+
+model PollOption {
+  id      String @id @default(uuid())
+  poll_id String
+  text    String
+  votes   Int    @default(0)
+
+  poll      Poll       @relation(fields: [poll_id], references: [id], onDelete: Cascade)
+  pollVotes PollVote[]
+
+  @@index([poll_id], name: "idx_poll_options_poll")
+  @@map("poll_options")
+}
+
+model PollVote {
+  id        String @id @default(uuid())
+  option_id String
+  user_id   String
+  created_at String @default(dbgenerated("(datetime('now'))"))
+
+  option PollOption @relation(fields: [option_id], references: [id], onDelete: Cascade)
+
+  @@unique([option_id, user_id])
+  @@index([user_id], name: "idx_poll_votes_user")
+  @@map("poll_votes")
 }
 
 model Notification {
