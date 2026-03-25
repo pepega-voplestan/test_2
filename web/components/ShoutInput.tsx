@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import EmojiPicker from './EmojiPicker';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
-import PollEditor, { PollPayload } from './PollEditor';
+import PollEditor, { PollPayload, PollEditorHandle } from './PollEditor';
 import { Shout } from '../types';
 
 interface ShoutInputProps {
@@ -62,6 +62,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   // Poll state
   const [showPollEditor, setShowPollEditor] = useState(false);
   const [pollPayload, setPollPayload] = useState<PollPayload | null>(null);
+  const pollEditorRef = useRef<PollEditorHandle>(null);
 
   // Close tag menu on outside click
   useEffect(() => {
@@ -204,6 +205,11 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
   const submitShout = async () => {
     if (!canSubmit || !user) return;
+
+    // Validate poll options if poll editor is open
+    if (showPollEditor && pollEditorRef.current && !pollEditorRef.current.validate()) {
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -451,6 +457,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
             {/* Poll editor */}
             {showPollEditor && (
               <PollEditor
+                ref={pollEditorRef}
                 onClose={() => { setShowPollEditor(false); setPollPayload(null); }}
                 onChange={setPollPayload}
               />
