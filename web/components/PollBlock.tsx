@@ -154,7 +154,7 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                 </span>
               </div>
               {displayTotal > 0 && (
-                <span className={`flex items-center gap-1.5 text-xs ${canVote ? 'ml-6' : ''} ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
+                <span className={`flex items-center gap-1.5 text-xs self-end ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
                   {hasVoted && isSelected && (
                     <span className="w-2 h-2 shrink-0 rounded-full bg-[#0087ff]" />
                   )}
