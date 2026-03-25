@@ -139,9 +139,8 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
               <span className={`break-all ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
                 {option.text}
               </span>
-              <span className="text-xs text-th-text-4 shrink-0">{displayVotes}</span>
               <span className={`text-sm font-bold shrink-0 whitespace-nowrap ml-auto ${isSelected ? 'text-th-text' : 'text-th-text-3'}`}>
-                {pct}%
+                {displayVotes} <span className="text-th-text-4 font-normal">•</span> {pct}%
               </span>
             </div>
           </button>
