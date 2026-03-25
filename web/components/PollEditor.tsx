@@ -118,7 +118,8 @@ const PollEditor = forwardRef<PollEditorHandle, PollEditorProps>(({ onClose, onC
   }, [options, emptyError]);
 
   const canRemove = options.length > 2;
-  const showMultiToggle = options.length >= 3;
+  const canAddOption = options.length < POLL_MAX_OPTIONS;
+  const canToggleMulti = options.length >= 3;
 
   return (
     <div className="mt-3 bg-th-inset/50 rounded-lg p-3 border border-th-border-2">
@@ -180,39 +181,43 @@ const PollEditor = forwardRef<PollEditorHandle, PollEditorProps>(({ onClose, onC
       )}
 
       <div className="flex items-center gap-3 mt-1.5">
-        {options.length < POLL_MAX_OPTIONS && (
-          <button
-            type="button"
-            onClick={addOption}
-            className="text-sm font-bold text-th-text-3 hover:text-th-text-2 transition-colors"
-          >
-            + Добавить опцию
-          </button>
-        )}
-        {showMultiToggle && (
-          <button
-            type="button"
-            onClick={toggleMulti}
-            className={`flex items-center gap-1.5 text-sm font-bold transition-colors ${
-              multi
+        <button
+          type="button"
+          onClick={canAddOption ? addOption : undefined}
+          disabled={!canAddOption}
+          className={`text-sm font-bold transition-colors ${
+            canAddOption
+              ? 'text-th-text-3 hover:text-th-text-2'
+              : 'text-th-text-4/30 cursor-default'
+          }`}
+        >
+          + Добавить опцию
+        </button>
+        <button
+          type="button"
+          onClick={canToggleMulti ? toggleMulti : undefined}
+          disabled={!canToggleMulti}
+          className={`flex items-center gap-1.5 text-sm font-bold transition-colors ${
+            !canToggleMulti
+              ? 'text-th-text-4/30 cursor-default'
+              : multi
                 ? 'text-[#0087ff]'
                 : 'text-th-text-3 hover:text-th-text-2'
-            }`}
-            title={multi ? 'Несколько опций (вкл.)' : 'Несколько опций (выкл.)'}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <path d="M5 6.5l1.5 1.5L9 5" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <path d="M5 17.5l1.5 1.5L9 16" />
-              <line x1="14" y1="6" x2="21" y2="6" />
-              <line x1="14" y1="10" x2="19" y2="10" />
-              <line x1="14" y1="17" x2="21" y2="17" />
-              <line x1="14" y1="21" x2="19" y2="21" />
-            </svg>
-            Несколько опций
-          </button>
-        )}
+          }`}
+          title={!canToggleMulti ? 'Нужно минимум 3 опции' : multi ? 'Несколько опций (вкл.)' : 'Несколько опций (выкл.)'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <path d="M5 6.5l1.5 1.5L9 5" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <path d="M5 17.5l1.5 1.5L9 16" />
+            <line x1="14" y1="6" x2="21" y2="6" />
+            <line x1="14" y1="10" x2="19" y2="10" />
+            <line x1="14" y1="17" x2="21" y2="17" />
+            <line x1="14" y1="21" x2="19" y2="21" />
+          </svg>
+          Несколько опций
+        </button>
       </div>
     </div>
   );
