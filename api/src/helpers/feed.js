@@ -86,6 +86,20 @@ export async function enrichFeed(topShouts, currentUserId) {
     }
   }
 
+  // Count unique voters per poll
+  const pollVoterCounts = new Map(); // pollId → number
+  if (polls.length) {
+    const pollIds = polls.map(p => p.id);
+    for (const pid of pollIds) {
+      const count = await prisma.pollVote.findMany({
+        where: { option: { poll_id: pid } },
+        select: { user_id: true },
+      });
+      const uniqueUsers = new Set(count.map(v => v.user_id));
+      pollVoterCounts.set(pid, uniqueUsers.size);
+    }
+  }
+
   // Group comments by shout
   const commentsByShout = new Map();
   for (const c of comments) {
@@ -122,6 +136,7 @@ export async function enrichFeed(topShouts, currentUserId) {
           multi: !!poll.multi,
           options: poll.options.map(o => ({ id: o.id, text: o.text, votes: o.votes })),
           userVotes: [...(userPollVotes.get(poll.id) || [])],
+          totalVoters: pollVoterCounts.get(poll.id) || 0,
         }
       : undefined;
     return {

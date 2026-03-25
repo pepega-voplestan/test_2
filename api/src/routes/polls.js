@@ -72,8 +72,15 @@ router.post("/polls/:pollId/vote", requireAuth, asyncHandler(async (req, res) =>
 
   const optionsPayload = updatedOptions.map(o => ({ id: o.id, votes: o.votes }));
 
+  // Count unique voters
+  const allVotes = await prisma.pollVote.findMany({
+    where: { option: { poll_id: pollId } },
+    select: { user_id: true },
+  });
+  const totalVoters = new Set(allVotes.map(v => v.user_id)).size;
+
   console.log(`[Polls] Vote on poll ${pollId} by ${userId}`);
-  broadcast("poll_update", { pollId, options: optionsPayload });
+  broadcast("poll_update", { pollId, options: optionsPayload, totalVoters });
 
   res.json({
     ok: true,

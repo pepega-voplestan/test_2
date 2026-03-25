@@ -82,7 +82,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = !!mediaId || !!detectedYtId;
   const hasPoll = !!pollPayload && pollPayload.options.length > 0;
-  const canSubmit = (content.trim() || hasMedia || hasPoll) && !isOverLimit && !isSubmitting && !isUploading;
+  const canSubmit = (content.trim() || hasMedia) && (!hasPoll || content.trim()) && !isOverLimit && !isSubmitting && !isUploading;
 
   // Detect YouTube URLs in content (only when no image is attached)
   useEffect(() => {
