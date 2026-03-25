@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Poll } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -27,24 +27,8 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
   const totalVotes = localPoll.options.reduce((sum, o) => sum + o.votes, 0);
   const hasVoted = localPoll.userVotes.length > 0;
 
-  const togglePending = (optionId: string) => {
-    if (hasVoted || isVoting || !user) return;
-
-    if (localPoll.multi) {
-      setPendingVotes(prev =>
-        prev.includes(optionId)
-          ? prev.filter(id => id !== optionId)
-          : [...prev, optionId]
-      );
-    } else {
-      setPendingVotes(prev =>
-        prev[0] === optionId ? [] : [optionId]
-      );
-    }
-  };
-
-  const confirmVote = async () => {
-    if (isVoting || !user || pendingVotes.length === 0 || hasVoted) return;
+  const submitVote = useCallback(async (optionIds: string[]) => {
+    if (isVoting || !user || optionIds.length === 0 || hasVoted) return;
 
     setIsVoting(true);
 
@@ -52,16 +36,16 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
     const prevPoll = localPoll;
     const nextOptions = localPoll.options.map(o => ({
       ...o,
-      votes: pendingVotes.includes(o.id) ? o.votes + 1 : o.votes,
+      votes: optionIds.includes(o.id) ? o.votes + 1 : o.votes,
     }));
-    setLocalPoll({ ...localPoll, options: nextOptions, userVotes: pendingVotes });
+    setLocalPoll({ ...localPoll, options: nextOptions, userVotes: optionIds, totalVoters: localPoll.totalVoters + 1 });
 
     try {
       const res = await fetch(`/api/v1/polls/${localPoll.id}/vote`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optionIds: pendingVotes }),
+        body: JSON.stringify({ optionIds }),
       });
 
       if (!res.ok) {
@@ -87,6 +71,25 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
     } finally {
       setIsVoting(false);
     }
+  }, [isVoting, user, hasVoted, localPoll, onVote]);
+
+  const togglePending = (optionId: string) => {
+    if (hasVoted || isVoting || !user) return;
+
+    if (localPoll.multi) {
+      setPendingVotes(prev =>
+        prev.includes(optionId)
+          ? prev.filter(id => id !== optionId)
+          : [...prev, optionId]
+      );
+    } else {
+      // Single-select: auto-submit immediately
+      submitVote([optionId]);
+    }
+  };
+
+  const confirmVote = async () => {
+    await submitVote(pendingVotes);
   };
 
   // When user has pending selections, preview with their votes included
@@ -97,11 +100,11 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
     <div className="mt-2 flex flex-col gap-1.5">
       <div className="flex items-center gap-2 mb-0.5">
         <span className="text-xs text-th-text-3 font-bold">
-          Опрос{localPoll.multi ? ' · Несколько опций' : ''}
+          Опрос
         </span>
-        {totalVotes > 0 && (
+        {localPoll.totalVoters > 0 && (
           <span className="text-xs text-th-text-4">
-            {totalVotes} {getDeclension(totalVotes, 'голос', 'голоса', 'голосов')}
+            {localPoll.totalVoters} {getDeclension(localPoll.totalVoters, 'проголосовавший', 'проголосовавших', 'проголосовавших')}
           </span>
         )}
       </div>
@@ -131,15 +134,15 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
             {(displayTotal > 0) && (
               <div
                 className={`absolute inset-y-0 left-0 transition-all duration-300 rounded-lg ${
-                  isSelected ? 'bg-[#0087ff]/15' : 'bg-th-text-4/10'
+                  isSelected ? 'bg-[#0087ff]/20' : 'bg-th-text/10'
                 }`}
                 style={{ width: `${pct}%` }}
               />
             )}
             <div className="relative flex flex-col gap-0.5">
               <div className="flex items-start gap-2">
-                {canVote && (
-                  <span className={`w-4 h-4 mt-0.5 shrink-0 flex items-center justify-center rounded-${localPoll.multi ? 'sm' : 'full'} border ${
+                {canVote && localPoll.multi && (
+                  <span className={`w-4 h-4 mt-0.5 shrink-0 flex items-center justify-center rounded-sm border ${
                     isSelected ? 'border-[#0087ff] bg-[#0087ff] text-white' : 'border-th-text-4/30'
                   }`}>
                     {isSelected && (
@@ -155,9 +158,6 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
               </div>
               {displayTotal > 0 && (
                 <span className={`flex items-center gap-1.5 text-xs self-end ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
-                  {hasVoted && isSelected && (
-                    <span className="w-2 h-2 shrink-0 rounded-full bg-[#0087ff]" />
-                  )}
                   {displayVotes} / <span className="font-bold">{pct}%</span>
                 </span>
               )}
@@ -166,8 +166,8 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
         );
       })}
 
-      {/* Confirm vote button */}
-      {user && !hasVoted && pendingVotes.length > 0 && (
+      {/* Confirm vote button — only for multi-select */}
+      {user && !hasVoted && localPoll.multi && pendingVotes.length > 0 && (
         <button
           type="button"
           onClick={confirmVote}

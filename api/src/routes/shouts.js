@@ -143,6 +143,11 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Нужен текст или медиа" });
   }
 
+  // Poll requires text
+  if (pollData && !content.trim()) {
+    return res.status(400).json({ error: "Опрос должен содержать текст" });
+  }
+
   // Cannot have both image and YouTube
   if (mediaId && youtubeUrl) {
     return res.status(400).json({ error: "Можно прикрепить или изображение, или видео" });
@@ -240,6 +245,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
       multi: !!createdPoll.multi,
       options: createdPoll.options.map(o => ({ id: o.id, text: o.text, votes: 0 })),
       userVotes: [],
+      totalVoters: 0,
     };
   }
 

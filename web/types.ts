@@ -62,6 +62,7 @@ export interface Poll {
   multi: boolean;
   options: PollOption[];
   userVotes: string[];
+  totalVoters: number;
 }
 
 export interface Shout {
