@@ -136,10 +136,10 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                 style={{ width: `${pct}%` }}
               />
             )}
-            <div className="relative flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
+            <div className="relative flex flex-col gap-0.5">
+              <div className="flex items-start gap-2">
                 {canVote && (
-                  <span className={`w-4 h-4 shrink-0 flex items-center justify-center rounded-${localPoll.multi ? 'sm' : 'full'} border ${
+                  <span className={`w-4 h-4 mt-0.5 shrink-0 flex items-center justify-center rounded-${localPoll.multi ? 'sm' : 'full'} border ${
                     isSelected ? 'border-[#0087ff] bg-[#0087ff] text-white' : 'border-th-text-4/30'
                   }`}>
                     {isSelected && (
@@ -149,12 +149,12 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                     )}
                   </span>
                 )}
-                <span className={`truncate ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
+                <span className={`break-words ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
                   {option.text}
                 </span>
               </div>
               {displayTotal > 0 && (
-                <span className={`flex items-center gap-1.5 text-xs shrink-0 whitespace-nowrap ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
+                <span className={`flex items-center gap-1.5 text-xs ${canVote ? 'ml-6' : ''} ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
                   {hasVoted && isSelected && (
                     <span className="w-2 h-2 shrink-0 rounded-full bg-[#0087ff]" />
                   )}
