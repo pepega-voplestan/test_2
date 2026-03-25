@@ -89,10 +89,9 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
     }
   };
 
-  // Show results if user has voted or is not logged in
-  const showResults = hasVoted || !user;
-  // Calculate total including pending for preview
-  const previewTotal = showResults ? totalVotes : totalVotes + pendingVotes.length;
+  // When user has pending selections, preview with their votes included
+  const previewTotal = pendingVotes.length > 0 ? totalVotes + pendingVotes.length : totalVotes;
+  const canVote = user && !hasVoted;
 
   return (
     <div className="mt-2 flex flex-col gap-1.5">
@@ -111,11 +110,10 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
           ? localPoll.userVotes.includes(option.id)
           : pendingVotes.includes(option.id);
         const displayVotes = isSelected && !hasVoted ? option.votes + 1 : option.votes;
-        const pct = showResults && totalVotes > 0
-          ? Math.round((option.votes / totalVotes) * 100)
-          : (!showResults && previewTotal > 0 && pendingVotes.length > 0)
-            ? Math.round((displayVotes / previewTotal) * 100)
-            : 0;
+        const displayTotal = pendingVotes.length > 0 ? previewTotal : totalVotes;
+        const pct = displayTotal > 0
+          ? Math.round((displayVotes / displayTotal) * 100)
+          : 0;
 
         return (
           <button
@@ -129,8 +127,8 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                 : 'border-th-border-2/50 hover:border-th-border-2 bg-th-card/50'
             } ${hasVoted ? 'cursor-default' : ''} disabled:cursor-default`}
           >
-            {/* Progress bar background */}
-            {(showResults || (pendingVotes.length > 0 && isSelected)) && (
+            {/* Progress bar background — always visible when there are votes */}
+            {(displayTotal > 0) && (
               <div
                 className={`absolute inset-y-0 left-0 transition-all duration-300 rounded-lg ${
                   isSelected ? 'bg-[#0087ff]/15' : 'bg-th-text-4/10'
@@ -140,7 +138,7 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
             )}
             <div className="relative flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                {user && !hasVoted && (
+                {canVote && (
                   <span className={`w-4 h-4 shrink-0 flex items-center justify-center rounded-${localPoll.multi ? 'sm' : 'full'} border ${
                     isSelected ? 'border-[#0087ff] bg-[#0087ff] text-white' : 'border-th-text-4/30'
                   }`}>
@@ -155,12 +153,12 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                   {option.text}
                 </span>
               </div>
-              {showResults && (
+              {displayTotal > 0 && (
                 <span className={`flex items-center gap-1.5 text-xs shrink-0 whitespace-nowrap ${isSelected ? 'text-[#0087ff] font-medium' : 'text-th-text-3'}`}>
                   {hasVoted && isSelected && (
                     <span className="w-2 h-2 shrink-0 rounded-full bg-[#0087ff]" />
                   )}
-                  {option.votes} / <span className="font-bold">{pct}%</span>
+                  {displayVotes} / <span className="font-bold">{pct}%</span>
                 </span>
               )}
             </div>
