@@ -89,7 +89,7 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
   const canRemove = options.length > 2;
 
   return (
-    <div className="mt-3 ml-14 bg-th-inset/50 rounded-lg p-3 border border-th-border-2">
+    <div className="mt-3 bg-th-inset/50 rounded-lg p-3 border border-th-border-2">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-th-text-3">Опрос</span>
         <button
