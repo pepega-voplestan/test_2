@@ -120,12 +120,10 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
             } ${hasVoted ? 'cursor-default' : ''} disabled:cursor-default`}
           >
             {/* Progress bar — all options use the same blue fill */}
-            {(displayTotal > 0) && (
-              <div
-                className="absolute inset-y-0 left-0 transition-all duration-300 rounded-md bg-[#0087ff]/15"
-                style={{ width: `${pct}%` }}
-              />
-            )}
+            <div
+              className="absolute inset-y-0 left-0 transition-all duration-300 rounded-md bg-[#0087ff]/15"
+              style={{ width: `${pct}%` }}
+            />
             <div className="relative flex items-center gap-2">
               {canVote && localPoll.multi && (
                 <span className={`w-4 h-4 shrink-0 flex items-center justify-center rounded-sm border ${
@@ -138,17 +136,13 @@ const PollBlock: React.FC<PollBlockProps> = ({ poll, onVote }) => {
                   )}
                 </span>
               )}
-              <span className={`break-all flex-1 ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
+              <span className={`break-all ${isSelected ? 'text-th-text font-medium' : 'text-th-text-2'}`}>
                 {option.text}
               </span>
-              {displayTotal > 0 && (
-                <>
-                  <span className="text-xs text-th-text-4 shrink-0">{displayVotes}</span>
-                  <span className={`text-sm font-bold shrink-0 whitespace-nowrap ${isSelected ? 'text-th-text' : 'text-th-text-3'}`}>
-                    {pct}%
-                  </span>
-                </>
-              )}
+              <span className="text-xs text-th-text-4 shrink-0">{displayVotes}</span>
+              <span className={`text-sm font-bold shrink-0 whitespace-nowrap ml-auto ${isSelected ? 'text-th-text' : 'text-th-text-3'}`}>
+                {pct}%
+              </span>
             </div>
           </button>
         );
