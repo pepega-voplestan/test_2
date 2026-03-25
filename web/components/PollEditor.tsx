@@ -114,7 +114,7 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
               onChange={(e) => updateOption(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(e, i)}
               maxLength={POLL_OPTION_MAX_LENGTH}
-              placeholder={`Вариант ${i + 1}`}
+              placeholder={`Опция ${i + 1}`}
               className="flex-1 bg-th-input border border-th-border rounded px-2 py-1 text-sm text-th-text placeholder-th-text-4 outline-none focus:border-[#0087ff]/50"
             />
             {opt.length > POLL_OPTION_MAX_LENGTH * 0.9 && (
@@ -131,7 +131,7 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
                   ? 'text-th-text-4 hover:text-red-400 cursor-pointer'
                   : 'text-th-text-4/30 cursor-default'
               }`}
-              title={canRemove ? 'Удалить вариант' : 'Минимум 2 варианта'}
+              title={canRemove ? 'Удалить опцию' : 'Минимум 2 опции'}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -148,7 +148,7 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
             onClick={addOption}
             className="text-sm font-bold text-th-text-2 px-3 py-1 rounded bg-th-card border border-th-border shadow-sm hover:bg-th-elevated active:bg-th-elevated transition-colors"
           >
-            + Добавить вариант
+            + Добавить опцию
           </button>
         ) : (
           <div />
@@ -157,12 +157,13 @@ const PollEditor: React.FC<PollEditorProps> = ({ onClose, onChange }) => {
         <button
           type="button"
           onClick={toggleMulti}
-          className="flex items-center gap-2 text-sm text-th-text-3 select-none cursor-pointer group"
+          className={`text-sm font-bold px-3 py-1 rounded border transition-colors ${
+            multi
+              ? 'bg-[#0087ff]/10 text-[#0087ff] border-[#0087ff]/30 hover:bg-[#0087ff]/20'
+              : 'bg-th-card text-th-text-2 border-th-border shadow-sm hover:bg-th-elevated'
+          }`}
         >
-          <span className="text-th-text-4 group-hover:text-th-text-3 transition-colors">Несколько вариантов</span>
-          <div className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 ${multi ? 'bg-[#0087ff]' : 'bg-th-text-4/30'}`}>
-            <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform duration-200 ${multi ? 'translate-x-[16px]' : 'translate-x-[2px]'}`} />
-          </div>
+          Несколько опций
         </button>
       </div>
     </div>
