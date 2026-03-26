@@ -53,11 +53,20 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
     markAsRead(n.id);
     if (e.button === 1 || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
-    if (n.shoutId) navigateTo(`/shout/${n.shoutId}`);
+    if (n.shoutId) {
+      const path = n.commentId
+        ? `/shout/${n.shoutId}?comment=${n.commentId}`
+        : `/shout/${n.shoutId}`;
+      navigateTo(path);
+    }
     onClose();
   }
 
-  const href = n.shoutId ? `#/shout/${n.shoutId}` : '#';
+  const href = n.shoutId
+    ? n.commentId
+      ? `#/shout/${n.shoutId}?comment=${n.commentId}`
+      : `#/shout/${n.shoutId}`
+    : '#';
 
   return (
     <a

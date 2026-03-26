@@ -511,6 +511,16 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       }
     }
 
+    // Clean up empty <div> wrappers that Chrome creates when deleting
+    // contentEditable=false elements (mention spans). These produce phantom newlines.
+    for (const div of Array.from(el.querySelectorAll('div'))) {
+      const text = div.textContent ?? '';
+      // If the div only contains whitespace/zero-width chars and a <br>, it's a phantom line
+      if (text.replace(/[\u200B\u00A0\s]/g, '') === '' && div.childNodes.length <= 1) {
+        div.remove();
+      }
+    }
+
     const serialized = serializeContent(el);
     setIsEmpty(serialized === '');
     onContentChangeRef.current(serialized);
