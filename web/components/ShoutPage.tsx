@@ -8,9 +8,10 @@ import ShoutCard from './ShoutCard';
 
 interface ShoutPageProps {
   shoutId: string;
+  focusCommentId?: string;
 }
 
-const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
+const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
   const { prefs } = useContentPreferences();
   const { user } = useAuth();
   const [shout, setShout] = useState<Shout | null>(null);
@@ -125,6 +126,22 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
 
   useSSE(sseListeners);
 
+  // Scroll to and highlight the focused comment once the shout has loaded
+  useEffect(() => {
+    if (!focusCommentId || !shout) return;
+    // Use a short delay to allow the DOM to render the comment elements
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`comment-${focusCommentId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-blue-400/60', 'rounded-lg');
+        const cleanup = setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400/60', 'rounded-lg'), 3000);
+        return () => clearTimeout(cleanup);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [focusCommentId, shout]);
+
   return (
     <div>
       <button
@@ -148,14 +165,16 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId }) => {
       )}
 
       {shout && (
-        <ShoutCard
-          shout={shout}
-          showMedia={prefs.showMedia}
-          isThreadOpen
-          onCommentAdded={handleCommentAdded}
-          onDelete={handleDelete}
-          onCommentDeleted={handleCommentDeleted}
-        />
+        <div className="bg-th-feed rounded-xl px-5 py-4 border border-th-border-2">
+          <ShoutCard
+            shout={shout}
+            showMedia={prefs.showMedia}
+            isThreadOpen
+            onCommentAdded={handleCommentAdded}
+            onDelete={handleDelete}
+            onCommentDeleted={handleCommentDeleted}
+          />
+        </div>
       )}
     </div>
   );
