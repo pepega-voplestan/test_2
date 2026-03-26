@@ -740,7 +740,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   );
 
   return (
-    <div id={`comment-${comment.id}`} className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4 transition-all duration-500">
+    <div id={`comment-${comment.id}`} className="flex flex-col mt-4 border-l-2 border-th-border-2 pl-4">
       {isCommentAuthorIgnored && ignoreRevealed ? (
         <div
           className="rounded-lg bg-th-text-4/20 p-2 cursor-pointer transition-all duration-200 hover:bg-th-text-4/30"
