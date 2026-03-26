@@ -4,7 +4,7 @@
 
 This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style social media web application where users post short messages ("shouts"), comment on them, like content, attach images or YouTube videos, and manage user profiles. The UI is entirely in Russian.
 
-**Stack**: React 18 + TypeScript + Vite (frontend) / Node.js + Express + Prisma + SQLite (backend) / Docker + Nginx (deployment)
+**Stack**: React 18 + TypeScript + Vite (frontend) / Node.js + Express + Prisma + SQLite (backend) / BullMQ + Redis (background jobs) / Docker + Nginx (deployment)
 
 ## Repository Structure
 
@@ -12,23 +12,25 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 .
 ├── api/                    # Backend (Express.js)
 │   ├── src/
-│   │   ├── server.js       # Entry point: dotenv, imports app.js, seeds settings, notification cleanup
+│   │   ├── server.js       # Entry point: dotenv, imports app.js, seeds settings
 │   │   ├── app.js          # Express app factory: middleware, session, admin, swagger, routes (imported by server.js and tests)
-│   │   ├── admin.js        # AdminJS panel setup (users, shouts, comments, media, announcements, settings)
+│   │   ├── admin.js        # AdminJS panel setup (users, shouts, comments, media, announcements, settings) + custom dashboard
+│   │   ├── admin-dashboard.jsx # Custom AdminJS dashboard with analytics (users, shouts, comments, likes, media stats + timelines)
 │   │   ├── swagger.js      # OpenAPI 3.0.3 spec for Swagger UI (dev only, blocked in prod)
 │   │   ├── routes/         # Domain-split route handlers
 │   │   │   ├── index.js        # Mounts all domain routers via mountRoutes(app)
 │   │   │   ├── auth.js         # Auth routes (register, login, logout, password reset)
-│   │   │   ├── shouts.js       # Shout CRUD + replies + single shout fetch
+│   │   │   ├── shouts.js       # Shout CRUD + replies + single shout fetch + poll creation
 │   │   │   ├── comments.js     # Comment CRUD + reply/mention notifications
 │   │   │   ├── likes.js        # Shout and comment like toggles
 │   │   │   ├── users.js        # User profile + mentions autocomplete
 │   │   │   ├── upload.js       # Media and avatar upload
 │   │   │   ├── announcements.js # Announcement read/write
-│   │   │   └── notifications.js # Notification fetch + mark-read endpoints
+│   │   │   ├── notifications.js # Notification fetch + mark-read endpoints
+│   │   │   └── polls.js        # Poll voting endpoint
 │   │   ├── helpers/        # Shared utilities
 │   │   │   ├── common.js       # asyncHandler, requireAuth, and other shared middleware
-│   │   │   ├── feed.js         # enrichFeed: joins users/media/likes onto shout/comment rows
+│   │   │   ├── feed.js         # enrichFeed: joins users/media/likes/polls onto shout/comment rows
 │   │   │   ├── media.js        # Sharp image processing, GIF handling, avatar generation
 │   │   │   ├── mentions.js     # extractMentionedUserIds, buildSnippet for notification system
 │   │   │   └── validation.js   # Zod schemas shared across routes
@@ -46,10 +48,10 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── env.js          # Vitest setupFiles: loads env vars written by globalSetup
 │   │   ├── helpers.js      # Shared test utilities (request, authenticatedAgent, cleanDb, disconnectDb)
 │   │   ├── fixtures/
-│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, etc.)
+│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, createPoll, createPollVote, etc.)
 │   │   ├── unit/           # Unit tests (auth, admin, common, email, media, mentions, sse, validation, app.setup)
 │   │   └── integration/    # Integration tests (health, auth, shouts, comments, likes, announcements,
-│   │                       #   notifications, feed, upload, users, index)
+│   │                       #   notifications, feed, upload, users, polls, index)
 │   ├── vitest.config.js    # Vitest config: node env, globalSetup, sequential files, coverage
 │   ├── eslint.config.js    # ESLint flat config: @eslint/js recommended, Node globals, allows console, _-prefix unused vars
 │   ├── package.json
@@ -60,7 +62,7 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── Header.tsx        # App header with auth, navigation, theme toggle, notification dropdown
 │   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step with email verification)
 │   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates; popular tab has dual sort buttons (likes/comments)
-│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit; spoiler/nsfw tags require media
+│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, polls, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit; spoiler/nsfw tags require media
 │   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete; inline embed rendering for Twitter/X, Steam, Imgur, Coub, Tenor, Giphy, YouTube
 │   │   ├── ShoutPage.tsx     # Single shout detail view (route: #/shout/:id)
 │   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
@@ -68,6 +70,8 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   │   ├── ProfilePage.tsx   # User profile view and edit form
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
 │   │   ├── EmojiPicker.tsx   # Emoji picker: 500+ emojis, 13 categories (faces, gestures, people, hearts, nature, food, activities, travel, objects, symbols, flags + frequent), search (Russian + English keywords), sticky headers, quick-nav bar
+│   │   ├── PollEditor.tsx    # Poll creation UI: 2-7 options, multi-select toggle, validation
+│   │   ├── PollBlock.tsx     # Poll display and voting: progress bars, vote counts, optimistic updates
 │   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss, pinch/scroll-to-zoom, pan when zoomed, scroll lock
 │   ├── context/
 │   │   ├── AuthContext.tsx               # Auth state via React Context + API helper
@@ -104,6 +108,23 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 │   ├── package.json
 │   ├── Dockerfile
 │   └── .dockerignore
+├── workers/                # Background job service (BullMQ + Redis)
+│   ├── src/
+│   │   ├── index.ts        # Entry point: starts workers, scheduler, Bull Board dashboard
+│   │   ├── db.ts           # Prisma client init (WAL mode, foreign keys)
+│   │   ├── redis.ts        # Redis connection config
+│   │   ├── queues.ts       # BullMQ queue definitions (notification-cleanup, db-backup)
+│   │   ├── scheduler.ts    # Cron job registration (daily cleanup + backup)
+│   │   └── jobs/
+│   │       ├── notification-cleanup.ts # Deletes notifications older than 14 days
+│   │       └── db-backup.ts            # SQLite VACUUM INTO backup with rotation
+│   ├── prisma/
+│   │   └── schema.prisma   # Symlink/copy of api schema
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── eslint.config.js
+│   ├── Dockerfile          # Multi-stage: base → builder → app (prod) / dev (tsx watch)
+│   └── .dockerignore
 ├── scripts/
 │   ├── backup.sh             # Backup Docker volumes (DB + media) with rotation, optional rclone upload
 │   └── restore.sh            # Restore Docker volumes from a timestamped backup
@@ -113,12 +134,12 @@ This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style soc
 ├── .husky/
 │   ├── pre-commit            # Git hook: runs npm run lint for api and web before every commit
 │   └── pre-push              # Git hook: runs npm test for api and web before every push
-├── docker-compose.yml        # Production: 4 services on port 3005
-├── docker-compose.dev.yml    # Development: 4 services on port 3006 (isolated volumes)
+├── docker-compose.yml        # Production: 6 services on port 3005
+├── docker-compose.dev.yml    # Development: 6 services on port 3006 (isolated volumes)
 ├── docker-compose.test.yml   # Test: single api-test service with tmpfs DB, runs vitest --coverage
 ├── nginx.conf                # Production reverse proxy (blocks /api/docs, proxies /admin with HTTP basic auth)
 ├── nginx-dev.conf            # Development reverse proxy (allows /api/docs for Swagger UI, proxies /admin)
-├── media-nginx.conf          # Security-hardened media file server (webp/jpg/jpeg/png/gif)
+├── media-nginx.conf          # Security-hardened media file server (webp/jpg/jpeg/png/gif/mp4)
 ├── Makefile                  # Shortcuts for docker-compose + backup/restore + test commands
 ├── package.json              # Workspace root: husky setup only
 ├── .env                      # Production environment variables (gitignored)
@@ -210,7 +231,7 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/auth/forgot-password/reset` | No | Verify code + set new password, auto-login (rate limited 20/min) |
 | GET | `/shouts?limit=&offset=&sortBy=` | No | List shouts with pagination (max 50). `sortBy=new\|popular` |
 | GET | `/shouts/:id` | No | Get a single shout by ID (used by ShoutPage) |
-| POST | `/shouts` | Yes | Create a shout (text, mediaId, or youtubeUrl) |
+| POST | `/shouts` | Yes | Create a shout (text, mediaId, youtubeUrl, and/or poll) |
 | DELETE | `/shouts/:id` | Yes | Soft-delete own shout |
 | POST | `/shouts/:id/replies` | Yes | Add a comment to a shout |
 | POST | `/shouts/:id/like` | Yes | Toggle like, returns new count |
@@ -228,6 +249,7 @@ All endpoints are prefixed with `/api/v1/`.
 | GET | `/notifications?cursor=&limit=` | Yes | Fetch notifications (read + unread) from the past 14 days, cursor-paginated. `cursor` = ISO timestamp of last item (fetch older items); `limit` default 20, max 50. Response: `{ notifications, nextCursor }` |
 | PATCH | `/notifications/read-batch` | Yes | Mark a batch of notifications as read (max 50 at once) |
 | PATCH | `/notifications/read-all` | Yes | Mark all unread notifications as read |
+| POST | `/polls/:pollId/vote` | Yes | Vote on a poll (single or multi-select); body: `{ optionIds: string[] }` |
 
 ## Admin Panel
 
@@ -249,6 +271,8 @@ The app ships an **AdminJS**-powered admin panel at `/admin`, protected by two l
 | Медиа (Media) | Read-only view of uploaded media |
 | Объявления (Announcements) | Create announcements (auto-soft-deletes previous), soft-delete existing |
 | Настройки (Settings) | Edit key-value settings (e.g. `registration_open`) |
+
+**Custom Dashboard** (`api/src/admin-dashboard.jsx`): The admin panel home page shows analytics with configurable time period filters (1, 7, 30, 90 days, or all-time). Displays key metrics (users, shouts, comments, likes, media), top creators bar chart, and timeline charts for shouts/comments/likes/registrations per day.
 
 **Setup** (`api/src/app.js`): AdminJS is initialized on startup (skipped in test mode). If setup fails in dev mode, the server continues without the admin panel. In production, failure is fatal (exits with code 1).
 
@@ -277,6 +301,7 @@ The `/api/v1/events` endpoint streams Server-Sent Events to all connected client
 | `delete_comment` | `{ id, shoutId }` | Comment soft-deleted |
 | `shout_like` | `{ id, likes }` | Shout like toggled |
 | `comment_like` | `{ id, likes }` | Comment like toggled |
+| `poll_update` | `{ pollId, options: [{ id, votes }], totalVoters }` | Poll vote cast |
 
 **Events emitted (targeted delivery via `broadcastToUser`):**
 
@@ -305,7 +330,7 @@ Notifications are triggered server-side and delivered in real-time via targeted 
 - Created in `routes/shouts.js` (for mention notifications in new shouts) and `routes/comments.js` (for mention and reply notifications).
 - `helpers/mentions.js` provides `extractMentionedUserIds(content, actorId)` to parse `@[username:userId]` tokens and `buildSnippet(content, maxLen=60)` to generate truncated previews for notification text. Snippets apply spoiler-awareness: inline spoiler markers (`||…||`) are replaced with asterisks masking only the hidden part; shouts tagged `politics` replace the entire snippet with "ПОЛИТИКА"; `spoiler`/`nsfw` tags replace it with "СПОЙЛЕР".
 - Self-mentions are excluded — the actor never receives their own notification.
-- Server-side cleanup: `server.js` runs a task every 24 hours that hard-deletes notifications older than 14 days.
+- Server-side cleanup: the workers service runs a daily BullMQ job (at 00:00 UTC) that hard-deletes notifications older than 14 days.
 - Frontend: `NotificationsContext.tsx` fetches all notifications (read + unread) on login with cursor-based pagination (14-day window, page size 20). New notifications arrive via SSE and are prepended. Read and unread notifications are both shown, sorted purely chronologically (newest first). Deduplication by `id` prevents duplicates from SSE replays or page overlaps.
 - Read marking: hovering a notification item for 800ms queues it for batch-read. When the dropdown closes (or after a 5-second safety flush), the batch is sent via `PATCH /notifications/read-batch`. The dropdown list is frozen while open — read-status changes (optimistic updates) do not affect item order until the dropdown is reopened.
 - **Browser tab indicator**: `NotificationsContext.tsx` sets `document.title` to `(N) Вопли` when there are unread notifications (capped at `9+`), and dynamically draws a red dot badge onto the favicon using the Canvas API. Both are cleared when `unreadCount` returns to 0.
@@ -343,6 +368,7 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `visibility_tag` (String, default `""`) — content flag: `""`, `"spoiler"`, `"nsfw"`, or `"politics"` (mutually exclusive)
 - `is_deleted` (Int, default 0, soft-delete; `2` = banned-user content)
 - `created_at` (String, ISO datetime)
+- Relations: `poll` (optional one-to-one with Poll)
 - Legacy inline columns: `media_type`, `media_url`, `media_meta` (retained for baseline, to be removed)
 - Indices: `(parent_id, created_at)`, `(created_at)`
 
@@ -395,7 +421,28 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `is_read` (Int, default 0)
 - `created_at` (String, ISO datetime)
 - Index: `(user_id, is_read, created_at)` for efficient unread fetching
-- Hard-deleted after 14 days by server cleanup task
+- Hard-deleted after 14 days by workers cleanup job
+
+**Poll** (`polls`)
+- `id` (String, UUID, PK)
+- `shout_id` (String, FK → shouts, UNIQUE, CASCADE)
+- `multi` (Int, default 0) — 0 = single-select, 1 = multi-select
+- Relations: one-to-one with Shout, one-to-many with PollOption
+
+**PollOption** (`poll_options`)
+- `id` (String, UUID, PK)
+- `poll_id` (String, FK → polls, CASCADE)
+- `text` (String) — option text (max 144 chars)
+- `votes` (Int, default 0) — vote count
+- Index: `(poll_id)`
+
+**PollVote** (`poll_votes`)
+- `id` (String, UUID, PK)
+- `option_id` (String, FK → poll_options, CASCADE)
+- `user_id` (String) — voter (no FK constraint)
+- `created_at` (String, ISO datetime)
+- Unique constraint: `(option_id, user_id)` — prevents duplicate votes
+- Index: `(user_id)`
 
 **Setting** (`settings`)
 - `key` (String, PK) — e.g. `"registration_open"`
@@ -418,6 +465,10 @@ Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/
 | `ADMIN_EMAIL` | — | Admin panel login email |
 | `ADMIN_PASSWORD_HASH` | — | BCrypt hash of admin password. Generate: `node -e "import('bcryptjs').then(b=>b.default.hash('YOUR_PASSWORD',12).then(console.log))"` |
 | `ADMIN_COOKIE_SECRET` | — | Secret for AdminJS session cookie (min 32 chars). Required in production. |
+| `REDIS_HOST` | `redis` | Redis hostname for BullMQ (workers service) |
+| `REDIS_PORT` | `6379` | Redis port for BullMQ (workers service) |
+| `WORKERS_PORT` | `3001` | Port for the workers service (Bull Board dashboard) |
+| `BULL_BOARD_BASE_PATH` | `/workers` | Base path for Bull Board web UI |
 
 Environment files: `.env` (production), `.env.dev` (development), `.env.example` (template).
 
@@ -453,7 +504,7 @@ Tests are run sequentially (not in parallel) to avoid SQLite write conflicts.
 - `tests/setup.js` — Vitest `globalSetup`: creates a fresh SQLite DB at `tests/test.db`, runs Prisma migrations, writes a temp `.env.test` file, and cleans everything up in teardown.
 - `tests/env.js` — Vitest `setupFiles`: loads `.env.test` into `process.env` for each test worker.
 - `tests/helpers.js` — Shared utilities: `getApp()` (lazy app import), `request()` (supertest), `authenticatedAgent(user)` (supertest agent with session cookie), `cleanDb()` (truncate all tables), `disconnectDb()`.
-- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
+- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
 
 **Mocked modules in tests:**
 - `../src/email.js` — `sendVerificationEmail` is a no-op
@@ -594,7 +645,8 @@ cd web && npm run lint
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
 - Animated GIFs skip re-encoding; the original GIF is stored as `original.gif` alongside WebP thumbnail variants. The `animated: true` flag and `gif` URL are included in the media DTO.
 - Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling. Supports pinch-to-zoom (mobile) and scroll-to-zoom (desktop), pan when zoomed, and double-tap/click to toggle zoom.
-- The media nginx container serves files from the `/media` volume with a strict allowlist: `.webp`, `.jpg`, `.jpeg`, `.png`, `.gif` extensions only; no dotfiles or directory listing; immutable 1-year cache headers.
+- **Polls**: Shouts can optionally include a poll with 2–7 options (max 144 chars each). Polls can be single-select or multi-select (`multi` flag). Voting is one-time — re-voting returns a 400 error. Vote submission is optimistic on the frontend (reverts on error). SSE broadcasts `poll_update` events to all clients for real-time vote count updates. The `PollEditor.tsx` component handles creation (in `ShoutInput.tsx`), and `PollBlock.tsx` handles display and voting (in `ShoutCard.tsx`). Poll validation constants: `POLL_MAX_OPTIONS = 7`, `POLL_OPTION_MAX_LENGTH = 144`.
+- The media nginx container serves files from the `/media` volume with a strict allowlist: `.webp`, `.jpg`, `.jpeg`, `.png`, `.gif`, `.mp4` extensions only; no dotfiles or directory listing; immutable 1-year cache headers.
 - Popular sort: shouts from the last 7 days. The popular tab has dual sort buttons — heart icon (sort by like count) and comment icon (sort by comment count). Uses `popularSort` state toggled by `handlePopularSortChange` in `ShoutFeed.tsx`.
 - Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation. Codes expire in 10 minutes, max 5 attempts. Registration can be disabled by setting `registration_open=false` in the Settings table via the admin panel.
 - Password reset follows the same email verification pattern.
@@ -603,6 +655,28 @@ cd web && npm run lint
 - `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<SSEProvider>` → `<ContentPreferencesProvider>` → `<NotificationsProvider>` (inner). `SSEProvider` must wrap both `NotificationsProvider` and any component that calls `useSSE` or `useSSEContext`.
 - When content preferences hide media (nsfw/politics/showMedia off), `ShoutFeed.tsx` renders a same-size placeholder div (crossed-camera icon) instead of removing the element from the DOM — this prevents layout jumps when toggling content preferences.
 - Nginx CSP headers allow embeds from YouTube (nocookie), Coub, Tenor, Steam (`store.steampowered.com`); images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, fxTwitter (`pbs.fxtwitter.com`), Steam CDN (`cdn.akamai.steamstatic.com`); and connect-src to fxTwitter API (`api.fxtwitter.com`) and Steam store API.
+
+## Background Jobs (Workers)
+
+The `workers/` directory contains a dedicated BullMQ-based background job service, running as a separate Docker container with its own Redis instance.
+
+**Architecture**: TypeScript + BullMQ + Redis. Workers share the SQLite database volume with the API service. Bull Board web dashboard is exposed at `/workers` (proxied through nginx with HTTP basic auth).
+
+**Scheduled jobs:**
+
+| Job | Schedule | Description |
+|-----|----------|-------------|
+| `notification-cleanup` | Daily at 00:00 UTC | Hard-deletes notifications older than 14 days |
+| `db-backup` | Daily at 02:00 UTC | Creates atomic SQLite backup via `VACUUM INTO`, keeps last 7 backups |
+
+**Key files:**
+- `src/index.ts` — Entry point: initializes workers, registers scheduled jobs, starts Bull Board Express server on port 3001
+- `src/scheduler.ts` — Registers repeatable jobs via `upsertJobScheduler` (idempotent on restart)
+- `src/queues.ts` — BullMQ queue definitions with retention config
+- `src/jobs/notification-cleanup.ts` — Deletes old notifications using Prisma
+- `src/jobs/db-backup.ts` — Atomic backup with pruning of old backups
+
+**Development**: Dev container uses `tsx watch` with source mount (`./workers/src:/app/src:ro`) for hot-reload.
 
 ## Backup & Restore
 
@@ -631,16 +705,18 @@ Three docker-compose files:
 - `docker-compose.dev.yml` — development (port 3006, isolated volumes)
 - `docker-compose.test.yml` — test runner (single service, tmpfs DB)
 
-Production and development each define four services:
+Production and development each define six services:
 
 | Service | Description |
 |---------|-------------|
 | `api` / `api-dev` | Express backend (internal port 3000). Runs `prisma migrate deploy` on startup via `scripts/start.sh`. Dev container mounts `./api/src` as read-only for hot-reload without rebuild. |
-| `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images and GIFs only) |
-| `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, `/admin` to api with HTTP basic auth, SPA fallback. Production blocks `/api/docs` (Swagger UI). SSE endpoint has buffering disabled and 24h timeout. |
+| `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images, GIFs, and mp4 only) |
+| `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, `/admin` to api with HTTP basic auth, `/workers` to workers with HTTP basic auth, SPA fallback. Production blocks `/api/docs` (Swagger UI). SSE endpoint has buffering disabled and 24h timeout. |
 | `web-build` / `web-build-dev` | One-shot container that builds the React app and populates the `webdist` shared volume |
+| `redis` / `redis-dev` | Redis 7 Alpine for BullMQ job queue. Saves snapshot every 60s if 1+ key changed. Volume: `redis-data`. |
+| `worker` / `worker-dev` | BullMQ workers (port 3001). Runs scheduled jobs (notification cleanup, DB backup). Bull Board dashboard at `/workers`. Dev container uses `tsx watch` with source mount for hot-reload. |
 
-Production volumes: `appdata`, `webdist`, `media`. Development volumes: `appdata-dev`, `webdist-dev`, `media-dev` (fully isolated).
+Production volumes: `appdata`, `webdist`, `media`, `redis-data`. Development volumes: `appdata-dev`, `webdist-dev`, `media-dev`, `redis-data-dev` (fully isolated).
 
 The test service (`api-test`) uses the `test` Dockerfile target, runs with `tmpfs` for `/tmp` and `/data`, and exits with the vitest coverage exit code.
 
@@ -652,3 +728,4 @@ The test service (`api-test`) uses the `test` Dockerfile target, runs with `tmpf
 - Legacy inline media columns on `shouts` table to be removed in a follow-up migration
 - Notification `type` field in schema has a comment noting planned future types (`shout_like`, `comment_like`) not yet implemented
 - Web component tests are not yet written (contexts and hooks are covered; `components/` directory has no test files)
+- Workers service (`workers/`) does not yet have a test suite
