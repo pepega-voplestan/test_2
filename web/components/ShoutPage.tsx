@@ -126,19 +126,15 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
 
   useSSE(sseListeners);
 
-  // Scroll to and highlight the focused comment once the shout has loaded
+  // Jump to the focused comment once the shout has loaded
   useEffect(() => {
     if (!focusCommentId || !shout) return;
-    // Use a short delay to allow the DOM to render the comment elements
     const timer = setTimeout(() => {
       const el = document.getElementById(`comment-${focusCommentId}`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-2', 'ring-blue-400/60', 'rounded-lg');
-        const cleanup = setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400/60', 'rounded-lg'), 3000);
-        return () => clearTimeout(cleanup);
+        el.scrollIntoView({ block: 'center' });
       }
-    }, 150);
+    }, 50);
     return () => clearTimeout(timer);
   }, [focusCommentId, shout]);
 

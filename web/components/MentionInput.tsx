@@ -511,12 +511,20 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       }
     }
 
-    // Clean up empty <div> wrappers that Chrome creates when deleting
-    // contentEditable=false elements (mention spans). These produce phantom newlines.
-    for (const div of Array.from(el.querySelectorAll('div'))) {
+    // Clean up <div> wrappers that Chrome creates when deleting contentEditable=false
+    // elements (mention spans). A <div> containing only whitespace/zero-width chars
+    // (leftover \u00A0 from mention insertion) is a phantom line — remove it entirely.
+    // A <div> with real content should be unwrapped (replace with its children) to
+    // prevent it from serializing as an unwanted leading newline.
+    for (const div of Array.from(el.querySelectorAll(':scope > div'))) {
       const text = div.textContent ?? '';
-      // If the div only contains whitespace/zero-width chars and a <br>, it's a phantom line
-      if (text.replace(/[\u200B\u00A0\s]/g, '') === '' && div.childNodes.length <= 1) {
+      if (text.replace(/[\u200B\u00A0\s]/g, '') === '') {
+        div.remove();
+      } else {
+        // Unwrap: move children out and remove the div wrapper
+        while (div.firstChild) {
+          el.insertBefore(div.firstChild, div);
+        }
         div.remove();
       }
     }
