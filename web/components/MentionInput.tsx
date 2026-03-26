@@ -298,6 +298,23 @@ function decorateSpoilers(el: HTMLElement): void {
   }
 }
 
+// Clean up phantom <div> wrappers that Chrome creates when deleting
+// contentEditable=false elements (e.g. mention spans). These produce
+// unwanted newlines when serialized.
+function cleanupPhantomDivs(el: HTMLElement): void {
+  for (const div of Array.from(el.querySelectorAll(':scope > div'))) {
+    const text = div.textContent ?? '';
+    if (text.replace(/[\u200B\u00A0\s]/g, '') === '') {
+      div.remove();
+    } else {
+      while (div.firstChild) {
+        el.insertBefore(div.firstChild, div);
+      }
+      div.remove();
+    }
+  }
+}
+
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
   const { placeholder, disabled, onContentChange, onSubmit, onImagePaste, className, size = 'md' } = props;
 
@@ -384,6 +401,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const el = editorRef.current;
       if (!el) return;
       el.focus({ preventScroll: true });
+      cleanupPhantomDivs(el);
       const sel = window.getSelection()!;
       // Move cursor to end of content
       const endRange = document.createRange();
@@ -463,6 +481,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
   function doInsertMention(query: MentionQuery, user: MentionUser) {
     const { atNode, atNodeOffset, query: q } = query;
+    if (editorRef.current) cleanupPhantomDivs(editorRef.current);
 
     // Delete the "@query" text and replace with a styled, non-editable span
     const range = document.createRange();
@@ -511,23 +530,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       }
     }
 
-    // Clean up <div> wrappers that Chrome creates when deleting contentEditable=false
-    // elements (mention spans). A <div> containing only whitespace/zero-width chars
-    // (leftover \u00A0 from mention insertion) is a phantom line — remove it entirely.
-    // A <div> with real content should be unwrapped (replace with its children) to
-    // prevent it from serializing as an unwanted leading newline.
-    for (const div of Array.from(el.querySelectorAll(':scope > div'))) {
-      const text = div.textContent ?? '';
-      if (text.replace(/[\u200B\u00A0\s]/g, '') === '') {
-        div.remove();
-      } else {
-        // Unwrap: move children out and remove the div wrapper
-        while (div.firstChild) {
-          el.insertBefore(div.firstChild, div);
-        }
-        div.remove();
-      }
-    }
+    cleanupPhantomDivs(el);
 
     const serialized = serializeContent(el);
     setIsEmpty(serialized === '');
