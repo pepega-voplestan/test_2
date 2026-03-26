@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 type Route =
   | { page: "feed" }
   | { page: "profile"; userId: string }
-  | { page: "shout"; shoutId: string };
+  | { page: "shout"; shoutId: string; commentId?: string };
 
 function parseHash(): Route {
   const hash = window.location.hash;
@@ -14,10 +14,12 @@ function parseHash(): Route {
     return { page: "profile", userId: profileMatch[1] };
   }
 
-  // #/shout/<shoutId>
-  const shoutMatch = hash.match(/^#\/shout\/([a-zA-Z0-9-]+)$/);
+  // #/shout/<shoutId> or #/shout/<shoutId>?comment=<commentId>
+  const shoutMatch = hash.match(/^#\/shout\/([a-zA-Z0-9-]+)(?:\?comment=([a-zA-Z0-9-]+))?$/);
   if (shoutMatch) {
-    return { page: "shout", shoutId: shoutMatch[1] };
+    const route: Route = { page: "shout", shoutId: shoutMatch[1] };
+    if (shoutMatch[2]) route.commentId = shoutMatch[2];
+    return route;
   }
 
   return { page: "feed" };
