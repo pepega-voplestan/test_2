@@ -30,7 +30,7 @@ const App: React.FC = () => {
                 {route.page === 'profile' ? (
                   <ProfilePage userId={route.userId} />
                 ) : route.page === 'shout' ? (
-                  <ShoutPage shoutId={route.shoutId} />
+                  <ShoutPage shoutId={route.shoutId} focusCommentId={route.commentId} />
                 ) : (
                   <ShoutFeed />
                 )}
