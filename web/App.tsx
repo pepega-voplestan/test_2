@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Header from './components/Header';
 import ShoutFeed from './components/ShoutFeed';
 import ProfilePage from './components/ProfilePage';
@@ -10,10 +10,29 @@ import { NotificationsProvider } from './context/NotificationsContext';
 import { ContentPreferencesProvider } from './context/ContentPreferencesContext';
 import { IgnoredUsersProvider } from './context/IgnoredUsersContext';
 import AuthModal from './components/AuthModal';
-import { useRoute } from './hooks/useRoute';
+import { useRoute, navigateTo } from './hooks/useRoute';
 
 const App: React.FC = () => {
   const route = useRoute();
+
+  // Intercept clicks on internal <a> links for SPA navigation
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest('a');
+      if (!anchor) return;
+      // Skip if modifier keys (new tab), external links, or non-left clicks
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      if (anchor.target === '_blank') return;
+      const href = anchor.getAttribute('href');
+      if (!href || !href.startsWith('/')) return;
+      // Skip API/media paths
+      if (href.startsWith('/api') || href.startsWith('/media') || href.startsWith('/admin') || href.startsWith('/workers')) return;
+      e.preventDefault();
+      navigateTo(href);
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 
   return (
     <ThemeProvider>

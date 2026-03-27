@@ -3,54 +3,79 @@ import { useRoute, navigateTo } from "./useRoute";
 
 describe("useRoute", () => {
   afterEach(() => {
-    window.location.hash = "";
+    history.replaceState(null, "", "/");
   });
 
   it("returns feed route by default", () => {
-    window.location.hash = "";
+    history.replaceState(null, "", "/");
     const { result } = renderHook(() => useRoute());
     expect(result.current).toEqual({ page: "feed" });
   });
 
   it("parses profile route", () => {
-    window.location.hash = "#/profile/abc-123";
+    history.replaceState(null, "", "/profile/abc-123");
     const { result } = renderHook(() => useRoute());
     expect(result.current).toEqual({ page: "profile", userId: "abc-123" });
   });
 
   it("parses shout route", () => {
-    window.location.hash = "#/shout/def-456";
+    history.replaceState(null, "", "/shout/def-456");
     const { result } = renderHook(() => useRoute());
     expect(result.current).toEqual({ page: "shout", shoutId: "def-456" });
   });
 
-  it("falls back to feed for unknown hash", () => {
-    window.location.hash = "#/unknown/path";
+  it("parses shout route with comment query param", () => {
+    history.replaceState(null, "", "/shout/def-456?comment=c-789");
+    const { result } = renderHook(() => useRoute());
+    expect(result.current).toEqual({ page: "shout", shoutId: "def-456", commentId: "c-789" });
+  });
+
+  it("falls back to feed for unknown path", () => {
+    history.replaceState(null, "", "/unknown/path");
     const { result } = renderHook(() => useRoute());
     expect(result.current).toEqual({ page: "feed" });
   });
 
-  it("reacts to hashchange events", () => {
-    window.location.hash = "";
+  it("reacts to popstate events", () => {
+    history.replaceState(null, "", "/");
     const { result } = renderHook(() => useRoute());
     expect(result.current).toEqual({ page: "feed" });
 
     act(() => {
-      window.location.hash = "#/profile/user-1";
-      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      history.replaceState(null, "", "/profile/user-1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
     });
 
     expect(result.current).toEqual({ page: "profile", userId: "user-1" });
+  });
+
+  it("migrates legacy hash URLs to clean paths", () => {
+    window.location.hash = "#/profile/old-user";
+    const { result } = renderHook(() => useRoute());
+    expect(result.current).toEqual({ page: "profile", userId: "old-user" });
+    expect(window.location.hash).toBe("");
   });
 });
 
 describe("navigateTo", () => {
   afterEach(() => {
-    window.location.hash = "";
+    history.replaceState(null, "", "/");
   });
 
-  it("sets window.location.hash", () => {
-    navigateTo("#/shout/test-id");
-    expect(window.location.hash).toBe("#/shout/test-id");
+  it("updates the URL path via pushState", () => {
+    navigateTo("/shout/test-id");
+    expect(window.location.pathname).toBe("/shout/test-id");
+  });
+
+  it("triggers route update in useRoute", () => {
+    history.replaceState(null, "", "/");
+    const { result } = renderHook(() => useRoute());
+    expect(result.current).toEqual({ page: "feed" });
+
+    act(() => {
+      navigateTo("/profile/nav-user");
+    });
+
+    expect(result.current).toEqual({ page: "profile", userId: "nav-user" });
   });
 });
