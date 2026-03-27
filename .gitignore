@@ -12,3 +12,4 @@ api/tests/.env.test
 api/tests/.media-tmp/
 api/tests/avatars/
 .htpasswd
+.idea
