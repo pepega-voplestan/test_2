@@ -16,4 +16,4 @@ runcmd:
   - DEBIAN_FRONTEND=noninteractive curl -fsSL https://get.docker.com | sh
   - mkdir -p /opt/vopli
   - curl -fsSL https://tailscale.com/install.sh | sh
-  - tailscale up --authkey=${tailscale_auth_key} --hostname=${hostname} --ssh
+  - tailscale up --authkey=${tailscale_auth_key} --hostname=${hostname}
