@@ -530,8 +530,6 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       }
     }
 
-    cleanupPhantomDivs(el);
-
     // After Ctrl+A → Delete, Chrome may leave a lone <br> which serializes as
     // a phantom "\n". If the editor has no real text content, wipe it clean.
     if (!el.textContent?.replace(/[\u200B\u00A0\s]/g, '') && el.querySelector('br') && !el.querySelector('span[data-mention-id], span[data-spoiler]')) {
