@@ -26,10 +26,15 @@ resource "null_resource" "configure_volume" {
   }
 
   connection {
-    type  = "ssh"
-    host  = digitalocean_droplet.app.ipv4_address
-    user  = "root"
-    agent = true
+    type        = "ssh"
+    host        = digitalocean_droplet.app.ipv4_address
+    user        = "root"
+    private_key = file(var.ssh_private_key_path)
+  }
+
+  provisioner "file" {
+    source      = local.env_file
+    destination = "/opt/vopli/.env"
   }
 
   provisioner "remote-exec" {
@@ -50,6 +55,9 @@ resource "null_resource" "configure_volume" {
       "systemctl restart docker",
       "systemctl enable docker",
       "mkdir -p /opt/vopli",
+
+      # Generate nginx basic auth
+      "docker run --rm httpd:alpine htpasswd -nbB '${var.admin_user}' '${var.admin_password}' > /opt/vopli/.htpasswd",
     ]
   }
 }
