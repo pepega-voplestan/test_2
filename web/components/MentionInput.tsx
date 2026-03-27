@@ -315,6 +315,34 @@ function cleanupPhantomDivs(el: HTMLElement): void {
   }
 }
 
+function isTouchDevice(): boolean {
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+}
+
+// Scroll the full reply form into view.  On mobile (touch) we align the form
+// to the bottom of the visual viewport so it sits just above the on-screen
+// keyboard.  On desktop we centre it.  Uses a delay so the mobile keyboard has
+// time to resize the viewport before we measure.
+function scrollFormIntoView(el: HTMLElement): void {
+  const scrollTarget = el.closest('form')?.parentElement || el;
+  const mobile = isTouchDevice();
+  const delay = mobile ? 250 : 0;
+
+  setTimeout(() => {
+    if (mobile && window.visualViewport) {
+      // Position the form at the bottom of the visual viewport (just above the keyboard)
+      const vv = window.visualViewport;
+      const rect = scrollTarget.getBoundingClientRect();
+      const overshoot = rect.bottom - (vv.offsetTop + vv.height);
+      if (overshoot > 0 || rect.top < vv.offsetTop) {
+        window.scrollBy(0, overshoot > 0 ? overshoot + 16 : rect.top - vv.offsetTop - 16);
+      }
+    } else {
+      scrollTarget.scrollIntoView({ block: 'center' });
+    }
+  }, delay);
+}
+
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
   const { placeholder, disabled, onContentChange, onSubmit, onImagePaste, className, size = 'md' } = props;
 
@@ -394,10 +422,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       if (!el) return;
       el.focus({ preventScroll: true });
       if (scrollIntoView) {
-        // Scroll the full reply container (form + toolbar) into view, not just the
-        // contenteditable.  The delay lets mobile keyboards finish resizing the viewport.
-        const scrollTarget = el.closest('form')?.parentElement || el;
-        setTimeout(() => scrollTarget.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
+        scrollFormIntoView(el);
       }
     },
     insertText(text: string) {
@@ -661,6 +686,13 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onFocus={() => {
+          // On mobile, tapping the input opens the keyboard which shifts content.
+          // Re-scroll the form into view so it stays visible above the keyboard.
+          if (isTouchDevice() && editorRef.current) {
+            scrollFormIntoView(editorRef.current);
+          }
+        }}
         onBlur={() => {
           const sel = window.getSelection();
           if (sel && sel.rangeCount > 0) {
