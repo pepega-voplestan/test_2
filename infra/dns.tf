@@ -1,11 +1,4 @@
-# DNS — uncomment when your domain is ready.
-#
-# First, point your domain's nameservers at your registrar to:
-#   ns1.digitalocean.com
-#   ns2.digitalocean.com
-#   ns3.digitalocean.com
-#
-# Then set var.domain = "vopley.net" in terraform.tfvars and uncomment below.
+# DNS (uncomment when domain is ready)
 
 # resource "digitalocean_domain" "default" {
 #   name = var.domain
