@@ -5,9 +5,9 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 const mockEmailsSend = vi.hoisted(() => vi.fn());
 
 vi.mock("resend", () => ({
-  Resend: vi.fn(() => ({
-    emails: { send: mockEmailsSend },
-  })),
+  Resend: vi.fn().mockImplementation(function () {
+    this.emails = { send: mockEmailsSend };
+  }),
 }));
 
 // ── No-client path (RESEND_API_KEY unset) ─────────────────────────────────────
