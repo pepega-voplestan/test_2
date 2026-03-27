@@ -1,21 +1,13 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 
-let transporter = null;
+let resend = null;
 
 if (RESEND_API_KEY) {
-  transporter = nodemailer.createTransport({
-    host: "smtp.resend.com",
-    port: 465,
-    secure: true,
-    auth: {
-      user: "resend",
-      pass: RESEND_API_KEY,
-    },
-  });
-  console.log("[Email] SMTP transporter configured (Resend)");
+  resend = new Resend(RESEND_API_KEY);
+  console.log("[Email] Resend client configured");
 } else {
   console.warn("[Email] RESEND_API_KEY not set — emails will be logged to console only");
 }
@@ -67,22 +59,23 @@ export async function sendVerificationEmail(to, code, purpose) {
     </div>
   `;
 
-  if (!transporter) {
-    console.log(`[Email] (no SMTP) Would send to ${to}: [${purpose}] code=${code}`);
+  if (!resend) {
+    console.log(`[Email] (no API key) Would send to ${to}: [${purpose}] code=${code}`);
     return;
   }
 
-  try {
-    const info = await transporter.sendMail({
-      from: EMAIL_FROM,
-      to,
-      subject,
-      text,
-      html,
-    });
-    console.log(`[Email] Sent ${purpose} code to ${to}, messageId=${info.messageId}`);
-  } catch (err) {
-    console.error(`[Email] Failed to send to ${to}:`, err.message);
-    throw new Error("Не удалось отправить письмо. Попробуйте позже.", { cause: err });
+  const { error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+
+  if (error) {
+    console.error(`[Email] Failed to send to ${to}:`, error.message);
+    throw new Error("Не удалось отправить письмо. Попробуйте позже.", { cause: error });
   }
+
+  console.log(`[Email] Sent ${purpose} code to ${to}`);
 }
