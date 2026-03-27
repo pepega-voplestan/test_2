@@ -319,28 +319,46 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// Scroll the full reply form into view.  On mobile (touch) we align the form
-// to the bottom of the visual viewport so it sits just above the on-screen
-// keyboard.  On desktop we centre it.  Uses a delay so the mobile keyboard has
-// time to resize the viewport before we measure.
+// Scroll the reply form into the centre of the visible viewport.
+// On mobile we listen for visualViewport 'resize' events (fired when the
+// keyboard actually opens) instead of guessing with a fixed timeout.
+// Uses instant jump (no smooth animation) to avoid fighting the keyboard.
 function scrollFormIntoView(el: HTMLElement): void {
   const scrollTarget = el.closest('form')?.parentElement || el;
   const mobile = isTouchDevice();
-  const delay = mobile ? 250 : 0;
 
-  setTimeout(() => {
-    if (mobile && window.visualViewport) {
-      // Position the form at the bottom of the visual viewport (just above the keyboard)
-      const vv = window.visualViewport;
+  if (!mobile || !window.visualViewport) {
+    scrollTarget.scrollIntoView({ block: 'center' });
+    return;
+  }
+
+  const vv = window.visualViewport;
+  let rafId = 0;
+
+  const reposition = () => {
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
       const rect = scrollTarget.getBoundingClientRect();
-      const overshoot = rect.bottom - (vv.offsetTop + vv.height);
-      if (overshoot > 0 || rect.top < vv.offsetTop) {
-        window.scrollBy(0, overshoot > 0 ? overshoot + 16 : rect.top - vv.offsetTop - 16);
+      const visibleTop = vv.offsetTop;
+      const visibleHeight = vv.height;
+      const visibleCenter = visibleTop + visibleHeight / 2;
+      const elemCenter = rect.top + rect.height / 2;
+      const drift = elemCenter - visibleCenter;
+      if (Math.abs(drift) > 10) {
+        window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
       }
-    } else {
-      scrollTarget.scrollIntoView({ block: 'center' });
-    }
-  }, delay);
+    });
+  };
+
+  // Fire once immediately in case the keyboard is already open
+  reposition();
+
+  // Then track viewport resize as the keyboard animates open
+  vv.addEventListener('resize', reposition);
+  setTimeout(() => {
+    vv.removeEventListener('resize', reposition);
+    cancelAnimationFrame(rafId);
+  }, 1500);
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -687,11 +705,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onFocus={() => {
-          // On mobile, tapping the input opens the keyboard which shifts content.
-          // Re-scroll the form into view so it stays visible above the keyboard.
-          if (isTouchDevice() && editorRef.current) {
-            scrollFormIntoView(editorRef.current);
-          }
+          // scrollFormIntoView is called by the imperative focus(true) method
+          // which already sets up a visualViewport resize listener. We no longer
+          // duplicate the scroll here to avoid two competing scroll adjustments.
         }}
         onBlur={() => {
           const sel = window.getSelection();
