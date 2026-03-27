@@ -319,11 +319,16 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
+// Timestamp of the last scrollFormIntoView call — used to prevent the onFocus
+// handler from firing a duplicate scroll when focus(true) already triggered one.
+let lastScrollCallTs = 0;
+
 // Scroll the reply form into the centre of the visible viewport.
 // On mobile we listen for visualViewport 'resize' events (fired when the
 // keyboard actually opens) instead of guessing with a fixed timeout.
 // Uses instant jump (no smooth animation) to avoid fighting the keyboard.
 function scrollFormIntoView(el: HTMLElement): void {
+  lastScrollCallTs = Date.now();
   const scrollTarget = el.closest('form')?.parentElement || el;
   const mobile = isTouchDevice();
 
@@ -339,11 +344,13 @@ function scrollFormIntoView(el: HTMLElement): void {
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
       const rect = scrollTarget.getBoundingClientRect();
-      const visibleTop = vv.offsetTop;
-      const visibleHeight = vv.height;
-      const visibleCenter = visibleTop + visibleHeight / 2;
-      const elemCenter = rect.top + rect.height / 2;
-      const drift = elemCenter - visibleCenter;
+      // On iOS Safari visualViewport reflects the visible area above the
+      // keyboard.  pageTop is the absolute top of that visible rectangle in
+      // page coordinates; we use it + vv.height to find the visible centre.
+      const pageTop = vv.offsetTop + window.scrollY;
+      const visibleCenter = pageTop + vv.height / 2;
+      const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
+      const drift = elemPageCenter - visibleCenter;
       if (Math.abs(drift) > 10) {
         window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
       }
@@ -355,8 +362,10 @@ function scrollFormIntoView(el: HTMLElement): void {
 
   // Then track viewport resize as the keyboard animates open
   vv.addEventListener('resize', reposition);
+  vv.addEventListener('scroll', reposition);
   setTimeout(() => {
     vv.removeEventListener('resize', reposition);
+    vv.removeEventListener('scroll', reposition);
     cancelAnimationFrame(rafId);
   }, 1500);
 }
@@ -705,9 +714,12 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onFocus={() => {
-          // scrollFormIntoView is called by the imperative focus(true) method
-          // which already sets up a visualViewport resize listener. We no longer
-          // duplicate the scroll here to avoid two competing scroll adjustments.
+          // When the user taps the input directly (not via the Reply button),
+          // we still need to scroll the form into view.  Skip if focus(true)
+          // already triggered scrollFormIntoView within the last 500ms.
+          if (isTouchDevice() && editorRef.current && Date.now() - lastScrollCallTs > 500) {
+            scrollFormIntoView(editorRef.current);
+          }
         }}
         onBlur={() => {
           const sel = window.getSelection();
