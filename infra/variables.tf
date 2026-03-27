@@ -28,6 +28,12 @@ variable "ssh_public_key_path" {
   default     = "~/.ssh/id_ed25519.pub"
 }
 
+variable "ssh_private_key_path" {
+  description = "Path to the SSH private key used by Terraform provisioners"
+  type        = string
+  default     = "~/.ssh/id_ed25519"
+}
+
 variable "ssh_allowed_ips" {
   description = "CIDR blocks allowed to reach port 22"
   type        = list(string)
@@ -37,6 +43,28 @@ variable "ssh_allowed_ips" {
 variable "do_ssh_key_name" {
   description = "Name of an existing SSH key in your DigitalOcean account (Settings → Security)"
   type        = string
+}
+
+variable "tailscale_auth_key" {
+  description = "Tailscale reusable auth key"
+  type        = string
+  sensitive   = true
+}
+
+variable "deploy_ssh_public_key" {
+  description = "Public SSH key for GitHub Actions deploy access (contents of ~/.ssh/github_actions_deploy.pub)"
+  type        = string
+}
+
+variable "admin_user" {
+  description = "Username for nginx basic auth (/admin and /workers)"
+  type        = string
+}
+
+variable "admin_password" {
+  description = "Password for nginx basic auth (/admin and /workers)"
+  type        = string
+  sensitive   = true
 }
 
 variable "domain" {
