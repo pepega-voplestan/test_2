@@ -834,7 +834,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!repliesOpen || !pendingMention) return;
     const id = setTimeout(() => {
       mentionInputRef.current?.insertMention(pendingMention);
-      mentionInputRef.current?.focus();
+      mentionInputRef.current?.focus(true);
       setPendingMention(null);
     }, 0);
     return () => clearTimeout(id);
@@ -847,7 +847,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       setPendingMention(author);
     } else {
       mentionInputRef.current?.insertMention(author);
-      mentionInputRef.current?.focus();
+      mentionInputRef.current?.focus(true);
     }
   };
 
@@ -855,10 +855,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!user) { openModal(); return; }
     if (!repliesOpen) {
       toggleThread();
-      // Focus the input after the thread opens
-      setTimeout(() => mentionInputRef.current?.focus(), 0);
+      // Focus and scroll to the input after the thread opens
+      setTimeout(() => mentionInputRef.current?.focus(true), 0);
     } else {
-      mentionInputRef.current?.focus();
+      mentionInputRef.current?.focus(true);
     }
   };
 
