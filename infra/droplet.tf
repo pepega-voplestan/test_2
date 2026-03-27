@@ -4,7 +4,11 @@ resource "digitalocean_droplet" "app" {
   size      = var.droplet_size
   image     = "ubuntu-24-04-x64"
   ssh_keys  = [data.digitalocean_ssh_key.default.fingerprint]
-  user_data = file("${path.module}/cloud-init.yml")
+  user_data = templatefile("${path.module}/cloud-init.yml", {
+    tailscale_auth_key    = var.tailscale_auth_key
+    hostname              = local.prefix
+    deploy_ssh_public_key = var.deploy_ssh_public_key
+  })
 
   lifecycle {
     prevent_destroy = true
@@ -20,10 +24,10 @@ resource "null_resource" "wait_for_cloud_init" {
   }
 
   connection {
-    type  = "ssh"
-    host  = digitalocean_droplet.app.ipv4_address
-    user  = "root"
-    agent = true
+    type        = "ssh"
+    host        = digitalocean_droplet.app.ipv4_address
+    user        = "root"
+    private_key = file(var.ssh_private_key_path)
   }
 
   provisioner "remote-exec" {
