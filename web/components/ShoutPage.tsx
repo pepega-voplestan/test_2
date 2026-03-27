@@ -126,13 +126,20 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
 
   useSSE(sseListeners);
 
-  // Jump to the focused comment once the shout has loaded
+  // Jump to the focused comment only once after the shout first loads
+  const didScrollToComment = useRef(false);
+
   useEffect(() => {
-    if (!focusCommentId || !shout) return;
+    didScrollToComment.current = false;
+  }, [focusCommentId]);
+
+  useEffect(() => {
+    if (!focusCommentId || !shout || didScrollToComment.current) return;
     const timer = setTimeout(() => {
       const el = document.getElementById(`comment-${focusCommentId}`);
       if (el) {
         el.scrollIntoView({ block: 'center' });
+        didScrollToComment.current = true;
       }
     }, 50);
     return () => clearTimeout(timer);
