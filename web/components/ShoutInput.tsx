@@ -280,17 +280,6 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
         {!isDragging && (
           <>
             <div className="flex gap-4">
-              <div className="shrink-0">
-                <div className="w-10 h-10 rounded-full bg-th-input flex items-center justify-center overflow-hidden">
-                  {user ? (
-                      <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-                  ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-[#0087ff]" viewBox="0 0 40 40" fill="currentColor">
-                          <path fillRule="evenodd" clipRule="evenodd" d="M20 38C29.9411 38 38 29.9411 38 20C38 10.0589 29.9411 2 20 2C10.0589 2 2 10.0589 2 20C2 29.9411 10.0589 38 20 38ZM20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40ZM20 23C23.3137 23 26 20.3137 26 17C26 13.6863 23.3137 11 20 11C16.6863 11 14 13.6863 14 17C14 20.3137 16.6863 23 20 23ZM20 25C24.4183 25 28 21.4183 28 17C28 12.5817 24.4183 9 20 9C15.5817 9 12 12.5817 12 17C12 21.4183 15.5817 25 20 25ZM16 29C15.4477 29 15 29.4477 15 30C15 30.5523 15.4477 31 16 31H23C23.5523 31 24 30.5523 24 30C24 29.4477 23.5523 29 23 29H16Z"></path>
-                      </svg>
-                  )}
-                </div>
-              </div>
               <div className="grow flex flex-col min-w-0">
                 {user ? (
                     <div className="flex flex-col w-full gap-2">
@@ -417,7 +406,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
             {/* Media preview */}
             {mediaPreview && (
-              <div className="mt-3 ml-14 relative inline-block">
+              <div className="mt-3 relative inline-block">
                 {mediaIsVideo ? (
                   <video src={mediaPreview} className="max-h-40 rounded-lg border border-th-border" muted preload="metadata" />
                 ) : (
@@ -442,7 +431,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
             {/* YouTube auto-detect preview */}
             {!mediaId && detectedYtId && (
-              <div className="mt-3 ml-14 flex items-center gap-3 bg-th-inset/50 rounded-lg p-2 border border-th-border-2">
+              <div className="mt-3 flex items-center gap-3 bg-th-inset/50 rounded-lg p-2 border border-th-border-2">
                 <img
                   src={`https://img.youtube.com/vi/${detectedYtId}/default.jpg`}
                   alt="YouTube"
