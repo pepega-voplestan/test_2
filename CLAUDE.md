@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is **Kanobu Shouts Clone** (branded "Вопли") — a Twitter/X-style social media web application where users post short messages ("shouts"), comment on them, like content, attach images or YouTube videos, and manage user profiles. The UI is entirely in Russian.
+This is Vopley.net — a Twitter/X-style social media web application where users post short messages ("shouts"), comment on them, like content, attach images or YouTube videos, and manage user profiles. The UI is entirely in Russian.
 
 **Stack**: React 18 + TypeScript + Vite (frontend) / Node.js + Express + Prisma + SQLite (backend) / BullMQ + Redis (background jobs) / Docker + Nginx (deployment)
 
