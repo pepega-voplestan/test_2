@@ -299,19 +299,16 @@ function decorateSpoilers(el: HTMLElement): void {
 }
 
 // Clean up phantom <div> wrappers that Chrome creates when deleting
-// contentEditable=false elements (e.g. mention spans). These produce
-// unwanted newlines when serialized.
+// contentEditable=false elements (e.g. mention spans).  Only removes
+// truly empty divs (zero-width spaces, whitespace-only) — non-empty
+// divs represent real newlines and must be preserved.
 function cleanupPhantomDivs(el: HTMLElement): void {
   for (const div of Array.from(el.querySelectorAll(':scope > div'))) {
     const text = div.textContent ?? '';
     if (text.replace(/[\u200B\u00A0\s]/g, '') === '') {
       div.remove();
-    } else {
-      while (div.firstChild) {
-        el.insertBefore(div.firstChild, div);
-      }
-      div.remove();
     }
+    // Non-empty divs are intentional line breaks — leave them alone.
   }
 }
 
@@ -319,28 +316,55 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// Scroll the full reply form into view.  On mobile (touch) we align the form
-// to the bottom of the visual viewport so it sits just above the on-screen
-// keyboard.  On desktop we centre it.  Uses a delay so the mobile keyboard has
-// time to resize the viewport before we measure.
+// Timestamp of the last scrollFormIntoView call — used to prevent the onFocus
+// handler from firing a duplicate scroll when focus(true) already triggered one.
+let lastScrollCallTs = 0;
+
+// Scroll the reply form into the centre of the visible viewport.
+// On mobile we listen for visualViewport 'resize' events (fired when the
+// keyboard actually opens) instead of guessing with a fixed timeout.
+// Uses instant jump (no smooth animation) to avoid fighting the keyboard.
 function scrollFormIntoView(el: HTMLElement): void {
+  lastScrollCallTs = Date.now();
   const scrollTarget = el.closest('form')?.parentElement || el;
   const mobile = isTouchDevice();
-  const delay = mobile ? 250 : 0;
 
-  setTimeout(() => {
-    if (mobile && window.visualViewport) {
-      // Position the form at the bottom of the visual viewport (just above the keyboard)
-      const vv = window.visualViewport;
+  if (!mobile || !window.visualViewport) {
+    scrollTarget.scrollIntoView({ block: 'center' });
+    return;
+  }
+
+  const vv = window.visualViewport;
+  let rafId = 0;
+
+  const reposition = () => {
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
       const rect = scrollTarget.getBoundingClientRect();
-      const overshoot = rect.bottom - (vv.offsetTop + vv.height);
-      if (overshoot > 0 || rect.top < vv.offsetTop) {
-        window.scrollBy(0, overshoot > 0 ? overshoot + 16 : rect.top - vv.offsetTop - 16);
+      // On iOS Safari visualViewport reflects the visible area above the
+      // keyboard.  pageTop is the absolute top of that visible rectangle in
+      // page coordinates; we use it + vv.height to find the visible centre.
+      const pageTop = vv.offsetTop + window.scrollY;
+      const visibleCenter = pageTop + vv.height / 2;
+      const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
+      const drift = elemPageCenter - visibleCenter;
+      if (Math.abs(drift) > 10) {
+        window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
       }
-    } else {
-      scrollTarget.scrollIntoView({ block: 'center' });
-    }
-  }, delay);
+    });
+  };
+
+  // Fire once immediately in case the keyboard is already open
+  reposition();
+
+  // Then track viewport resize as the keyboard animates open
+  vv.addEventListener('resize', reposition);
+  vv.addEventListener('scroll', reposition);
+  setTimeout(() => {
+    vv.removeEventListener('resize', reposition);
+    vv.removeEventListener('scroll', reposition);
+    cancelAnimationFrame(rafId);
+  }, 1500);
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -687,9 +711,10 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onFocus={() => {
-          // On mobile, tapping the input opens the keyboard which shifts content.
-          // Re-scroll the form into view so it stays visible above the keyboard.
-          if (isTouchDevice() && editorRef.current) {
+          // When the user taps the input directly (not via the Reply button),
+          // we still need to scroll the form into view.  Skip if focus(true)
+          // already triggered scrollFormIntoView within the last 500ms.
+          if (isTouchDevice() && editorRef.current && Date.now() - lastScrollCallTs > 500) {
             scrollFormIntoView(editorRef.current);
           }
         }}
