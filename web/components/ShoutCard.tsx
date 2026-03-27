@@ -500,7 +500,7 @@ function renderInline(text: string, keyPrefix: string) {
     if (mentionMatch) {
       const [, name, id] = mentionMatch;
       return (
-        <a key={`${keyPrefix}-${i}`} href={`#/profile/${id}`} className="text-blue-400 hover:underline font-medium">
+        <a key={`${keyPrefix}-${i}`} href={`/profile/${id}`} className="text-blue-400 hover:underline font-medium">
           @{name}
         </a>
       );
@@ -606,7 +606,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
     <>
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <a href={`#/profile/${comment.user.id}`} className="shrink-0">
+          <a href={`/profile/${comment.user.id}`} className="shrink-0">
             <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
               {comment.user.avatar ? (
                 <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full object-cover" />
@@ -617,7 +617,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               )}
             </div>
           </a>
-          <a href={`#/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+          <a href={`/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
             {comment.user.name}
           </a>
           <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
@@ -1093,7 +1093,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                     </svg>
                   </div>
                 </div>
-                <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
+                <a href={`/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
               </div>
               <div className="text-th-text-4 text-sm italic mb-3">
                 Этот вопль был удалён
@@ -1104,7 +1104,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
             <>
               <div className="flex items-center gap-2 mb-2">
                 {shout.user ? (
-                  <a href={`#/profile/${shout.user.id}`} className="shrink-0">
+                  <a href={`/profile/${shout.user.id}`} className="shrink-0">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
                       {shout.user.avatar ? (
                         <img src={shout.user.avatar} alt={shout.user.name} className="w-full h-full object-cover" />
@@ -1125,11 +1125,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                   </div>
                 )}
                 {shout.user && (
-                  <a href={`#/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+                  <a href={`/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
                     {shout.user.name}
                   </a>
                 )}
-                <a href={`#/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
+                <a href={`/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                 {/* Content flag badges */}
                 {tag === 'spoiler' && (
                   <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
