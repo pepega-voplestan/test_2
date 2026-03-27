@@ -394,8 +394,10 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       if (!el) return;
       el.focus({ preventScroll: true });
       if (scrollIntoView) {
-        // Delay slightly so mobile keyboards have time to appear and resize the viewport
-        setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 120);
+        // Scroll the full reply container (form + toolbar) into view, not just the
+        // contenteditable.  The delay lets mobile keyboards finish resizing the viewport.
+        const scrollTarget = el.closest('form')?.parentElement || el;
+        setTimeout(() => scrollTarget.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
       }
     },
     insertText(text: string) {
