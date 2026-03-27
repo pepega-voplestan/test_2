@@ -1,15 +1,19 @@
 #cloud-config
 
 # Runs once on first boot.
-# Installs Docker and creates the app directory.
+# Installs Docker, Tailscale, and creates the app directory.
 # Volume mounting and Docker data-root configuration are handled by
 # Terraform remote-exec provisioners after the volume is attached.
+
+ssh_authorized_keys:
+  - ${deploy_ssh_public_key}
 
 packages:
   - curl
   - ca-certificates
 
 runcmd:
-  - curl -fsSL https://get.docker.com | sh
-  - apt-get install -y docker-compose-plugin
+  - DEBIAN_FRONTEND=noninteractive curl -fsSL https://get.docker.com | sh
   - mkdir -p /opt/vopli
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - tailscale up --authkey=${tailscale_auth_key} --hostname=${hostname} --ssh

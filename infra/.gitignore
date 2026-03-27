@@ -1,10 +1,10 @@
 # Secrets / local state — never commit
 terraform.tfvars
 envs/prod.tfvars
+envs/dev.tfvars
 
 # Example files are safe to commit
 !*.tfvars.example
-!envs/dev.tfvars
 
 # Terraform working directory
 .terraform/
