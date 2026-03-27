@@ -64,9 +64,9 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
 
   const href = n.shoutId
     ? n.commentId
-      ? `#/shout/${n.shoutId}?comment=${n.commentId}`
-      : `#/shout/${n.shoutId}`
-    : '#';
+      ? `/shout/${n.shoutId}?comment=${n.commentId}`
+      : `/shout/${n.shoutId}`
+    : '/';
 
   return (
     <a
