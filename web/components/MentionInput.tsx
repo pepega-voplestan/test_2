@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 
 export interface MentionInputHandle {
   clear(): void;
-  focus(): void;
+  focus(scrollIntoView?: boolean): void;
   insertText(text: string): void;
   insertMention(user: { id: string; name: string }): void;
   wrapSpoiler(): void;
@@ -389,8 +389,14 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       setMentionQuery(null);
       onContentChangeRef.current('');
     },
-    focus() {
-      editorRef.current?.focus({ preventScroll: true });
+    focus(scrollIntoView?: boolean) {
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      if (scrollIntoView) {
+        // Delay slightly so mobile keyboards have time to appear and resize the viewport
+        setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 120);
+      }
     },
     insertText(text: string) {
       const el = editorRef.current;
