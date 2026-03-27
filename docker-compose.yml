@@ -11,6 +11,7 @@ services:
       - vopli
 
   api:
+    image: ${IMAGE_PREFIX}/api:latest
     build:
       context: ./api
       target: app
@@ -40,6 +41,7 @@ services:
       start_period: 15s
 
   worker:
+    image: ${IMAGE_PREFIX}/workers:latest
     build:
       context: .
       dockerfile: workers/Dockerfile
@@ -88,6 +90,7 @@ services:
       - vopli
 
   web-build:
+    image: ${IMAGE_PREFIX}/web:latest
     build:
       context: ./web
     volumes:
