@@ -1,0 +1,27 @@
+# Secrets / local state — never commit
+terraform.tfvars
+envs/prod.tfvars
+
+# Example files are safe to commit
+!*.tfvars.example
+!envs/dev.tfvars
+
+# Terraform working directory
+.terraform/
+.terraform.lock.hcl
+
+# State files — use remote state (DO Spaces) when sharing with a team
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
