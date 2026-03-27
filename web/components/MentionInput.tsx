@@ -299,19 +299,16 @@ function decorateSpoilers(el: HTMLElement): void {
 }
 
 // Clean up phantom <div> wrappers that Chrome creates when deleting
-// contentEditable=false elements (e.g. mention spans). These produce
-// unwanted newlines when serialized.
+// contentEditable=false elements (e.g. mention spans).  Only removes
+// truly empty divs (zero-width spaces, whitespace-only) — non-empty
+// divs represent real newlines and must be preserved.
 function cleanupPhantomDivs(el: HTMLElement): void {
   for (const div of Array.from(el.querySelectorAll(':scope > div'))) {
     const text = div.textContent ?? '';
     if (text.replace(/[\u200B\u00A0\s]/g, '') === '') {
       div.remove();
-    } else {
-      while (div.firstChild) {
-        el.insertBefore(div.firstChild, div);
-      }
-      div.remove();
     }
+    // Non-empty divs are intentional line breaks — leave them alone.
   }
 }
 
