@@ -424,7 +424,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     return (
       <div className="text-center py-16">
         <div className="text-th-text-4 text-lg mb-2">Пользователь не найден</div>
-        <a href="#/" className="text-sky-500 hover:underline text-sm">Вернуться к ленте</a>
+        <a href="/" className="text-sky-500 hover:underline text-sm">Вернуться к ленте</a>
       </div>
     );
   }
@@ -432,7 +432,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   return (
     <div className="w-full">
       {/* Back button */}
-      <a href="#/" className="inline-flex items-center gap-1 text-th-text-4 hover:text-th-text text-sm mb-6 transition-colors">
+      <a href="/" className="inline-flex items-center gap-1 text-th-text-4 hover:text-th-text text-sm mb-6 transition-colors">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
@@ -846,7 +846,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               <div className="overflow-y-auto flex flex-col gap-2">
                 {ignoreListUsers.map(u => (
                   <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-th-ring/5">
-                    <a href={`#/profile/${u.id}`} className="shrink-0" onClick={() => setShowIgnoreList(false)}>
+                    <a href={`/profile/${u.id}`} className="shrink-0" onClick={() => setShowIgnoreList(false)}>
                       <div className="w-8 h-8 rounded-full overflow-hidden bg-th-input">
                         {u.avatar ? (
                           <img src={u.avatar} alt={u.name} className="w-full h-full object-cover" />
@@ -857,7 +857,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                         )}
                       </div>
                     </a>
-                    <a href={`#/profile/${u.id}`} className="text-sm text-th-text-2 font-medium hover:underline flex-1 min-w-0 truncate" onClick={() => setShowIgnoreList(false)}>
+                    <a href={`/profile/${u.id}`} className="text-sm text-th-text-2 font-medium hover:underline flex-1 min-w-0 truncate" onClick={() => setShowIgnoreList(false)}>
                       {u.name}
                     </a>
                     <button
