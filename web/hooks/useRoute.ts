@@ -5,42 +5,56 @@ type Route =
   | { page: "profile"; userId: string }
   | { page: "shout"; shoutId: string; commentId?: string };
 
-function parseHash(): Route {
-  const hash = window.location.hash;
+function parsePath(): Route {
+  const path = window.location.pathname;
 
-  // #/profile/<userId>
-  const profileMatch = hash.match(/^#\/profile\/([a-zA-Z0-9-]+)$/);
+  // /profile/<userId>
+  const profileMatch = path.match(/^\/profile\/([a-zA-Z0-9-]+)$/);
   if (profileMatch) {
     return { page: "profile", userId: profileMatch[1] };
   }
 
-  // #/shout/<shoutId> or #/shout/<shoutId>?comment=<commentId>
-  const shoutMatch = hash.match(/^#\/shout\/([a-zA-Z0-9-]+)(?:\?comment=([a-zA-Z0-9-]+))?$/);
+  // /shout/<shoutId> with optional ?comment=<commentId>
+  const shoutMatch = path.match(/^\/shout\/([a-zA-Z0-9-]+)$/);
   if (shoutMatch) {
     const route: Route = { page: "shout", shoutId: shoutMatch[1] };
-    if (shoutMatch[2]) route.commentId = shoutMatch[2];
+    const commentId = new URLSearchParams(window.location.search).get("comment");
+    if (commentId) route.commentId = commentId;
     return route;
   }
 
   return { page: "feed" };
 }
 
+// Backward compatibility: redirect old hash-based URLs to clean paths
+function migrateHashUrl() {
+  const hash = window.location.hash;
+  if (hash.startsWith("#/")) {
+    const cleanPath = hash.slice(1); // "#/profile/123" → "/profile/123"
+    history.replaceState(null, "", cleanPath);
+  }
+}
+
 export function useRoute(): Route {
-  const [route, setRoute] = useState<Route>(parseHash);
+  const [route, setRoute] = useState<Route>(() => {
+    migrateHashUrl();
+    return parsePath();
+  });
 
   useEffect(() => {
-    const onHashChange = () => {
-      const next = parseHash();
-      console.log("[Router] Hash changed:", window.location.hash, "→", next);
+    const onPopState = () => {
+      const next = parsePath();
+      console.log("[Router] Navigation:", window.location.pathname, "→", next);
       setRoute(next);
     };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   return route;
 }
 
 export function navigateTo(path: string) {
-  window.location.hash = path;
+  history.pushState(null, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
