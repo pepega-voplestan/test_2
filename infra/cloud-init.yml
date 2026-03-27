@@ -1,0 +1,15 @@
+#cloud-config
+
+# Runs once on first boot.
+# Installs Docker and creates the app directory.
+# Volume mounting and Docker data-root configuration are handled by
+# Terraform remote-exec provisioners after the volume is attached.
+
+packages:
+  - curl
+  - ca-certificates
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - apt-get install -y docker-compose-plugin
+  - mkdir -p /opt/vopli
