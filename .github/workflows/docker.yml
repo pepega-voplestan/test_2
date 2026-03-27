@@ -1,11 +1,17 @@
-name: Docker
+name: Deploy
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
 
 env:
-  REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
 
 jobs:
@@ -37,7 +43,7 @@ jobs:
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -64,3 +70,47 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTH_KEY }}
+
+      - name: Deploy to ${{ inputs.target }}
+        env:
+          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          DROPLET_HOST: vopli-${{ inputs.target }}
+          DROPLET_USER: ${{ secrets.DROPLET_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ inputs.target == 'prod' && secrets.DROPLET_SSH_KEY_PROD || secrets.DROPLET_SSH_KEY_DEV }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519"
+
+          # Copy compose and nginx configs
+          scp $SSH_OPTS \
+            docker-compose.yml \
+            nginx.conf \
+            media-nginx.conf \
+            $DROPLET_USER@$DROPLET_HOST:/opt/vopli/
+
+          # Pull images and restart
+          ssh $SSH_OPTS $DROPLET_USER@$DROPLET_HOST "
+            set -e
+            echo \"$GHCR_TOKEN\" | docker login ghcr.io -u \"$GHCR_USER\" --password-stdin
+            export IMAGE_PREFIX=\"$IMAGE_PREFIX\"
+            cd /opt/vopli
+            docker compose pull
+            docker compose up -d --no-build --remove-orphans
+            docker image prune -f
+          "
