@@ -92,7 +92,7 @@ jobs:
           DROPLET_USER: ${{ secrets.DROPLET_USER }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ inputs.target == 'prod' && secrets.DROPLET_SSH_KEY_PROD || secrets.DROPLET_SSH_KEY_DEV }}" > ~/.ssh/id_ed25519
+          echo "${{ inputs.target == 'prod' && secrets.DROPLET_SSH_KEY_PROD || secrets.DROPLET_SSH_KEY_DEV }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
           SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519"
