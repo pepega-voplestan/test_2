@@ -524,9 +524,13 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     focus(scrollIntoView?: boolean) {
       const el = editorRef.current;
       if (!el) return;
-      el.focus({ preventScroll: true });
       if (scrollIntoView) {
+        // Let the browser handle the native scroll-to-focus so the keyboard
+        // reliably opens on iOS, then refine the position.
+        el.focus();
         scrollFormIntoView(el);
+      } else {
+        el.focus({ preventScroll: true });
       }
     },
     insertText(text: string) {
@@ -588,9 +592,20 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const range = sel.getRangeAt(0);
 
       if (!range.collapsed && el.contains(range.commonAncestorContainer)) {
-        // Has selection — wrap it with ||
-        const selectedText = range.toString();
-        range.deleteContents();
+        // Has selection — extract as fragment to preserve line breaks and
+        // structure, then serialize to text keeping newlines.
+        const frag = range.extractContents();
+        const tmp = document.createElement('div');
+        tmp.appendChild(frag);
+        // Convert <br> and block-level elements to newlines
+        for (const br of Array.from(tmp.querySelectorAll('br'))) {
+          br.replaceWith('\n');
+        }
+        for (const div of Array.from(tmp.querySelectorAll('div'))) {
+          if (div.previousSibling) div.before('\n');
+          div.replaceWith(...Array.from(div.childNodes));
+        }
+        const selectedText = tmp.textContent ?? '';
         const textNode = document.createTextNode(`||${selectedText}||`);
         range.insertNode(textNode);
         // Place cursor after the closing ||
@@ -602,7 +617,6 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       } else {
         // No selection — insert |||| and place cursor in the middle
         const textNode = document.createTextNode('||||');
-        range.deleteContents();
         range.insertNode(textNode);
         const newRange = document.createRange();
         newRange.setStart(textNode, 2); // between the two ||
