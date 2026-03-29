@@ -5,7 +5,7 @@ import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
-import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
+import MentionInput, { MentionInputHandle, effectiveLength, isIOS } from './MentionInput';
 import PollBlock from './PollBlock';
 
 interface ShoutCardProps {
@@ -829,28 +829,36 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (onThreadToggle) onThreadToggle(shout.id);
   };
 
-  // Once the thread is open and a pending mention is queued, insert it into the reply box.
-  // This runs asynchronously (after React re-render), so on iOS the keyboard won't open
-  // from el.focus() — that's expected.  We still call focus(true) which scrolls the form
-  // into view and focuses on desktop/Android as a best-effort.
+  // Once the thread is open and a pending mention is queued, insert it.
+  // Async context (useEffect + setTimeout) breaks iOS user activation,
+  // so on iOS we only scroll into view — the user taps to open keyboard.
+  // insertMention() still runs (it uses preventScroll focus for DOM ops).
   useEffect(() => {
     if (!repliesOpen || !pendingMention) return;
     const id = setTimeout(() => {
-      mentionInputRef.current?.focus(true);
-      mentionInputRef.current?.insertMention(pendingMention);
+      if (isIOS()) {
+        mentionInputRef.current?.insertMention(pendingMention);
+        mentionInputRef.current?.scrollIntoView();
+      } else {
+        mentionInputRef.current?.focus(true);
+        mentionInputRef.current?.insertMention(pendingMention);
+      }
       setPendingMention(null);
     }, 50);
     return () => clearTimeout(id);
   }, [repliesOpen, pendingMention]);
 
   // Scroll reply input into view after the thread opens via "Ответить".
-  // On iOS the keyboard won't open (async context breaks user activation),
-  // but the input will be visible and ready for a tap.
+  // On iOS: scroll only, user taps to focus. On others: focus + scroll.
   const [pendingFocus, setPendingFocus] = useState(false);
   useEffect(() => {
     if (!repliesOpen || !pendingFocus) return;
     const id = setTimeout(() => {
-      mentionInputRef.current?.focus(true);
+      if (isIOS()) {
+        mentionInputRef.current?.scrollIntoView();
+      } else {
+        mentionInputRef.current?.focus(true);
+      }
       setPendingFocus(false);
     }, 50);
     return () => clearTimeout(id);
