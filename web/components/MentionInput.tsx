@@ -406,23 +406,28 @@ function scrollFormIntoView(el: HTMLElement): void {
     if (done) return;
     done = true;
     vv.removeEventListener('resize', onResize);
-    const rect = el.getBoundingClientRect();
-    const pageTop = vv.offsetTop + window.scrollY;
-    const visibleCenter = pageTop + vv.height / 2;
-    const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
-    const drift = elemPageCenter - visibleCenter;
-    if (Math.abs(drift) > 10) {
-      window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
-    }
+    // Use requestAnimationFrame to ensure fresh layout values after any
+    // in-progress native scroll has been applied to the DOM.
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      // Compute the absolute scroll position that centres the element
+      // in the visual viewport.  Using scrollTo (not scrollBy) cancels
+      // any in-progress smooth scroll the browser may have started for
+      // the native focus-scroll.
+      const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
+      const targetScrollY = elemPageCenter - vv.offsetTop - vv.height / 2;
+      if (Math.abs(window.scrollY - targetScrollY) > 10) {
+        window.scrollTo({ top: targetScrollY, left: 0, behavior: 'instant' as ScrollBehavior });
+      }
+    });
   };
 
-  // Debounce: wait for the last resize event (keyboard animation settling).
-  // 150ms ensures the native focus-scroll and keyboard animation are both
-  // done before we apply our single centering correction.
+  // Debounce: wait 300ms after the last resize event so the keyboard
+  // animation and any native focus-scroll are fully settled.
   let debounceTimer: ReturnType<typeof setTimeout>;
   const onResize = () => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(centre, 150);
+    debounceTimer = setTimeout(centre, 300);
   };
 
   vv.addEventListener('resize', onResize);
