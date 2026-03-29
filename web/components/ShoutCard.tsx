@@ -833,8 +833,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   useEffect(() => {
     if (!repliesOpen || !pendingMention) return;
     const id = setTimeout(() => {
-      mentionInputRef.current?.insertMention(pendingMention);
       mentionInputRef.current?.focus(true);
+      mentionInputRef.current?.insertMention(pendingMention);
       setPendingMention(null);
     }, 50);
     return () => clearTimeout(id);
@@ -857,8 +857,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       toggleThread();
       setPendingMention(author);
     } else {
-      mentionInputRef.current?.insertMention(author);
+      // focus(true) first to open the keyboard, then insertMention.
+      // If insertMention runs first it calls focus({ preventScroll: true })
+      // which makes the subsequent focus() a no-op (already focused) and
+      // the keyboard never opens on mobile.
       mentionInputRef.current?.focus(true);
+      mentionInputRef.current?.insertMention(author);
     }
   };
 
