@@ -553,17 +553,45 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
       if (!el) return;
-      // Focus is needed for the Selection API to work on this element.
-      // On iOS, temporarily suppress the keyboard with inputMode="none"
-      // so that focusing for DOM manipulation doesn't pop the keyboard.
+
       if (isIOS()) {
-        el.inputMode = 'none';
-        el.focus({ preventScroll: true });
-        // Restore after a microtask so the keyboard suppression takes effect.
-        queueMicrotask(() => { el.inputMode = ''; });
-      } else {
-        el.focus({ preventScroll: true });
+        // iOS: avoid any focus() call — even with inputMode="none" iOS
+        // Safari can still open the keyboard.  Instead, manipulate the
+        // DOM directly (no Selection API needed) and blur afterwards.
+        cleanupPhantomDivs(el);
+
+        const span = document.createElement('span');
+        span.contentEditable = 'false';
+        span.dataset.mentionId = user.id;
+        span.dataset.mentionName = user.name;
+        span.textContent = `@${user.name}`;
+        span.className = 'text-blue-400 font-medium';
+
+        const spaceNode = document.createTextNode('\u00A0');
+        el.appendChild(span);
+        el.appendChild(spaceNode);
+
+        // Save caret offset so that when the user taps to focus later,
+        // the cursor lands after the mention.
+        savedOffsetRef.current = getCharOffset(el, (() => {
+          const r = document.createRange();
+          r.setStart(spaceNode, 1);
+          r.collapse(true);
+          return r;
+        })());
+
+        // Ensure the element is not focused (keyboard stays closed).
+        el.blur();
+
+        const serialized = serializeContent(el);
+        setIsEmpty(serialized === '');
+        onContentChangeRef.current(serialized);
+        setMentionQuery(null);
+        return;
       }
+
+      // Android & Desktop: focus is needed for the Selection API.
+      el.focus({ preventScroll: true });
       cleanupPhantomDivs(el);
       const sel = window.getSelection()!;
       // Move cursor to end of content
