@@ -416,11 +416,13 @@ function scrollFormIntoView(el: HTMLElement): void {
     }
   };
 
-  // Debounce: wait for the last resize event (keyboard animation settling)
+  // Debounce: wait for the last resize event (keyboard animation settling).
+  // 150ms ensures the native focus-scroll and keyboard animation are both
+  // done before we apply our single centering correction.
   let debounceTimer: ReturnType<typeof setTimeout>;
   const onResize = () => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(centre, 100);
+    debounceTimer = setTimeout(centre, 150);
   };
 
   vv.addEventListener('resize', onResize);
@@ -516,14 +518,10 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         // open from JS and causes scroll fights.  Just scroll into view;
         // the user taps the input themselves.
         if (scrollIntoView) scrollFormIntoView(el);
-      } else if (isTouchDevice()) {
-        // Android: suppress the browser's native scroll-to-focus so our
-        // scrollFormIntoView does the one correct scroll after the keyboard
-        // animation finishes.  preventScroll doesn't affect keyboard on Android.
-        el.focus({ preventScroll: true });
-        if (scrollIntoView) scrollFormIntoView(el);
       } else {
-        // Desktop: simple focus + immediate centre.
+        // Android & Desktop: let the browser do its native scroll-to-focus,
+        // then scrollFormIntoView fires a single correction after the
+        // keyboard animation settles via the visualViewport resize listener.
         el.focus();
         if (scrollIntoView) scrollFormIntoView(el);
       }
