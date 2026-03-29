@@ -829,7 +829,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (onThreadToggle) onThreadToggle(shout.id);
   };
 
-  // Once the thread is open and a pending mention is queued, insert it into the reply box
+  // Once the thread is open and a pending mention is queued, insert it into the reply box.
+  // This runs asynchronously (after React re-render), so on iOS the keyboard won't open
+  // from el.focus() — that's expected.  We still call focus(true) which scrolls the form
+  // into view and focuses on desktop/Android as a best-effort.
   useEffect(() => {
     if (!repliesOpen || !pendingMention) return;
     const id = setTimeout(() => {
@@ -840,7 +843,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     return () => clearTimeout(id);
   }, [repliesOpen, pendingMention]);
 
-  // Focus reply input after the thread opens via "Ответить"
+  // Scroll reply input into view after the thread opens via "Ответить".
+  // On iOS the keyboard won't open (async context breaks user activation),
+  // but the input will be visible and ready for a tap.
   const [pendingFocus, setPendingFocus] = useState(false);
   useEffect(() => {
     if (!repliesOpen || !pendingFocus) return;
