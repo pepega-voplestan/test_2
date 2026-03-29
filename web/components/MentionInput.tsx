@@ -316,16 +316,16 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// Timestamp of the last scrollFormIntoView call — used to prevent the onFocus
-// handler from firing a duplicate scroll when focus(true) already triggered one.
-let lastScrollCallTs = 0;
+// Flag to prevent the onFocus handler from firing a duplicate scroll when
+// the imperative focus(scrollIntoView=true) already triggered one.
+let scrollInProgress = false;
 
 // Scroll the reply form into the centre of the visible viewport.
 // On mobile we listen for visualViewport 'resize' events (fired when the
 // keyboard actually opens) instead of guessing with a fixed timeout.
 // Uses instant jump (no smooth animation) to avoid fighting the keyboard.
 function scrollFormIntoView(el: HTMLElement): void {
-  lastScrollCallTs = Date.now();
+  scrollInProgress = true;
   const scrollTarget = el.closest('form')?.parentElement || el;
   const mobile = isTouchDevice();
 
@@ -377,6 +377,7 @@ function scrollFormIntoView(el: HTMLElement): void {
   setTimeout(() => {
     vv.removeEventListener('resize', reposition);
     cancelAnimationFrame(rafId);
+    scrollInProgress = false;
   }, 1500);
 }
 
@@ -418,7 +419,8 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     if (!rect) return;
     const DROPDOWN_HEIGHT = 240;
     const MARGIN = 4;
-    const spaceBelow = window.innerHeight - rect.bottom;
+    const visibleHeight = window.visualViewport?.height ?? window.innerHeight;
+    const spaceBelow = visibleHeight - rect.bottom;
     const showAbove = spaceBelow < DROPDOWN_HEIGHT + MARGIN;
     setDropdownStyle({
       position: 'fixed',
@@ -725,9 +727,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onPaste={handlePaste}
         onFocus={() => {
           // When the user taps the input directly (not via the Reply button),
-          // we still need to scroll the form into view.  Skip if focus(true)
-          // already triggered scrollFormIntoView within the last 500ms.
-          if (isTouchDevice() && editorRef.current && Date.now() - lastScrollCallTs > 500) {
+          // we still need to scroll the form into view.  Skip if the
+          // imperative focus(true) already triggered a scroll.
+          if (isTouchDevice() && editorRef.current && !scrollInProgress) {
             scrollFormIntoView(editorRef.current);
           }
         }}

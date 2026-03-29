@@ -15,6 +15,12 @@ import { useRoute, navigateTo } from './hooks/useRoute';
 const App: React.FC = () => {
   const route = useRoute();
 
+  // Reset scroll position when navigating between pages
+  const routeKey = route.page === 'profile' ? route.userId : route.page === 'shout' ? route.shoutId : '';
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [route.page, routeKey]);
+
   // Intercept clicks on internal <a> links for SPA navigation
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
