@@ -54,6 +54,18 @@ export default function AuthModal() {
     }
   }, [mode]);
 
+  // Lock background scroll while the modal is open
+  useEffect(() => {
+    if (!isAuthModalOpen) return;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = 'hidden';
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    };
+  }, [isAuthModalOpen]);
+
   if (!isAuthModalOpen) return null;
 
   function resetState() {
