@@ -30,7 +30,7 @@ const PollEditor = forwardRef<PollEditorHandle, PollEditorProps>(({ onClose, onC
       inputRefs.current[focusIndexRef.current]?.focus();
       focusIndexRef.current = null;
     }
-  });
+  }, [options.length]);
 
   const updateOption = (index: number, value: string) => {
     const next = [...options];
