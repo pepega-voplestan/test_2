@@ -37,22 +37,16 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
   const initialPinchDist = useRef(0);
   const initialPinchZoom = useRef(1);
 
-  // Scroll lock
+  // Scroll lock — use overflow on <html> to avoid the iOS position:fixed flash
   useEffect(() => {
-    const scrollY = window.scrollY;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     document.body.style.paddingRight = `${scrollbarWidth}px`;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
     return () => {
+      document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      window.scrollTo(0, scrollY);
     };
   }, []);
 
