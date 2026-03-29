@@ -336,8 +336,16 @@ function scrollFormIntoView(el: HTMLElement): void {
 
   const vv = window.visualViewport;
   let rafId = 0;
+  let lastHeight = vv.height;
 
   const reposition = () => {
+    // Only reposition when the viewport height actually changed (keyboard
+    // opening/closing), not on every scroll tick.  This avoids a feedback
+    // loop where scrollBy triggers another visualViewport scroll event.
+    const curHeight = vv.height;
+    if (Math.abs(curHeight - lastHeight) < 1) return;
+    lastHeight = curHeight;
+
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
       const rect = scrollTarget.getBoundingClientRect();
@@ -354,15 +362,20 @@ function scrollFormIntoView(el: HTMLElement): void {
     });
   };
 
-  // Fire once immediately in case the keyboard is already open
-  reposition();
+  // Do an initial reposition after a short delay to let the keyboard start
+  // animating (the visualViewport height hasn't changed yet at focus time).
+  setTimeout(() => {
+    lastHeight = 0; // force the guard to pass on the first real check
+    reposition();
+  }, 120);
 
-  // Then track viewport resize as the keyboard animates open
+  // Track viewport resize as the keyboard animates open.
+  // Only listen to 'resize' — NOT 'scroll'.  On iOS, calling scrollBy()
+  // inside a visualViewport scroll handler creates a feedback loop that
+  // causes the erratic jiggling reported on iPhone 12/13.
   vv.addEventListener('resize', reposition);
-  vv.addEventListener('scroll', reposition);
   setTimeout(() => {
     vv.removeEventListener('resize', reposition);
-    vv.removeEventListener('scroll', reposition);
     cancelAnimationFrame(rafId);
   }, 1500);
 }
