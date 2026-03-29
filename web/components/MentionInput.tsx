@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 export interface MentionInputHandle {
   clear(): void;
   focus(scrollIntoView?: boolean): void;
+  scrollIntoView(): void;
   insertText(text: string): void;
   insertMention(user: { id: string; name: string }): void;
   wrapSpoiler(): void;
@@ -381,6 +382,11 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
+export function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 // Centre the element in the visible viewport (accounting for the on-screen
 // keyboard on mobile).  On touch devices we listen for the visualViewport
 // resize that fires when the keyboard finishes animating, then do a single
@@ -505,12 +511,15 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     focus(scrollIntoView?: boolean) {
       const el = editorRef.current;
       if (!el) return;
-      // Always use plain focus() — preventScroll and blur/focus tricks
-      // cause inconsistent keyboard behaviour across iOS/Android.
       el.focus();
       if (scrollIntoView) {
         scrollFormIntoView(el);
       }
+    },
+    scrollIntoView() {
+      const el = editorRef.current;
+      if (!el) return;
+      scrollFormIntoView(el);
     },
     insertText(text: string) {
       const el = editorRef.current;
