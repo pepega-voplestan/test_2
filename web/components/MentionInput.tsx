@@ -386,9 +386,8 @@ function isTouchDevice(): boolean {
 let scrollInProgress = false;
 
 // Scroll the reply form into the centre of the visible viewport.
-// On mobile we listen for visualViewport 'resize' events (fired when the
-// keyboard actually opens) instead of guessing with a fixed timeout.
-// Uses instant jump (no smooth animation) to avoid fighting the keyboard.
+// On mobile, the browser's native focus scroll + keyboard opening is handled
+// first, then we do a single adjustment once the keyboard has settled.
 function scrollFormIntoView(el: HTMLElement): void {
   scrollInProgress = true;
   const scrollTarget = el.closest('form')?.parentElement || el;
@@ -401,23 +400,31 @@ function scrollFormIntoView(el: HTMLElement): void {
   }
 
   const vv = window.visualViewport;
-  let rafId = 0;
-  let lastHeight = vv.height;
 
-  const reposition = () => {
-    // Only reposition when the viewport height actually changed (keyboard
-    // opening/closing), not on every scroll tick.  This avoids a feedback
-    // loop where scrollBy triggers another visualViewport scroll event.
+  // Wait for keyboard to finish animating, then centre the form in the
+  // visible area above the keyboard.  We poll briefly (≤1s) until the
+  // viewport height stabilises, then do one final scroll.
+  let prevHeight = vv.height;
+  let stableCount = 0;
+  let elapsed = 0;
+  const POLL = 60;                // check every 60ms
+  const STABLE_THRESHOLD = 3;     // 3 stable readings ≈ 180ms of no change
+  const MAX_WAIT = 1000;
+
+  const timer = setInterval(() => {
+    elapsed += POLL;
     const curHeight = vv.height;
-    if (Math.abs(curHeight - lastHeight) < 1) return;
-    lastHeight = curHeight;
+    if (Math.abs(curHeight - prevHeight) < 1) {
+      stableCount++;
+    } else {
+      stableCount = 0;
+      prevHeight = curHeight;
+    }
 
-    cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(() => {
+    if (stableCount >= STABLE_THRESHOLD || elapsed >= MAX_WAIT) {
+      clearInterval(timer);
+      // One clean scroll to centre the form in the visible viewport
       const rect = scrollTarget.getBoundingClientRect();
-      // On iOS Safari visualViewport reflects the visible area above the
-      // keyboard.  pageTop is the absolute top of that visible rectangle in
-      // page coordinates; we use it + vv.height to find the visible centre.
       const pageTop = vv.offsetTop + window.scrollY;
       const visibleCenter = pageTop + vv.height / 2;
       const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
@@ -425,26 +432,12 @@ function scrollFormIntoView(el: HTMLElement): void {
       if (Math.abs(drift) > 10) {
         window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
       }
-    });
-  };
+      scrollInProgress = false;
+    }
+  }, POLL);
 
-  // Do an initial reposition after a short delay to let the keyboard start
-  // animating (the visualViewport height hasn't changed yet at focus time).
-  setTimeout(() => {
-    lastHeight = 0; // force the guard to pass on the first real check
-    reposition();
-  }, 120);
-
-  // Track viewport resize as the keyboard animates open.
-  // Only listen to 'resize' — NOT 'scroll'.  On iOS, calling scrollBy()
-  // inside a visualViewport scroll handler creates a feedback loop that
-  // causes the erratic jiggling reported on iPhone 12/13.
-  vv.addEventListener('resize', reposition);
-  setTimeout(() => {
-    vv.removeEventListener('resize', reposition);
-    cancelAnimationFrame(rafId);
-    scrollInProgress = false;
-  }, 1500);
+  // Safety: clear interval if it somehow survives
+  setTimeout(() => { clearInterval(timer); scrollInProgress = false; }, MAX_WAIT + 100);
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -528,8 +521,10 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const el = editorRef.current;
       if (!el) return;
       if (scrollIntoView) {
-        // Let the browser handle the native scroll-to-focus so the keyboard
-        // reliably opens on iOS, then refine the position.
+        // Blur first so the subsequent focus() reliably triggers the
+        // keyboard and native scroll even if the element was already focused
+        // (e.g. after insertMention called focus({ preventScroll: true })).
+        if (document.activeElement === el) el.blur();
         el.focus();
         scrollFormIntoView(el);
       } else {
