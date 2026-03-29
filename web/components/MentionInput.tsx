@@ -381,63 +381,48 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// Flag to prevent the onFocus handler from firing a duplicate scroll when
-// the imperative focus(scrollIntoView=true) already triggered one.
-let scrollInProgress = false;
-
-// Scroll the reply form into the centre of the visible viewport.
-// On mobile, the browser's native focus scroll + keyboard opening is handled
-// first, then we do a single adjustment once the keyboard has settled.
+// Centre the element in the visible viewport (accounting for the on-screen
+// keyboard on mobile).  On touch devices we listen for the visualViewport
+// resize that fires when the keyboard finishes animating, then do a single
+// scroll correction.  An 800ms timeout acts as a fallback for devices that
+// don't fire a resize (e.g. keyboard was already open).
 function scrollFormIntoView(el: HTMLElement): void {
-  scrollInProgress = true;
-  const scrollTarget = el.closest('form')?.parentElement || el;
-  const mobile = isTouchDevice();
-
-  if (!mobile || !window.visualViewport) {
-    scrollTarget.scrollIntoView({ block: 'center' });
-    scrollInProgress = false;
+  if (!isTouchDevice() || !window.visualViewport) {
+    // Desktop: immediate centre, no keyboard to worry about.
+    el.scrollIntoView({ block: 'center' });
     return;
   }
 
   const vv = window.visualViewport;
+  let done = false;
 
-  // Wait for keyboard to finish animating, then centre the form in the
-  // visible area above the keyboard.  We poll briefly (≤1s) until the
-  // viewport height stabilises, then do one final scroll.
-  let prevHeight = vv.height;
-  let stableCount = 0;
-  let elapsed = 0;
-  const POLL = 60;                // check every 60ms
-  const STABLE_THRESHOLD = 3;     // 3 stable readings ≈ 180ms of no change
-  const MAX_WAIT = 1000;
-
-  const timer = setInterval(() => {
-    elapsed += POLL;
-    const curHeight = vv.height;
-    if (Math.abs(curHeight - prevHeight) < 1) {
-      stableCount++;
-    } else {
-      stableCount = 0;
-      prevHeight = curHeight;
+  const centre = () => {
+    if (done) return;
+    done = true;
+    vv.removeEventListener('resize', onResize);
+    const rect = el.getBoundingClientRect();
+    const pageTop = vv.offsetTop + window.scrollY;
+    const visibleCenter = pageTop + vv.height / 2;
+    const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
+    const drift = elemPageCenter - visibleCenter;
+    if (Math.abs(drift) > 10) {
+      window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
     }
+  };
 
-    if (stableCount >= STABLE_THRESHOLD || elapsed >= MAX_WAIT) {
-      clearInterval(timer);
-      // One clean scroll to centre the form in the visible viewport
-      const rect = scrollTarget.getBoundingClientRect();
-      const pageTop = vv.offsetTop + window.scrollY;
-      const visibleCenter = pageTop + vv.height / 2;
-      const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
-      const drift = elemPageCenter - visibleCenter;
-      if (Math.abs(drift) > 10) {
-        window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
-      }
-      scrollInProgress = false;
-    }
-  }, POLL);
+  // Debounce: wait for the last resize event (keyboard animation settling)
+  let debounceTimer: ReturnType<typeof setTimeout>;
+  const onResize = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(centre, 100);
+  };
 
-  // Safety: clear interval if it somehow survives
-  setTimeout(() => { clearInterval(timer); scrollInProgress = false; }, MAX_WAIT + 100);
+  vv.addEventListener('resize', onResize);
+  // Fallback: if no resize fires (keyboard already open), scroll after 800ms
+  setTimeout(() => {
+    clearTimeout(debounceTimer);
+    centre();
+  }, 800);
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -520,15 +505,11 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     focus(scrollIntoView?: boolean) {
       const el = editorRef.current;
       if (!el) return;
+      // Always use plain focus() — preventScroll and blur/focus tricks
+      // cause inconsistent keyboard behaviour across iOS/Android.
+      el.focus();
       if (scrollIntoView) {
-        // Blur first so the subsequent focus() reliably triggers the
-        // keyboard and native scroll even if the element was already focused
-        // (e.g. after insertMention called focus({ preventScroll: true })).
-        if (document.activeElement === el) el.blur();
-        el.focus();
         scrollFormIntoView(el);
-      } else {
-        el.focus({ preventScroll: true });
       }
     },
     insertText(text: string) {
@@ -802,12 +783,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onFocus={() => {
-          // When the user taps the input directly (not via the Reply button),
-          // we still need to scroll the form into view.  Skip if the
-          // imperative focus(true) already triggered a scroll.
-          if (isTouchDevice() && editorRef.current && !scrollInProgress) {
-            scrollFormIntoView(editorRef.current);
-          }
+          // Intentionally empty — let the browser handle native scroll-to-focus
+          // on direct tap.  Imperative focus(true) calls scrollFormIntoView
+          // explicitly when needed (Reply button paths).
         }}
         onBlur={() => {
           const sel = window.getSelection();
