@@ -836,9 +836,20 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       mentionInputRef.current?.insertMention(pendingMention);
       mentionInputRef.current?.focus(true);
       setPendingMention(null);
-    }, 0);
+    }, 50);
     return () => clearTimeout(id);
   }, [repliesOpen, pendingMention]);
+
+  // Focus reply input after the thread opens via "Ответить"
+  const [pendingFocus, setPendingFocus] = useState(false);
+  useEffect(() => {
+    if (!repliesOpen || !pendingFocus) return;
+    const id = setTimeout(() => {
+      mentionInputRef.current?.focus(true);
+      setPendingFocus(false);
+    }, 50);
+    return () => clearTimeout(id);
+  }, [repliesOpen, pendingFocus]);
 
   const handleMentionReply = (author: { id: string; name: string }) => {
     if (!user) { openModal(); return; }
@@ -855,8 +866,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!user) { openModal(); return; }
     if (!repliesOpen) {
       toggleThread();
-      // Focus and scroll to the input after the thread opens
-      setTimeout(() => mentionInputRef.current?.focus(true), 0);
+      setPendingFocus(true);
     } else {
       mentionInputRef.current?.focus(true);
     }

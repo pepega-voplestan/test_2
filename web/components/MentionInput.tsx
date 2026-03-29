@@ -122,21 +122,83 @@ function getCaretRect(): DOMRect | null {
   return rect;
 }
 
+// Compute the character offset of a collapsed Range within a contenteditable.
+// Counts text characters + 1 per <br>/<div> line break so the offset survives
+// DOM restructuring (e.g. Chrome wrapping lines in <div>s on re-focus).
+function getCharOffset(root: HTMLElement, range: Range): number {
+  let offset = 0;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (node === range.startContainer) {
+      return offset + (node.nodeType === Node.TEXT_NODE ? range.startOffset : 0);
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      offset += (node as Text).length;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as HTMLElement).tagName;
+      if (tag === 'BR') offset += 1;
+      else if (tag === 'DIV' && node !== root && node.previousSibling) offset += 1;
+    }
+  }
+  return offset; // fallback: end
+}
+
+// Restore a selection at a given character offset.
+function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  let remaining = targetOffset;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node as Text).length;
+      if (remaining <= len) {
+        const r = document.createRange();
+        r.setStart(node, remaining);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return;
+      }
+      remaining -= len;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as HTMLElement).tagName;
+      if (tag === 'BR' || (tag === 'DIV' && node !== root && node.previousSibling)) {
+        if (remaining <= 0) {
+          const r = document.createRange();
+          r.setStartBefore(node);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+          return;
+        }
+        remaining -= 1;
+      }
+    }
+  }
+  // Fallback: place cursor at end
+  const r = document.createRange();
+  r.selectNodeContents(root);
+  r.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
 // Inserts plain text at the current caret position inside a contenteditable element.
 // Handles multi-line text (splits on \n → <br>). Dispatches a synthetic 'input' event
 // so the React onInput handler picks up the change for serialization.
-// `savedRange` is used to restore the caret when the editor had lost focus (e.g. after
-// clicking the emoji picker).
-function insertAtCursor(el: HTMLElement, text: string, savedRange?: Range | null): void {
+// `savedOffset` is a character-based cursor position used to restore the caret when
+// the editor had lost focus (e.g. after clicking the emoji picker).  Character offsets
+// survive DOM restructuring that invalidates Range node references.
+function insertAtCursor(el: HTMLElement, text: string, savedOffset?: number | null): void {
   el.focus({ preventScroll: true });
   const sel = window.getSelection();
   if (!sel) return;
 
-  // Prefer savedRange when provided: Chrome often places the caret at position 0 when
-  // re-focusing a contenteditable, so selectionInEditor alone is not a reliable guard.
-  if (savedRange && el.contains(savedRange.startContainer)) {
-    sel.removeAllRanges();
-    sel.addRange(savedRange.cloneRange());
+  if (savedOffset != null) {
+    setCaretAtOffset(el, savedOffset);
   } else {
     const selectionInEditor =
       sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer);
@@ -331,6 +393,7 @@ function scrollFormIntoView(el: HTMLElement): void {
 
   if (!mobile || !window.visualViewport) {
     scrollTarget.scrollIntoView({ block: 'center' });
+    scrollInProgress = false;
     return;
   }
 
@@ -386,7 +449,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
   const editorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const savedRangeRef = useRef<Range | null>(null);
+  const savedOffsetRef = useRef<number | null>(null);
   const { users, loading, fetchUsers } = useMentionUsers();
   const { user: currentUser } = useAuth();
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
@@ -422,12 +485,14 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     const visibleHeight = window.visualViewport?.height ?? window.innerHeight;
     const spaceBelow = visibleHeight - rect.bottom;
     const showAbove = spaceBelow < DROPDOWN_HEIGHT + MARGIN;
+    const topPos = showAbove
+      ? Math.max(MARGIN, rect.top - DROPDOWN_HEIGHT - MARGIN)
+      : rect.bottom + MARGIN;
     setDropdownStyle({
       position: 'fixed',
       left: `${Math.min(rect.left, window.innerWidth - 256)}px`,
-      top: showAbove
-        ? `${rect.top - DROPDOWN_HEIGHT - MARGIN}px`
-        : `${rect.bottom + MARGIN}px`,
+      top: `${topPos}px`,
+      maxHeight: showAbove ? `${Math.max(80, rect.top - MARGIN * 2)}px` : `${Math.max(80, visibleHeight - rect.bottom - MARGIN * 2)}px`,
       zIndex: 200,
       width: '240px',
     });
@@ -467,7 +532,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertText(text: string) {
       const el = editorRef.current;
       if (!el) return;
-      insertAtCursor(el, text, savedRangeRef.current);
+      insertAtCursor(el, text, savedOffsetRef.current);
     },
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
@@ -514,10 +579,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const sel = window.getSelection();
       if (!sel) return;
 
-      // Restore saved range if the editor lost focus (e.g. clicking toolbar button)
-      if (savedRangeRef.current && el.contains(savedRangeRef.current.startContainer)) {
-        sel.removeAllRanges();
-        sel.addRange(savedRangeRef.current.cloneRange());
+      // Restore cursor position if the editor lost focus (e.g. clicking toolbar button)
+      if (savedOffsetRef.current != null) {
+        setCaretAtOffset(el, savedOffsetRef.current);
       }
 
       if (!sel.rangeCount) return;
@@ -735,8 +799,8 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         }}
         onBlur={() => {
           const sel = window.getSelection();
-          if (sel && sel.rangeCount > 0) {
-            savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+          if (sel && sel.rangeCount > 0 && editorRef.current) {
+            savedOffsetRef.current = getCharOffset(editorRef.current, sel.getRangeAt(0));
           }
         }}
         role="textbox"
