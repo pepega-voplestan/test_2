@@ -381,31 +381,26 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// Flag to prevent the onFocus handler from firing a duplicate scroll when
-// the imperative focus(scrollIntoView=true) already triggered one.
-let scrollInProgress = false;
-
-// Centre the reply form in the visible viewport (accounting for the on-screen
-// keyboard on mobile).  Called after el.focus() so the browser has already
-// done its native scroll-to-focus.  We simply wait a beat for the keyboard
-// animation to finish, then do one viewport-aware adjustment.
+// Centre the element in the visible viewport (accounting for the on-screen
+// keyboard on mobile).  On touch devices we listen for the visualViewport
+// resize that fires when the keyboard finishes animating, then do a single
+// scroll correction.  An 800ms timeout acts as a fallback for devices that
+// don't fire a resize (e.g. keyboard was already open).
 function scrollFormIntoView(el: HTMLElement): void {
-  scrollInProgress = true;
-  const scrollTarget = el.closest('form')?.parentElement || el;
-
   if (!isTouchDevice() || !window.visualViewport) {
     // Desktop: immediate centre, no keyboard to worry about.
-    scrollTarget.scrollIntoView({ block: 'center' });
-    scrollInProgress = false;
+    el.scrollIntoView({ block: 'center' });
     return;
   }
 
-  // Mobile: the browser's native focus() already scrolled the input roughly
-  // into view.  We schedule a viewport-aware centre after the keyboard has
-  // had time to open.  Two passes cover both fast and slow devices.
   const vv = window.visualViewport;
+  let done = false;
+
   const centre = () => {
-    const rect = scrollTarget.getBoundingClientRect();
+    if (done) return;
+    done = true;
+    vv.removeEventListener('resize', onResize);
+    const rect = el.getBoundingClientRect();
     const pageTop = vv.offsetTop + window.scrollY;
     const visibleCenter = pageTop + vv.height / 2;
     const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
@@ -415,10 +410,19 @@ function scrollFormIntoView(el: HTMLElement): void {
     }
   };
 
-  // First pass: catches fast keyboards / already-open keyboards
-  setTimeout(centre, 300);
-  // Second pass: catches slow keyboard animations; also clears the flag
-  setTimeout(() => { centre(); scrollInProgress = false; }, 600);
+  // Debounce: wait for the last resize event (keyboard animation settling)
+  let debounceTimer: ReturnType<typeof setTimeout>;
+  const onResize = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(centre, 100);
+  };
+
+  vv.addEventListener('resize', onResize);
+  // Fallback: if no resize fires (keyboard already open), scroll after 800ms
+  setTimeout(() => {
+    clearTimeout(debounceTimer);
+    centre();
+  }, 800);
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -779,12 +783,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onFocus={() => {
-          // When the user taps the input directly (not via the Reply button),
-          // we still need to scroll the form into view.  Skip if the
-          // imperative focus(true) already triggered a scroll.
-          if (isTouchDevice() && editorRef.current && !scrollInProgress) {
-            scrollFormIntoView(editorRef.current);
-          }
+          // Intentionally empty — let the browser handle native scroll-to-focus
+          // on direct tap.  Imperative focus(true) calls scrollFormIntoView
+          // explicitly when needed (Reply button paths).
         }}
         onBlur={() => {
           const sel = window.getSelection();
