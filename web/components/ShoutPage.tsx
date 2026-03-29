@@ -168,7 +168,7 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
       )}
 
       {shout && (
-        <div className="bg-th-feed rounded-xl px-5 py-4 border border-th-border-2">
+        <div className="bg-th-feed rounded-xl px-5 py-4">
           <ShoutCard
             shout={shout}
             showMedia={prefs.showMedia}

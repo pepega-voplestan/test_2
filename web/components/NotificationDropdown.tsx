@@ -142,7 +142,7 @@ const NotificationDropdown: React.FC = () => {
     });
   }, [isOpen, sortedNotifications]);
 
-  // Close on outside click
+  // Close on outside click or viewport resize (device rotation)
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
@@ -152,8 +152,13 @@ const NotificationDropdown: React.FC = () => {
       ) return;
       setIsOpen(false);
     };
+    const closeOnResize = () => setIsOpen(false);
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    window.addEventListener('resize', closeOnResize);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('resize', closeOnResize);
+    };
   }, [isOpen]);
 
   // IntersectionObserver on sentinel — triggers loadMore when scrolled near bottom
