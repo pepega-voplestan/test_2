@@ -832,7 +832,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     }
   };
 
-  const textSizeClass = size === 'sm' ? 'text-sm' : '';
+  // iOS Safari auto-zooms any editable element with font-size < 16px.
+  // Skip text-sm on iOS to prevent unwanted zoom on focus.
+  const textSizeClass = size === 'sm' && !isIOS() ? 'text-sm' : '';
 
   return (
     <div className="relative w-full overflow-hidden">
