@@ -869,11 +869,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!repliesOpen) {
       toggleThread();
       setPendingMention(author);
+    } else if (isIOS()) {
+      // iOS: insert mention (uses preventScroll focus for DOM ops), scroll only.
+      mentionInputRef.current?.insertMention(author);
+      mentionInputRef.current?.scrollIntoView();
     } else {
-      // focus(true) first to open the keyboard, then insertMention.
-      // If insertMention runs first it calls focus({ preventScroll: true })
-      // which makes the subsequent focus() a no-op (already focused) and
-      // the keyboard never opens on mobile.
+      // Android/Desktop: focus first to open keyboard, then insert mention.
       mentionInputRef.current?.focus(true);
       mentionInputRef.current?.insertMention(author);
     }
