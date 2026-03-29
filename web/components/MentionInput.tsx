@@ -122,21 +122,83 @@ function getCaretRect(): DOMRect | null {
   return rect;
 }
 
+// Compute the character offset of a collapsed Range within a contenteditable.
+// Counts text characters + 1 per <br>/<div> line break so the offset survives
+// DOM restructuring (e.g. Chrome wrapping lines in <div>s on re-focus).
+function getCharOffset(root: HTMLElement, range: Range): number {
+  let offset = 0;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (node === range.startContainer) {
+      return offset + (node.nodeType === Node.TEXT_NODE ? range.startOffset : 0);
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      offset += (node as Text).length;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as HTMLElement).tagName;
+      if (tag === 'BR') offset += 1;
+      else if (tag === 'DIV' && node !== root && node.previousSibling) offset += 1;
+    }
+  }
+  return offset; // fallback: end
+}
+
+// Restore a selection at a given character offset.
+function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  let remaining = targetOffset;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node as Text).length;
+      if (remaining <= len) {
+        const r = document.createRange();
+        r.setStart(node, remaining);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return;
+      }
+      remaining -= len;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as HTMLElement).tagName;
+      if (tag === 'BR' || (tag === 'DIV' && node !== root && node.previousSibling)) {
+        if (remaining <= 0) {
+          const r = document.createRange();
+          r.setStartBefore(node);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+          return;
+        }
+        remaining -= 1;
+      }
+    }
+  }
+  // Fallback: place cursor at end
+  const r = document.createRange();
+  r.selectNodeContents(root);
+  r.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
 // Inserts plain text at the current caret position inside a contenteditable element.
 // Handles multi-line text (splits on \n → <br>). Dispatches a synthetic 'input' event
 // so the React onInput handler picks up the change for serialization.
-// `savedRange` is used to restore the caret when the editor had lost focus (e.g. after
-// clicking the emoji picker).
-function insertAtCursor(el: HTMLElement, text: string, savedRange?: Range | null): void {
+// `savedOffset` is a character-based cursor position used to restore the caret when
+// the editor had lost focus (e.g. after clicking the emoji picker).  Character offsets
+// survive DOM restructuring that invalidates Range node references.
+function insertAtCursor(el: HTMLElement, text: string, savedOffset?: number | null): void {
   el.focus({ preventScroll: true });
   const sel = window.getSelection();
   if (!sel) return;
 
-  // Prefer savedRange when provided: Chrome often places the caret at position 0 when
-  // re-focusing a contenteditable, so selectionInEditor alone is not a reliable guard.
-  if (savedRange && el.contains(savedRange.startContainer)) {
-    sel.removeAllRanges();
-    sel.addRange(savedRange.cloneRange());
+  if (savedOffset != null) {
+    setCaretAtOffset(el, savedOffset);
   } else {
     const selectionInEditor =
       sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer);
@@ -306,9 +368,12 @@ function cleanupPhantomDivs(el: HTMLElement): void {
   for (const div of Array.from(el.querySelectorAll(':scope > div'))) {
     const text = div.textContent ?? '';
     if (text.replace(/[\u200B\u00A0\s]/g, '') === '') {
+      // A <div><br></div> is an intentional empty line (user pressed Enter).
+      // Only remove truly empty phantom wrappers that Chrome creates when
+      // deleting contentEditable=false elements (e.g. mention spans).
+      if (div.querySelector('br')) continue;
       div.remove();
     }
-    // Non-empty divs are intentional line breaks — leave them alone.
   }
 }
 
@@ -316,34 +381,50 @@ function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// Timestamp of the last scrollFormIntoView call — used to prevent the onFocus
-// handler from firing a duplicate scroll when focus(true) already triggered one.
-let lastScrollCallTs = 0;
+// Flag to prevent the onFocus handler from firing a duplicate scroll when
+// the imperative focus(scrollIntoView=true) already triggered one.
+let scrollInProgress = false;
 
 // Scroll the reply form into the centre of the visible viewport.
-// On mobile we listen for visualViewport 'resize' events (fired when the
-// keyboard actually opens) instead of guessing with a fixed timeout.
-// Uses instant jump (no smooth animation) to avoid fighting the keyboard.
+// On mobile, the browser's native focus scroll + keyboard opening is handled
+// first, then we do a single adjustment once the keyboard has settled.
 function scrollFormIntoView(el: HTMLElement): void {
-  lastScrollCallTs = Date.now();
+  scrollInProgress = true;
   const scrollTarget = el.closest('form')?.parentElement || el;
   const mobile = isTouchDevice();
 
   if (!mobile || !window.visualViewport) {
     scrollTarget.scrollIntoView({ block: 'center' });
+    scrollInProgress = false;
     return;
   }
 
   const vv = window.visualViewport;
-  let rafId = 0;
 
-  const reposition = () => {
-    cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(() => {
+  // Wait for keyboard to finish animating, then centre the form in the
+  // visible area above the keyboard.  We poll briefly (≤1s) until the
+  // viewport height stabilises, then do one final scroll.
+  let prevHeight = vv.height;
+  let stableCount = 0;
+  let elapsed = 0;
+  const POLL = 60;                // check every 60ms
+  const STABLE_THRESHOLD = 3;     // 3 stable readings ≈ 180ms of no change
+  const MAX_WAIT = 1000;
+
+  const timer = setInterval(() => {
+    elapsed += POLL;
+    const curHeight = vv.height;
+    if (Math.abs(curHeight - prevHeight) < 1) {
+      stableCount++;
+    } else {
+      stableCount = 0;
+      prevHeight = curHeight;
+    }
+
+    if (stableCount >= STABLE_THRESHOLD || elapsed >= MAX_WAIT) {
+      clearInterval(timer);
+      // One clean scroll to centre the form in the visible viewport
       const rect = scrollTarget.getBoundingClientRect();
-      // On iOS Safari visualViewport reflects the visible area above the
-      // keyboard.  pageTop is the absolute top of that visible rectangle in
-      // page coordinates; we use it + vv.height to find the visible centre.
       const pageTop = vv.offsetTop + window.scrollY;
       const visibleCenter = pageTop + vv.height / 2;
       const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
@@ -351,20 +432,12 @@ function scrollFormIntoView(el: HTMLElement): void {
       if (Math.abs(drift) > 10) {
         window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
       }
-    });
-  };
+      scrollInProgress = false;
+    }
+  }, POLL);
 
-  // Fire once immediately in case the keyboard is already open
-  reposition();
-
-  // Then track viewport resize as the keyboard animates open
-  vv.addEventListener('resize', reposition);
-  vv.addEventListener('scroll', reposition);
-  setTimeout(() => {
-    vv.removeEventListener('resize', reposition);
-    vv.removeEventListener('scroll', reposition);
-    cancelAnimationFrame(rafId);
-  }, 1500);
+  // Safety: clear interval if it somehow survives
+  setTimeout(() => { clearInterval(timer); scrollInProgress = false; }, MAX_WAIT + 100);
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -372,7 +445,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
   const editorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const savedRangeRef = useRef<Range | null>(null);
+  const savedOffsetRef = useRef<number | null>(null);
   const { users, loading, fetchUsers } = useMentionUsers();
   const { user: currentUser } = useAuth();
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
@@ -405,14 +478,17 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     if (!rect) return;
     const DROPDOWN_HEIGHT = 240;
     const MARGIN = 4;
-    const spaceBelow = window.innerHeight - rect.bottom;
+    const visibleHeight = window.visualViewport?.height ?? window.innerHeight;
+    const spaceBelow = visibleHeight - rect.bottom;
     const showAbove = spaceBelow < DROPDOWN_HEIGHT + MARGIN;
+    const topPos = showAbove
+      ? Math.max(MARGIN, rect.top - DROPDOWN_HEIGHT - MARGIN)
+      : rect.bottom + MARGIN;
     setDropdownStyle({
       position: 'fixed',
       left: `${Math.min(rect.left, window.innerWidth - 256)}px`,
-      top: showAbove
-        ? `${rect.top - DROPDOWN_HEIGHT - MARGIN}px`
-        : `${rect.bottom + MARGIN}px`,
+      top: `${topPos}px`,
+      maxHeight: showAbove ? `${Math.max(80, rect.top - MARGIN * 2)}px` : `${Math.max(80, visibleHeight - rect.bottom - MARGIN * 2)}px`,
       zIndex: 200,
       width: '240px',
     });
@@ -444,15 +520,21 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     focus(scrollIntoView?: boolean) {
       const el = editorRef.current;
       if (!el) return;
-      el.focus({ preventScroll: true });
       if (scrollIntoView) {
+        // Blur first so the subsequent focus() reliably triggers the
+        // keyboard and native scroll even if the element was already focused
+        // (e.g. after insertMention called focus({ preventScroll: true })).
+        if (document.activeElement === el) el.blur();
+        el.focus();
         scrollFormIntoView(el);
+      } else {
+        el.focus({ preventScroll: true });
       }
     },
     insertText(text: string) {
       const el = editorRef.current;
       if (!el) return;
-      insertAtCursor(el, text, savedRangeRef.current);
+      insertAtCursor(el, text, savedOffsetRef.current);
     },
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
@@ -499,19 +581,29 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const sel = window.getSelection();
       if (!sel) return;
 
-      // Restore saved range if the editor lost focus (e.g. clicking toolbar button)
-      if (savedRangeRef.current && el.contains(savedRangeRef.current.startContainer)) {
-        sel.removeAllRanges();
-        sel.addRange(savedRangeRef.current.cloneRange());
+      // Restore cursor position if the editor lost focus (e.g. clicking toolbar button)
+      if (savedOffsetRef.current != null) {
+        setCaretAtOffset(el, savedOffsetRef.current);
       }
 
       if (!sel.rangeCount) return;
       const range = sel.getRangeAt(0);
 
       if (!range.collapsed && el.contains(range.commonAncestorContainer)) {
-        // Has selection — wrap it with ||
-        const selectedText = range.toString();
-        range.deleteContents();
+        // Has selection — extract as fragment to preserve line breaks and
+        // structure, then serialize to text keeping newlines.
+        const frag = range.extractContents();
+        const tmp = document.createElement('div');
+        tmp.appendChild(frag);
+        // Convert <br> and block-level elements to newlines
+        for (const br of Array.from(tmp.querySelectorAll('br'))) {
+          br.replaceWith('\n');
+        }
+        for (const div of Array.from(tmp.querySelectorAll('div'))) {
+          if (div.previousSibling) div.before('\n');
+          div.replaceWith(...Array.from(div.childNodes));
+        }
+        const selectedText = tmp.textContent ?? '';
         const textNode = document.createTextNode(`||${selectedText}||`);
         range.insertNode(textNode);
         // Place cursor after the closing ||
@@ -523,7 +615,6 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       } else {
         // No selection — insert |||| and place cursor in the middle
         const textNode = document.createTextNode('||||');
-        range.deleteContents();
         range.insertNode(textNode);
         const newRange = document.createRange();
         newRange.setStart(textNode, 2); // between the two ||
@@ -712,16 +803,16 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onPaste={handlePaste}
         onFocus={() => {
           // When the user taps the input directly (not via the Reply button),
-          // we still need to scroll the form into view.  Skip if focus(true)
-          // already triggered scrollFormIntoView within the last 500ms.
-          if (isTouchDevice() && editorRef.current && Date.now() - lastScrollCallTs > 500) {
+          // we still need to scroll the form into view.  Skip if the
+          // imperative focus(true) already triggered a scroll.
+          if (isTouchDevice() && editorRef.current && !scrollInProgress) {
             scrollFormIntoView(editorRef.current);
           }
         }}
         onBlur={() => {
           const sel = window.getSelection();
-          if (sel && sel.rangeCount > 0) {
-            savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+          if (sel && sel.rangeCount > 0 && editorRef.current) {
+            savedOffsetRef.current = getCharOffset(editorRef.current, sel.getRangeAt(0));
           }
         }}
         role="textbox"
