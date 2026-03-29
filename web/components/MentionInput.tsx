@@ -392,7 +392,7 @@ export function isIOS(): boolean {
 // resize that fires when the keyboard finishes animating, then do a single
 // scroll correction.  An 800ms timeout acts as a fallback for devices that
 // don't fire a resize (e.g. keyboard was already open).
-function scrollFormIntoView(el: HTMLElement): void {
+function scrollFormIntoView(el: HTMLElement, expectKeyboard = false): void {
   if (!isTouchDevice() || !window.visualViewport) {
     // Desktop: immediate centre, no keyboard to worry about.
     el.scrollIntoView({ block: 'center' });
@@ -400,26 +400,35 @@ function scrollFormIntoView(el: HTMLElement): void {
   }
 
   const vv = window.visualViewport;
-  let done = false;
 
-  const centre = () => {
-    if (done) return;
-    done = true;
-    vv.removeEventListener('resize', onResize);
-    // Use requestAnimationFrame to ensure fresh layout values after any
-    // in-progress native scroll has been applied to the DOM.
+  const centreNow = () => {
     requestAnimationFrame(() => {
       const rect = el.getBoundingClientRect();
-      // Compute the absolute scroll position that centres the element
-      // in the visual viewport.  Using scrollTo (not scrollBy) cancels
-      // any in-progress smooth scroll the browser may have started for
-      // the native focus-scroll.
       const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
       const targetScrollY = elemPageCenter - vv.offsetTop - vv.height / 2;
       if (Math.abs(window.scrollY - targetScrollY) > 10) {
         window.scrollTo({ top: targetScrollY, left: 0, behavior: 'instant' as ScrollBehavior });
       }
     });
+  };
+
+  if (!expectKeyboard) {
+    // No keyboard expected (iOS reply paths, or keyboard already open).
+    // Scroll immediately — no need to wait for a viewport resize.
+    centreNow();
+    return;
+  }
+
+  // Keyboard is expected to open (Android focus paths).  Wait for the
+  // visualViewport resize that fires when the keyboard finishes animating,
+  // then do a single scroll correction.
+  let done = false;
+
+  const centre = () => {
+    if (done) return;
+    done = true;
+    vv.removeEventListener('resize', onResize);
+    centreNow();
   };
 
   // Debounce: wait 300ms after the last resize event so the keyboard
@@ -528,7 +537,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         // then scrollFormIntoView fires a single correction after the
         // keyboard animation settles via the visualViewport resize listener.
         el.focus();
-        if (scrollIntoView) scrollFormIntoView(el);
+        if (scrollIntoView) scrollFormIntoView(el, true);
       }
     },
     scrollIntoView() {
