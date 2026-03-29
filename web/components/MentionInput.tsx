@@ -368,9 +368,12 @@ function cleanupPhantomDivs(el: HTMLElement): void {
   for (const div of Array.from(el.querySelectorAll(':scope > div'))) {
     const text = div.textContent ?? '';
     if (text.replace(/[\u200B\u00A0\s]/g, '') === '') {
+      // A <div><br></div> is an intentional empty line (user pressed Enter).
+      // Only remove truly empty phantom wrappers that Chrome creates when
+      // deleting contentEditable=false elements (e.g. mention spans).
+      if (div.querySelector('br')) continue;
       div.remove();
     }
-    // Non-empty divs are intentional line breaks — leave them alone.
   }
 }
 
