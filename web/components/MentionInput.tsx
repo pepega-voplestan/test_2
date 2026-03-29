@@ -511,9 +511,21 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     focus(scrollIntoView?: boolean) {
       const el = editorRef.current;
       if (!el) return;
-      el.focus();
-      if (scrollIntoView) {
-        scrollFormIntoView(el);
+      if (isIOS()) {
+        // iOS: never programmatically focus — the keyboard won't reliably
+        // open from JS and causes scroll fights.  Just scroll into view;
+        // the user taps the input themselves.
+        if (scrollIntoView) scrollFormIntoView(el);
+      } else if (isTouchDevice()) {
+        // Android: suppress the browser's native scroll-to-focus so our
+        // scrollFormIntoView does the one correct scroll after the keyboard
+        // animation finishes.  preventScroll doesn't affect keyboard on Android.
+        el.focus({ preventScroll: true });
+        if (scrollIntoView) scrollFormIntoView(el);
+      } else {
+        // Desktop: simple focus + immediate centre.
+        el.focus();
+        if (scrollIntoView) scrollFormIntoView(el);
       }
     },
     scrollIntoView() {
@@ -529,7 +541,17 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
       if (!el) return;
-      el.focus({ preventScroll: true });
+      // Focus is needed for the Selection API to work on this element.
+      // On iOS, temporarily suppress the keyboard with inputMode="none"
+      // so that focusing for DOM manipulation doesn't pop the keyboard.
+      if (isIOS()) {
+        el.inputMode = 'none';
+        el.focus({ preventScroll: true });
+        // Restore after a microtask so the keyboard suppression takes effect.
+        queueMicrotask(() => { el.inputMode = ''; });
+      } else {
+        el.focus({ preventScroll: true });
+      }
       cleanupPhantomDivs(el);
       const sel = window.getSelection()!;
       // Move cursor to end of content
