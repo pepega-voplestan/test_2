@@ -392,7 +392,7 @@ export function isIOS(): boolean {
 // resize that fires when the keyboard finishes animating, then do a single
 // scroll correction.  An 800ms timeout acts as a fallback for devices that
 // don't fire a resize (e.g. keyboard was already open).
-function scrollFormIntoView(el: HTMLElement): void {
+function scrollFormIntoView(el: HTMLElement, expectKeyboard = false): void {
   if (!isTouchDevice() || !window.visualViewport) {
     // Desktop: immediate centre, no keyboard to worry about.
     el.scrollIntoView({ block: 'center' });
@@ -400,26 +400,35 @@ function scrollFormIntoView(el: HTMLElement): void {
   }
 
   const vv = window.visualViewport;
-  let done = false;
 
-  const centre = () => {
-    if (done) return;
-    done = true;
-    vv.removeEventListener('resize', onResize);
-    // Use requestAnimationFrame to ensure fresh layout values after any
-    // in-progress native scroll has been applied to the DOM.
+  const centreNow = () => {
     requestAnimationFrame(() => {
       const rect = el.getBoundingClientRect();
-      // Compute the absolute scroll position that centres the element
-      // in the visual viewport.  Using scrollTo (not scrollBy) cancels
-      // any in-progress smooth scroll the browser may have started for
-      // the native focus-scroll.
       const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
       const targetScrollY = elemPageCenter - vv.offsetTop - vv.height / 2;
       if (Math.abs(window.scrollY - targetScrollY) > 10) {
         window.scrollTo({ top: targetScrollY, left: 0, behavior: 'instant' as ScrollBehavior });
       }
     });
+  };
+
+  if (!expectKeyboard) {
+    // No keyboard expected (iOS reply paths, or keyboard already open).
+    // Scroll immediately — no need to wait for a viewport resize.
+    centreNow();
+    return;
+  }
+
+  // Keyboard is expected to open (Android focus paths).  Wait for the
+  // visualViewport resize that fires when the keyboard finishes animating,
+  // then do a single scroll correction.
+  let done = false;
+
+  const centre = () => {
+    if (done) return;
+    done = true;
+    vv.removeEventListener('resize', onResize);
+    centreNow();
   };
 
   // Debounce: wait 300ms after the last resize event so the keyboard
@@ -528,7 +537,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         // then scrollFormIntoView fires a single correction after the
         // keyboard animation settles via the visualViewport resize listener.
         el.focus();
-        if (scrollIntoView) scrollFormIntoView(el);
+        if (scrollIntoView) scrollFormIntoView(el, true);
       }
     },
     scrollIntoView() {
@@ -544,17 +553,45 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
       if (!el) return;
-      // Focus is needed for the Selection API to work on this element.
-      // On iOS, temporarily suppress the keyboard with inputMode="none"
-      // so that focusing for DOM manipulation doesn't pop the keyboard.
+
       if (isIOS()) {
-        el.inputMode = 'none';
-        el.focus({ preventScroll: true });
-        // Restore after a microtask so the keyboard suppression takes effect.
-        queueMicrotask(() => { el.inputMode = ''; });
-      } else {
-        el.focus({ preventScroll: true });
+        // iOS: avoid any focus() call — even with inputMode="none" iOS
+        // Safari can still open the keyboard.  Instead, manipulate the
+        // DOM directly (no Selection API needed) and blur afterwards.
+        cleanupPhantomDivs(el);
+
+        const span = document.createElement('span');
+        span.contentEditable = 'false';
+        span.dataset.mentionId = user.id;
+        span.dataset.mentionName = user.name;
+        span.textContent = `@${user.name}`;
+        span.className = 'text-blue-400 font-medium';
+
+        const spaceNode = document.createTextNode('\u00A0');
+        el.appendChild(span);
+        el.appendChild(spaceNode);
+
+        // Save caret offset so that when the user taps to focus later,
+        // the cursor lands after the mention.
+        savedOffsetRef.current = getCharOffset(el, (() => {
+          const r = document.createRange();
+          r.setStart(spaceNode, 1);
+          r.collapse(true);
+          return r;
+        })());
+
+        // Ensure the element is not focused (keyboard stays closed).
+        el.blur();
+
+        const serialized = serializeContent(el);
+        setIsEmpty(serialized === '');
+        onContentChangeRef.current(serialized);
+        setMentionQuery(null);
+        return;
       }
+
+      // Android & Desktop: focus is needed for the Selection API.
+      el.focus({ preventScroll: true });
       cleanupPhantomDivs(el);
       const sel = window.getSelection()!;
       // Move cursor to end of content
@@ -795,7 +832,9 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     }
   };
 
-  const textSizeClass = size === 'sm' ? 'text-sm' : '';
+  // iOS Safari auto-zooms any editable element with font-size < 16px.
+  // Skip text-sm on iOS to prevent unwanted zoom on focus.
+  const textSizeClass = size === 'sm' && !isIOS() ? 'text-sm' : '';
 
   return (
     <div className="relative w-full overflow-hidden">
