@@ -385,59 +385,40 @@ function isTouchDevice(): boolean {
 // the imperative focus(scrollIntoView=true) already triggered one.
 let scrollInProgress = false;
 
-// Scroll the reply form into the centre of the visible viewport.
-// On mobile, the browser's native focus scroll + keyboard opening is handled
-// first, then we do a single adjustment once the keyboard has settled.
+// Centre the reply form in the visible viewport (accounting for the on-screen
+// keyboard on mobile).  Called after el.focus() so the browser has already
+// done its native scroll-to-focus.  We simply wait a beat for the keyboard
+// animation to finish, then do one viewport-aware adjustment.
 function scrollFormIntoView(el: HTMLElement): void {
   scrollInProgress = true;
   const scrollTarget = el.closest('form')?.parentElement || el;
-  const mobile = isTouchDevice();
 
-  if (!mobile || !window.visualViewport) {
+  if (!isTouchDevice() || !window.visualViewport) {
+    // Desktop: immediate centre, no keyboard to worry about.
     scrollTarget.scrollIntoView({ block: 'center' });
     scrollInProgress = false;
     return;
   }
 
+  // Mobile: the browser's native focus() already scrolled the input roughly
+  // into view.  We schedule a viewport-aware centre after the keyboard has
+  // had time to open.  Two passes cover both fast and slow devices.
   const vv = window.visualViewport;
-
-  // Wait for keyboard to finish animating, then centre the form in the
-  // visible area above the keyboard.  We poll briefly (≤1s) until the
-  // viewport height stabilises, then do one final scroll.
-  let prevHeight = vv.height;
-  let stableCount = 0;
-  let elapsed = 0;
-  const POLL = 60;                // check every 60ms
-  const STABLE_THRESHOLD = 3;     // 3 stable readings ≈ 180ms of no change
-  const MAX_WAIT = 1000;
-
-  const timer = setInterval(() => {
-    elapsed += POLL;
-    const curHeight = vv.height;
-    if (Math.abs(curHeight - prevHeight) < 1) {
-      stableCount++;
-    } else {
-      stableCount = 0;
-      prevHeight = curHeight;
+  const centre = () => {
+    const rect = scrollTarget.getBoundingClientRect();
+    const pageTop = vv.offsetTop + window.scrollY;
+    const visibleCenter = pageTop + vv.height / 2;
+    const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
+    const drift = elemPageCenter - visibleCenter;
+    if (Math.abs(drift) > 10) {
+      window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
     }
+  };
 
-    if (stableCount >= STABLE_THRESHOLD || elapsed >= MAX_WAIT) {
-      clearInterval(timer);
-      // One clean scroll to centre the form in the visible viewport
-      const rect = scrollTarget.getBoundingClientRect();
-      const pageTop = vv.offsetTop + window.scrollY;
-      const visibleCenter = pageTop + vv.height / 2;
-      const elemPageCenter = rect.top + window.scrollY + rect.height / 2;
-      const drift = elemPageCenter - visibleCenter;
-      if (Math.abs(drift) > 10) {
-        window.scrollBy({ top: drift, left: 0, behavior: 'instant' as ScrollBehavior });
-      }
-      scrollInProgress = false;
-    }
-  }, POLL);
-
-  // Safety: clear interval if it somehow survives
-  setTimeout(() => { clearInterval(timer); scrollInProgress = false; }, MAX_WAIT + 100);
+  // First pass: catches fast keyboards / already-open keyboards
+  setTimeout(centre, 300);
+  // Second pass: catches slow keyboard animations; also clears the flag
+  setTimeout(() => { centre(); scrollInProgress = false; }, 600);
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -520,15 +501,11 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     focus(scrollIntoView?: boolean) {
       const el = editorRef.current;
       if (!el) return;
+      // Always use plain focus() — preventScroll and blur/focus tricks
+      // cause inconsistent keyboard behaviour across iOS/Android.
+      el.focus();
       if (scrollIntoView) {
-        // Blur first so the subsequent focus() reliably triggers the
-        // keyboard and native scroll even if the element was already focused
-        // (e.g. after insertMention called focus({ preventScroll: true })).
-        if (document.activeElement === el) el.blur();
-        el.focus();
         scrollFormIntoView(el);
-      } else {
-        el.focus({ preventScroll: true });
       }
     },
     insertText(text: string) {
