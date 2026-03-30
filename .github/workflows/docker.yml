@@ -97,10 +97,21 @@ jobs:
 
           SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519"
 
+          # Select files based on target
+          if [ "${{ inputs.target }}" = "prod" ]; then
+            COMPOSE_FILE="docker-compose.yml"
+            NGINX_CONF="nginx.conf"
+            NGINX_SERVICE="nginx"
+          else
+            COMPOSE_FILE="docker-compose.dev.yml"
+            NGINX_CONF="nginx-dev.conf"
+            NGINX_SERVICE="nginx-dev"
+          fi
+
           # Copy compose and nginx configs
           scp $SSH_OPTS \
-            docker-compose.yml \
-            nginx.conf \
+            $COMPOSE_FILE \
+            $NGINX_CONF \
             media-nginx.conf \
             $DROPLET_USER@$DROPLET_HOST:/opt/vopli/
 
@@ -110,7 +121,8 @@ jobs:
             echo \"$GHCR_TOKEN\" | docker login ghcr.io -u \"$GHCR_USER\" --password-stdin
             export IMAGE_PREFIX=\"$IMAGE_PREFIX\"
             cd /opt/vopli
-            docker compose pull
-            docker compose up -d --no-build --remove-orphans
+            docker compose -f $COMPOSE_FILE pull
+            docker compose -f $COMPOSE_FILE up -d --no-build --remove-orphans
+            docker compose -f $COMPOSE_FILE restart $NGINX_SERVICE
             docker image prune -f
           "
