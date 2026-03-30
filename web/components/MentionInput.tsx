@@ -293,18 +293,15 @@ function insertAtCursor(el: HTMLElement, text: string, savedOffset?: number | nu
 
 // Visually decorate ||text|| in the contenteditable with styled spoiler spans.
 // Works by walking text nodes, finding ||...|| patterns, and replacing them with
-// <span data-spoiler>content</span>. Preserves the caret position.
+// <span data-spoiler>content</span>. Preserves the caret position by tracking it
+// relative to the specific text node being mutated (avoids global offset counting
+// which breaks with mentions, BRs, and block elements).
 function decorateSpoilers(el: HTMLElement): void {
   const sel = window.getSelection();
-  // Save caret as a text offset in the serialized string so we can restore after DOM mutation
-  let caretOffset = -1;
-  if (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer)) {
-    const range = sel.getRangeAt(0);
-    const preRange = document.createRange();
-    preRange.selectNodeContents(el);
-    preRange.setEnd(range.startContainer, range.startOffset);
-    caretOffset = preRange.toString().length;
-  }
+  const cursorContainer = (sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer))
+    ? sel.getRangeAt(0).startContainer
+    : null;
+  const cursorOffset = cursorContainer ? sel!.getRangeAt(0).startOffset : -1;
 
   // Collect all text nodes that are NOT inside a mention span or already inside a spoiler span
   const textNodes: Text[] = [];
@@ -324,14 +321,16 @@ function decorateSpoilers(el: HTMLElement): void {
   collectTextNodes(el);
 
   const SPOILER_RE = /\|\|(.+?)\|\|/g;
-  let mutated = false;
+  let cursorTarget: { node: Node; offset: number } | null = null;
 
   for (const textNode of textNodes) {
     const text = textNode.textContent ?? '';
     SPOILER_RE.lastIndex = 0;
     if (!SPOILER_RE.test(text)) continue;
 
-    // Build replacement fragment
+    const isCursorInThisNode = cursorContainer === textNode;
+
+    // Build replacement fragment, mapping cursor position if it falls in this node
     SPOILER_RE.lastIndex = 0;
     const frag = document.createDocumentFragment();
     let lastIndex = 0;
@@ -339,7 +338,11 @@ function decorateSpoilers(el: HTMLElement): void {
     while ((match = SPOILER_RE.exec(text)) !== null) {
       // Text before the match
       if (match.index > lastIndex) {
-        frag.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        const beforeNode = document.createTextNode(text.slice(lastIndex, match.index));
+        frag.appendChild(beforeNode);
+        if (isCursorInThisNode && cursorOffset >= lastIndex && cursorOffset <= match.index) {
+          cursorTarget = { node: beforeNode, offset: cursorOffset - lastIndex };
+        }
       }
       // Spoiler span
       const span = document.createElement('span');
@@ -347,64 +350,52 @@ function decorateSpoilers(el: HTMLElement): void {
       span.className = 'bg-th-text-4/30 rounded px-0.5';
       span.textContent = match[1]; // inner text without ||
       frag.appendChild(span);
-      lastIndex = match.index + match[0].length;
+
+      // Map cursor if it falls inside this ||...|| match
+      const innerStart = match.index + 2;
+      const innerEnd = innerStart + match[1].length;
+      const matchEnd = match.index + match[0].length;
+      if (isCursorInThisNode && !cursorTarget && cursorOffset >= match.index && cursorOffset <= matchEnd) {
+        if (cursorOffset <= innerStart) {
+          // In or before opening || → snap to start of inner text
+          cursorTarget = { node: span.firstChild!, offset: 0 };
+        } else if (cursorOffset <= innerEnd) {
+          // Inside inner text
+          cursorTarget = { node: span.firstChild!, offset: cursorOffset - innerStart };
+        } else {
+          // In or after closing || → snap to end of inner text
+          cursorTarget = { node: span.firstChild!, offset: match[1].length };
+        }
+      }
+
+      lastIndex = matchEnd;
     }
     // Remaining text after last match
     if (lastIndex < text.length) {
-      frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+      const afterNode = document.createTextNode(text.slice(lastIndex));
+      frag.appendChild(afterNode);
+      if (isCursorInThisNode && cursorOffset >= lastIndex) {
+        cursorTarget = { node: afterNode, offset: cursorOffset - lastIndex };
+      }
+    } else if (isCursorInThisNode && cursorOffset >= lastIndex && !cursorTarget) {
+      // Cursor is at the very end, right after the last match's closing ||.
+      // Create an empty text node so the cursor has somewhere to land.
+      const tailNode = document.createTextNode('');
+      frag.appendChild(tailNode);
+      cursorTarget = { node: tailNode, offset: 0 };
     }
     textNode.parentNode?.replaceChild(frag, textNode);
-    mutated = true;
   }
 
-  if (!mutated) return;
+  if (!cursorTarget) return;
 
-  // Restore caret position by walking the DOM and counting characters
-  if (caretOffset >= 0 && sel) {
-    let remaining = caretOffset;
-    function findOffset(node: Node): { node: Node; offset: number } | null {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const len = (node.textContent ?? '').length;
-        if (remaining <= len) return { node, offset: remaining };
-        remaining -= len;
-        return null;
-      }
-      if (node.nodeName === 'BR') {
-        if (remaining === 0) return { node: node.parentNode!, offset: Array.from(node.parentNode!.childNodes).indexOf(node as ChildNode) };
-        remaining -= 1;
-        return null;
-      }
-      // For spoiler spans, account for the || markers that are visually hidden
-      if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.spoiler !== undefined) {
-        remaining -= 2; // opening ||
-        for (const child of Array.from(node.childNodes)) {
-          const result = findOffset(child);
-          if (result) return result;
-        }
-        remaining -= 2; // closing ||
-        return null;
-      }
-      if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.mentionId) {
-        const e = node as HTMLElement;
-        const tokenLen = `@[${e.dataset.mentionName}:${e.dataset.mentionId}]`.length;
-        if (remaining <= tokenLen) return { node: node.parentNode!, offset: Array.from(node.parentNode!.childNodes).indexOf(node as ChildNode) + 1 };
-        remaining -= tokenLen;
-        return null;
-      }
-      for (const child of Array.from(node.childNodes)) {
-        const result = findOffset(child);
-        if (result) return result;
-      }
-      return null;
-    }
-    const pos = findOffset(el);
-    if (pos) {
-      const newRange = document.createRange();
-      newRange.setStart(pos.node, pos.offset);
-      newRange.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(newRange);
-    }
+  // Restore caret inside the replaced fragment
+  if (sel) {
+    const r = document.createRange();
+    r.setStart(cursorTarget.node, cursorTarget.offset);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
   }
 }
 
