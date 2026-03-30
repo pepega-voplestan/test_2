@@ -3,6 +3,6 @@ locals {
   prefix      = "vopli-${terraform.workspace}"
   volume_name = "vopli-${terraform.workspace}-data"
   volume_dev  = "/dev/disk/by-id/scsi-0DO_Volume_vopli-${terraform.workspace}-data"
-  mount_path  = "/mnt/vopli-data"
+  mount_path  = "/mnt/vopli-${terraform.workspace}-data"
   env_file    = "${path.module}/../${local.env == "prod" ? ".env" : ".env.dev"}"
 }
