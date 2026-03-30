@@ -123,29 +123,52 @@ function getCaretRect(): DOMRect | null {
   return rect;
 }
 
+// Check whether a node lives inside a contentEditable=false mention span.
+// Used by getCharOffset / setCaretAtOffset to treat mentions as atomic blocks
+// so the cursor is never placed inside a non-editable element.
+function isInsideMentionSpan(node: Node, root: HTMLElement): boolean {
+  let parent = node.parentElement;
+  while (parent && parent !== root) {
+    if (parent.dataset.mentionId) return true;
+    parent = parent.parentElement;
+  }
+  return false;
+}
+
 // Compute the character offset of a collapsed Range within a contenteditable.
 // Counts text characters + 1 per <br>/<div> line break so the offset survives
 // DOM restructuring (e.g. Chrome wrapping lines in <div>s on re-focus).
+// Mention spans are counted as atomic blocks (by their textContent length)
+// so the cursor is never mapped into a contentEditable=false subtree.
 function getCharOffset(root: HTMLElement, range: Range): number {
   let offset = 0;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
   let node: Node | null;
   while ((node = walker.nextNode())) {
+    // Skip nodes inside non-editable mention spans — the mention element
+    // itself is counted as an atomic block below.
+    if (isInsideMentionSpan(node, root)) continue;
     if (node === range.startContainer) {
       return offset + (node.nodeType === Node.TEXT_NODE ? range.startOffset : 0);
     }
     if (node.nodeType === Node.TEXT_NODE) {
       offset += (node as Text).length;
     } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const tag = (node as HTMLElement).tagName;
+      const el = node as HTMLElement;
+      const tag = el.tagName;
       if (tag === 'BR') offset += 1;
       else if (tag === 'DIV' && node !== root && node.previousSibling) offset += 1;
+      else if (tag === 'SPAN' && el.dataset.mentionId) {
+        offset += (el.textContent ?? '').length;
+      }
     }
   }
   return offset; // fallback: end
 }
 
 // Restore a selection at a given character offset.
+// Mention spans are treated as atomic blocks — the cursor is placed before or
+// after them, never inside, since they are contentEditable=false.
 function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
   const sel = window.getSelection();
   if (!sel) return;
@@ -153,6 +176,9 @@ function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
   let node: Node | null;
   while ((node = walker.nextNode())) {
+    // Skip nodes inside non-editable mention spans — handled atomically
+    // at the mention element level below.
+    if (isInsideMentionSpan(node, root)) continue;
     if (node.nodeType === Node.TEXT_NODE) {
       const len = (node as Text).length;
       if (remaining <= len) {
@@ -165,8 +191,29 @@ function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
       }
       remaining -= len;
     } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const tag = (node as HTMLElement).tagName;
-      if (tag === 'BR' || (tag === 'DIV' && node !== root && node.previousSibling)) {
+      const el = node as HTMLElement;
+      const tag = el.tagName;
+      if (tag === 'SPAN' && el.dataset.mentionId) {
+        const mentionLen = (el.textContent ?? '').length;
+        if (remaining <= 0) {
+          const r = document.createRange();
+          r.setStartBefore(node);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+          return;
+        }
+        if (remaining <= mentionLen) {
+          // Target falls inside the mention — snap to after it
+          const r = document.createRange();
+          r.setStartAfter(node);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+          return;
+        }
+        remaining -= mentionLen;
+      } else if (tag === 'BR' || (tag === 'DIV' && node !== root && node.previousSibling)) {
         if (remaining <= 0) {
           const r = document.createRange();
           r.setStartBefore(node);
