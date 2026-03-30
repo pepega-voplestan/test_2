@@ -633,9 +633,22 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const sel = window.getSelection();
       if (!sel) return;
 
-      // Restore cursor position if the editor lost focus (e.g. clicking toolbar button)
+      // Restore cursor position if the editor lost focus (e.g. clicking toolbar button).
+      // Uses character-offset-based restoration (same approach as insertAtCursor) so that
+      // DOM restructuring (e.g. Chrome wrapping lines in <div>s) doesn't invalidate the position.
       if (savedOffsetRef.current != null) {
         setCaretAtOffset(el, savedOffsetRef.current);
+      } else {
+        const selectionInEditor =
+          sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer);
+        if (!selectionInEditor) {
+          // Fallback: place cursor at end
+          const r = document.createRange();
+          r.selectNodeContents(el);
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
       }
 
       if (!sel.rangeCount) return;
