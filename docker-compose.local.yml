@@ -1,7 +1,7 @@
 version: "3.8"
 
-# Dev droplet deployment — pre-built images from GHCR, no bind mounts.
-# Managed by CI: .github/workflows/docker.yml
+# Local development — hot-reload, bind mounts, build from source.
+# Use: make local
 
 services:
   redis-dev:
@@ -14,8 +14,9 @@ services:
       - vopli-dev
 
   api-dev:
-    image: ${IMAGE_PREFIX}/api:latest
-    restart: unless-stopped
+    build:
+      context: ./api
+      target: app
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
@@ -30,6 +31,8 @@ services:
     volumes:
       - appdata-dev:/data
       - media-dev:/media
+      - ./api/src:/app/src:ro
+      - ./api/prisma:/app/prisma:ro
     expose:
       - "3000"
     networks:
@@ -42,8 +45,10 @@ services:
       start_period: 15s
 
   worker-dev:
-    image: ${IMAGE_PREFIX}/workers:latest
-    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+      target: dev
     environment:
       DATABASE_URL: ${DATABASE_URL}
       NODE_ENV: ${NODE_ENV}
@@ -51,6 +56,7 @@ services:
       BULL_BOARD_BASE_PATH: /workers
     volumes:
       - appdata-dev:/data
+      - ./workers/src:/app/src:ro
     expose:
       - "3001"
     depends_on:
@@ -78,7 +84,7 @@ services:
       - media-dev
       - worker-dev
     ports:
-      - "3005:80"
+      - "3006:80"
     volumes:
       - ./nginx-dev.conf:/etc/nginx/conf.d/default.conf:ro
       - ./.htpasswd:/etc/nginx/.htpasswd:ro
@@ -87,7 +93,8 @@ services:
       - vopli-dev
 
   web-build-dev:
-    image: ${IMAGE_PREFIX}/web:latest
+    build:
+      context: ./web
     volumes:
       - webdist-dev:/out
     command: sh -c "rm -rf /out/* && cp -r /app/dist/* /out/"
