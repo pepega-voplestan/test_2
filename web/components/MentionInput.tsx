@@ -169,25 +169,18 @@ function getCharOffset(root: HTMLElement, range: Range): number {
 // Restore a selection at a given character offset.
 // Mention spans are treated as atomic blocks — the cursor is placed before or
 // after them, never inside, since they are contentEditable=false.
-function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
-  const sel = window.getSelection();
-  if (!sel) return;
+// Find the DOM node and offset corresponding to a character offset in the editor.
+// Returns { node, offset } suitable for Range.setStart/setEnd, or null (fallback to end).
+function findDOMPosition(root: HTMLElement, targetOffset: number): { node: Node; offset: number; before?: boolean } | null {
   let remaining = targetOffset;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
   let node: Node | null;
   while ((node = walker.nextNode())) {
-    // Skip nodes inside non-editable mention spans — handled atomically
-    // at the mention element level below.
     if (isInsideMentionSpan(node, root)) continue;
     if (node.nodeType === Node.TEXT_NODE) {
       const len = (node as Text).length;
       if (remaining <= len) {
-        const r = document.createRange();
-        r.setStart(node, remaining);
-        r.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(r);
-        return;
+        return { node, offset: remaining };
       }
       remaining -= len;
     } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -195,41 +188,58 @@ function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
       const tag = el.tagName;
       if (tag === 'SPAN' && el.dataset.mentionId) {
         const mentionLen = (el.textContent ?? '').length;
-        if (remaining <= 0) {
-          const r = document.createRange();
-          r.setStartBefore(node);
-          r.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(r);
-          return;
-        }
-        if (remaining <= mentionLen) {
-          // Target falls inside the mention — snap to after it
-          const r = document.createRange();
-          r.setStartAfter(node);
-          r.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(r);
-          return;
-        }
+        if (remaining <= 0) return { node, offset: 0, before: true };
+        if (remaining <= mentionLen) return { node, offset: 0, before: false }; // snap to after
         remaining -= mentionLen;
       } else if (tag === 'BR' || (tag === 'DIV' && node !== root && node.previousSibling)) {
-        if (remaining <= 0) {
-          const r = document.createRange();
-          r.setStartBefore(node);
-          r.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(r);
-          return;
-        }
+        if (remaining <= 0) return { node, offset: 0, before: true };
         remaining -= 1;
       }
     }
   }
-  // Fallback: place cursor at end
+  return null;
+}
+
+function setCaretAtOffset(root: HTMLElement, targetOffset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const pos = findDOMPosition(root, targetOffset);
   const r = document.createRange();
-  r.selectNodeContents(root);
-  r.collapse(false);
+  if (pos) {
+    if (pos.before === true) r.setStartBefore(pos.node);
+    else if (pos.before === false) r.setStartAfter(pos.node);
+    else r.setStart(pos.node, pos.offset);
+  } else {
+    r.selectNodeContents(root);
+  }
+  r.collapse(pos ? true : false);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
+// Restore a full selection range between two character offsets.
+function setSelectionAtOffsets(root: HTMLElement, startOffset: number, endOffset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const startPos = findDOMPosition(root, startOffset);
+  const endPos = findDOMPosition(root, endOffset);
+  const r = document.createRange();
+  if (startPos) {
+    if (startPos.before === true) r.setStartBefore(startPos.node);
+    else if (startPos.before === false) r.setStartAfter(startPos.node);
+    else r.setStart(startPos.node, startPos.offset);
+  } else {
+    r.selectNodeContents(root);
+    r.collapse(true);
+  }
+  if (endPos) {
+    if (endPos.before === true) r.setEndBefore(endPos.node);
+    else if (endPos.before === false) r.setEndAfter(endPos.node);
+    else r.setEnd(endPos.node, endPos.offset);
+  } else {
+    r.selectNodeContents(root);
+    r.collapse(false);
+  }
   sel.removeAllRanges();
   sel.addRange(r);
 }
@@ -490,7 +500,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
   const editorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const savedOffsetRef = useRef<number | null>(null);
+  const savedOffsetRef = useRef<{ start: number; end: number } | null>(null);
   const { users, loading, fetchUsers } = useMentionUsers();
   const { user: currentUser } = useAuth();
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
@@ -586,7 +596,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     insertText(text: string) {
       const el = editorRef.current;
       if (!el) return;
-      insertAtCursor(el, text, savedOffsetRef.current);
+      insertAtCursor(el, text, savedOffsetRef.current?.start ?? null);
     },
     insertMention(user: { id: string; name: string }) {
       const el = editorRef.current;
@@ -611,12 +621,13 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
         // Save caret offset so that when the user taps to focus later,
         // the cursor lands after the mention.
-        savedOffsetRef.current = getCharOffset(el, (() => {
+        const caretOffset = getCharOffset(el, (() => {
           const r = document.createRange();
           r.setStart(spaceNode, 1);
           r.collapse(true);
           return r;
         })());
+        savedOffsetRef.current = { start: caretOffset, end: caretOffset };
 
         // Ensure the element is not focused (keyboard stays closed).
         el.blur();
@@ -671,11 +682,18 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const sel = window.getSelection();
       if (!sel) return;
 
-      // Restore cursor position if the editor lost focus (e.g. clicking toolbar button).
+      // Restore cursor/selection if the editor lost focus (e.g. clicking toolbar button).
       // Uses character-offset-based restoration (same approach as insertAtCursor) so that
       // DOM restructuring (e.g. Chrome wrapping lines in <div>s) doesn't invalidate the position.
+      // Restores the full selection range (not just collapsed caret) so that wrapSpoiler
+      // can detect selected text and wrap it with ||...|| markers.
       if (savedOffsetRef.current != null) {
-        setCaretAtOffset(el, savedOffsetRef.current);
+        const { start, end } = savedOffsetRef.current;
+        if (start !== end) {
+          setSelectionAtOffsets(el, start, end);
+        } else {
+          setCaretAtOffset(el, start);
+        }
       } else {
         const selectionInEditor =
           sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).commonAncestorContainer);
@@ -914,7 +932,14 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onBlur={() => {
           const sel = window.getSelection();
           if (sel && sel.rangeCount > 0 && editorRef.current) {
-            savedOffsetRef.current = getCharOffset(editorRef.current, sel.getRangeAt(0));
+            const range = sel.getRangeAt(0);
+            const start = getCharOffset(editorRef.current, range);
+            // Also save end offset so selection can be restored (e.g. for wrapSpoiler)
+            const endRange = document.createRange();
+            endRange.setStart(range.endContainer, range.endOffset);
+            endRange.collapse(true);
+            const end = getCharOffset(editorRef.current, endRange);
+            savedOffsetRef.current = { start, end };
           }
         }}
         role="textbox"
