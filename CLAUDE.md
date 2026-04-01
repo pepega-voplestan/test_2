@@ -279,7 +279,7 @@ The app ships an **AdminJS**-powered admin panel at `/admin`, protected by two l
 | Section | Capabilities |
 |---------|-------------|
 | Пользователи (Users) | View, edit, ban/unban (ban sets `is_deleted=2` on their content); links to user's shouts/comments/media |
-| Вопли (Shouts) | View, soft-delete, restore soft-deleted shouts |
+| Вопли (Shouts) | View, soft-delete, restore soft-deleted shouts; toggle `is_pinned` (only one shout can be pinned at a time) |
 | Комменты (Comments) | View, soft-delete, restore soft-deleted comments |
 | Медиа (Media) | Read-only view of uploaded media |
 | Объявления (Announcements) | Create announcements (auto-soft-deletes previous), soft-delete existing |
@@ -683,6 +683,7 @@ cd web && npm run lint
 - The `web/package.json` dev script runs both the API and Vite concurrently for local development.
 - `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<SSEProvider>` → `<ContentPreferencesProvider>` → `<IgnoredUsersProvider>` → `<NotificationsProvider>` (inner). `SSEProvider` must wrap both `NotificationsProvider` and any component that calls `useSSE` or `useSSEContext`.
 - When content preferences hide media (nsfw/politics/showMedia off), `ShoutFeed.tsx` renders a same-size placeholder div (crossed-camera icon) instead of removing the element from the DOM — this prevents layout jumps when toggling content preferences.
+- **Pinned shouts**: One shout can be pinned at a time (`is_pinned=1`). Pinned shouts are fetched separately and prepended to the first page of the "new" tab feed only (not shown in "popular" tab). Pinning is managed via the admin panel.
 - **Ignored users**: Users can ignore up to 3 other users. Ignored users' content is filtered client-side via `IgnoredUsersContext`. The ignore list is fetched on login and managed via `GET /me/ignored-users`, `POST /users/:id/ignore`, `DELETE /users/:id/ignore`.
 - Nginx CSP headers allow embeds from YouTube (nocookie), Coub, Tenor, Steam (`store.steampowered.com`); images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, fxTwitter (`pbs.fxtwitter.com`), Steam CDN (`cdn.akamai.steamstatic.com`); and connect-src to fxTwitter API (`api.fxtwitter.com`) and Steam store API.
 
