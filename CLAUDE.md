@@ -23,10 +23,11 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │   │   ├── shouts.js       # Shout CRUD + replies + single shout fetch + poll creation
 │   │   │   ├── comments.js     # Comment CRUD + reply/mention notifications
 │   │   │   ├── likes.js        # Shout and comment like toggles
-│   │   │   ├── users.js        # User profile + mentions autocomplete
+│   │   │   ├── users.js        # User profile + mentions autocomplete + email change
 │   │   │   ├── upload.js       # Media and avatar upload
 │   │   │   ├── announcements.js # Announcement read/write
 │   │   │   ├── notifications.js # Notification fetch + mark-read endpoints
+│   │   │   ├── ignored-users.js # Ignored users list, add, remove
 │   │   │   └── polls.js        # Poll voting endpoint
 │   │   ├── helpers/        # Shared utilities
 │   │   │   ├── common.js       # asyncHandler, requireAuth, and other shared middleware
@@ -48,7 +49,7 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │   ├── env.js          # Vitest setupFiles: loads env vars written by globalSetup
 │   │   ├── helpers.js      # Shared test utilities (request, authenticatedAgent, cleanDb, disconnectDb)
 │   │   ├── fixtures/
-│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, createPoll, createPollVote, etc.)
+│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, createPoll, createPollVote, createIgnoredUser, etc.)
 │   │   ├── unit/           # Unit tests (auth, admin, common, email, media, mentions, sse, validation, app.setup)
 │   │   └── integration/    # Integration tests (health, auth, shouts, comments, likes, announcements,
 │   │                       #   notifications, feed, upload, users, polls, index)
@@ -82,7 +83,9 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │   ├── NotificationsContext.tsx      # Notification state, batched read marking; subscribes via SSEContext; sets browser tab title/favicon badge
 │   │   ├── NotificationsContext.test.tsx # Tests: SSE events, batching, mark-as-read, cleanup
 │   │   ├── ContentPreferencesContext.tsx # Content visibility prefs (showMedia, showNsfw, showPolitics)
-│   │   └── ContentPreferencesContext.test.tsx # Tests: preference toggles
+│   │   ├── ContentPreferencesContext.test.tsx # Tests: preference toggles
+│   │   ├── IgnoredUsersContext.tsx       # Ignored users state management + API calls
+│   │   └── IgnoredUsersContext.test.tsx  # Tests: ignore/unignore, list management
 │   ├── hooks/
 │   │   ├── useRoute.ts           # Hash-based client-side routing
 │   │   ├── useRoute.test.ts      # Unit tests for hash-based routing hook
@@ -97,7 +100,7 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │       └── effectiveLength.test.ts # Tests: char counting, mention normalization, spoiler stripping, newline cost
 │   ├── public/
 │   │   └── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
-│   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider + NotificationsProvider
+│   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider + IgnoredUsersProvider + NotificationsProvider
 │   ├── index.tsx             # React entry point (StrictMode)
 │   ├── types.ts              # TypeScript type definitions (includes Notification interface)
 │   ├── index.html            # HTML template (Tailwind CDN, CSS custom properties for theming)
@@ -130,12 +133,14 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   └── restore.sh            # Restore Docker volumes from a timestamped backup
 ├── .github/
 │   └── workflows/
-│       └── ci.yml            # CI: lints then tests API + web on pull requests to main
+│       ├── ci.yml            # CI: lints then tests API + web on pull requests to main
+│       └── docker.yml        # Deploy: builds and pushes Docker images to GHCR, deploys to dev/prod
 ├── .husky/
 │   ├── pre-commit            # Git hook: runs npm run lint for api and web before every commit
 │   └── pre-push              # Git hook: runs npm test for api and web before every push
 ├── docker-compose.yml        # Production: 6 services on port 3005
-├── docker-compose.dev.yml    # Development: 6 services on port 3006 (isolated volumes)
+├── docker-compose.dev.yml    # Dev droplet deployment: pre-built images from GHCR (managed by CI)
+├── docker-compose.local.yml  # Local development: hot-reload, bind mounts, port 3006 (isolated volumes)
 ├── docker-compose.test.yml   # Test: single api-test service with tmpfs DB, runs vitest --coverage
 ├── nginx.conf                # Production reverse proxy (blocks /api/docs, proxies /admin with HTTP basic auth)
 ├── nginx-dev.conf            # Development reverse proxy (allows /api/docs for Swagger UI, proxies /admin)
@@ -182,8 +187,8 @@ This uses `concurrently` to start both the backend API (`node src/server.js` on 
 # Production (port 3005)
 make prod
 
-# Development (port 3006, isolated volumes)
-make dev
+# Local development (port 3006, isolated volumes, hot-reload)
+make local
 ```
 
 ### Makefile Targets
@@ -191,27 +196,29 @@ make dev
 | Target | Description |
 |--------|-------------|
 | `make prod` | Start production containers |
-| `make dev` | Start development containers (uses `.env.dev`) |
+| `make local` | Start local development containers (uses `.env.dev`, bind mounts) |
 | `make down` | Stop production containers |
-| `make down-dev` | Stop development containers |
+| `make down-local` | Stop local development containers |
 | `make logs` | Follow production logs |
-| `make logs-dev` | Follow development logs |
+| `make logs-local` | Follow local development logs |
 | `make rebuild` | Force rebuild production (no cache) |
-| `make rebuild-dev` | Force rebuild development (no cache) |
+| `make rebuild-local` | Force rebuild local development (no cache) |
 | `make backup` | Backup production volumes (DB + media) |
 | `make backup-upload` | Backup production + upload to Google Drive via rclone |
 | `make backup-dev` | Backup development volumes |
 | `make restore` | Restore production volumes (latest or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
 | `make restore-dev` | Restore development volumes |
 | `make deploy` | Backup, rebuild, and start production (safe redeploy) |
-| `make deploy-dev` | Backup, rebuild, and start development |
+| `make deploy-local` | Backup, rebuild, and start local development |
+| `make db-pull` | Pull a hot-copy of the production SQLite DB to `./app.db` |
+| `make db-pull-local` | Pull a hot-copy of the local dev SQLite DB to `./app.db` |
 | `make test` | Run API tests locally (`cd api && npm test`) |
 | `make test-web` | Run web tests locally (`cd web && npm test`) |
 | `make test-all` | Run both API and web tests sequentially |
 | `make test-docker` | Run API tests in Docker using `docker-compose.test.yml` |
 | `make test-coverage` | Run API tests with v8 coverage report |
 | `make test-web-coverage` | Run web tests with v8 coverage report |
-| `make install` | Install all dependencies (root + api + web) and set up git hooks |
+| `make install` | Install all dependencies (root + api + web + workers) and set up git hooks |
 | `make ensure-htpasswd` | Validate that `.htpasswd` exists (required for admin panel nginx auth) |
 
 ## API Endpoints
@@ -223,6 +230,7 @@ All endpoints are prefixed with `/api/v1/`.
 | GET | `/health` | No | Health check — `{ ok: true }` |
 | GET | `/me` | No | Get current user session |
 | GET | `/events` | No | SSE stream — real-time feed events |
+| GET | `/steam/app/:appId` | No | Steam store API proxy (cached 1h, avoids CORS) |
 | POST | `/auth/register/send-code` | No | Step 1: validate inputs, send email verification code (rate limited 20/min). Blocked if `registration_open` setting is `"false"`. |
 | POST | `/auth/register/verify` | No | Step 2: verify code, create account, auto-login (rate limited 20/min). Blocked if `registration_open` setting is `"false"`. |
 | POST | `/auth/login` | No | Login with username or email (rate limited 20/min) |
@@ -243,12 +251,17 @@ All endpoints are prefixed with `/api/v1/`.
 | GET | `/users/:id` | No | Get user profile (email visible to owner only) |
 | GET | `/users/:id/shouts` | No | Paginated list of a user's shouts |
 | PUT | `/users/:id` | Yes | Update profile (username, email, avatar, password) |
+| POST | `/users/:id/email/send-code` | Yes | Send email change verification code (rate limited 5/min) |
+| POST | `/users/:id/email/verify` | Yes | Verify code and update email |
 | POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP variants; GIFs also store original) |
 | POST | `/upload/avatar` | Yes | Upload avatar (≤2MB JPG/PNG/WebP; generates 64/128/256px square WebP) |
 | GET | `/avatars/:userId/:size.webp` | No | Serve avatar with immutable cache headers |
 | GET | `/notifications?cursor=&limit=` | Yes | Fetch notifications (read + unread) from the past 14 days, cursor-paginated. `cursor` = ISO timestamp of last item (fetch older items); `limit` default 20, max 50. Response: `{ notifications, nextCursor }` |
 | PATCH | `/notifications/read-batch` | Yes | Mark a batch of notifications as read (max 50 at once) |
 | PATCH | `/notifications/read-all` | Yes | Mark all unread notifications as read |
+| GET | `/me/ignored-users` | Yes | List ignored user IDs |
+| POST | `/users/:id/ignore` | Yes | Add user to ignore list (max 3) |
+| DELETE | `/users/:id/ignore` | Yes | Remove user from ignore list |
 | POST | `/polls/:pollId/vote` | Yes | Vote on a poll (single or multi-select); body: `{ optionIds: string[] }` |
 
 ## Admin Panel
@@ -266,7 +279,7 @@ The app ships an **AdminJS**-powered admin panel at `/admin`, protected by two l
 | Section | Capabilities |
 |---------|-------------|
 | Пользователи (Users) | View, edit, ban/unban (ban sets `is_deleted=2` on their content); links to user's shouts/comments/media |
-| Вопли (Shouts) | View, soft-delete, restore soft-deleted shouts |
+| Вопли (Shouts) | View, soft-delete, restore soft-deleted shouts; toggle `is_pinned` (only one shout can be pinned at a time) |
 | Комменты (Comments) | View, soft-delete, restore soft-deleted comments |
 | Медиа (Media) | Read-only view of uploaded media |
 | Объявления (Announcements) | Create announcements (auto-soft-deletes previous), soft-delete existing |
@@ -357,7 +370,7 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `show_nsfw` (Int, default 0) — user preference to show NSFW-tagged shouts
 - `show_politics` (Int, default 0) — user preference to show politics-tagged shouts
 - `created_at` (String, ISO datetime)
-- Relations: `receivedNotifications`, `sentNotifications`
+- Relations: `receivedNotifications`, `sentNotifications`, `ignoredByMe`, `ignoredByOthers`
 
 **Shout** (`shouts`)
 - `id` (String, UUID, PK)
@@ -366,6 +379,7 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `content` (String)
 - `media_id` (String?, FK → media)
 - `visibility_tag` (String, default `""`) — content flag: `""`, `"spoiler"`, `"nsfw"`, or `"politics"` (mutually exclusive)
+- `is_pinned` (Int, default 0) — pinned shout flag
 - `is_deleted` (Int, default 0, soft-delete; `2` = banned-user content)
 - `created_at` (String, ISO datetime)
 - Relations: `poll` (optional one-to-one with Poll)
@@ -449,6 +463,15 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `value` (String) — e.g. `"true"` or `"false"`
 - Seeded on startup via `server.js`. Editable via admin panel.
 
+**IgnoredUser** (`ignored_users`)
+- `id` (String, UUID, PK)
+- `owner_user_id` (String, FK → users, CASCADE) — user who ignores
+- `target_user_id` (String, FK → users, CASCADE) — user being ignored
+- `created_at` (String, ISO datetime)
+- `updated_at` (String, ISO datetime)
+- Unique constraint: `(owner_user_id, target_user_id)`
+- Max 3 ignored users per owner (enforced in route handler)
+
 Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/app.db`). Sessions stored separately at `/data/sessions.sqlite`.
 
 ## Environment Variables
@@ -504,7 +527,7 @@ Tests are run sequentially (not in parallel) to avoid SQLite write conflicts.
 - `tests/setup.js` — Vitest `globalSetup`: creates a fresh SQLite DB at `tests/test.db`, runs Prisma migrations, writes a temp `.env.test` file, and cleans everything up in teardown.
 - `tests/env.js` — Vitest `setupFiles`: loads `.env.test` into `process.env` for each test worker.
 - `tests/helpers.js` — Shared utilities: `getApp()` (lazy app import), `request()` (supertest), `authenticatedAgent(user)` (supertest agent with session cookie), `cleanDb()` (truncate all tables), `disconnectDb()`.
-- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
+- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, `createIgnoredUser()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
 
 **Mocked modules in tests:**
 - `../src/email.js` — `sendVerificationEmail` is a no-op
@@ -531,6 +554,7 @@ Uses `jsdom` environment with `@testing-library/react`.
 - `web/context/ThemeContext.test.tsx` — Theme toggling and `localStorage` persistence
 - `web/context/NotificationsContext.test.tsx` — SSE subscription, real-time updates, cursor pagination (`hasMore`/`loadMore`/`isLoadingMore`), sort order (chronological desc, read/unread agnostic), dedup, batched mark-as-read, safety timer, cleanup on unmount
 - `web/context/ContentPreferencesContext.test.tsx` — Content visibility preference toggles
+- `web/context/IgnoredUsersContext.test.tsx` — Ignore/unignore users, list management
 
 **Hook tests (co-located with source files):**
 - `web/hooks/useRoute.test.ts` — Hash-based routing (feed, profile, shout pages), navigation, `hashchange` events
@@ -587,6 +611,10 @@ cd web && npm run lint
 4. Lints web (`npm run lint --prefix web`)
 5. Runs `npm test` for both API and web
 
+`.github/workflows/docker.yml` — manual deploy workflow (`workflow_dispatch`):
+- Builds Docker images for api, web, workers and pushes to GHCR
+- Deploys to dev or prod target via SSH
+
 ## Code Conventions
 
 ### Backend (api/)
@@ -600,7 +628,7 @@ cd web && npm run lint
 - Sessions have a 30-day max age with `rolling: true` (extended on every authenticated request)
 - Password hashing with **bcryptjs** (10 rounds; 4 rounds in tests for speed)
 - Email sending via **nodemailer** through Resend SMTP (`smtp.resend.com:465`)
-- Rate limiting: auth endpoints at 20 req/min (forgot-password/send-code at 5/min); upload and shout creation at 100 req/10min per user (falls back to IP)
+- Rate limiting: auth endpoints at 20 req/min (forgot-password/send-code and email change at 5/min); upload and shout creation at 100 req/10min per user (falls back to IP)
 - All IDs are UUIDs generated with `crypto.randomUUID()`
 - JSON error responses: `{ error: "message" }`
 - Image processing via **Sharp**: auto-rotate, strip EXIF, generate WebP variants, atomic move from tmp to permanent storage
@@ -620,6 +648,7 @@ cd web && npm run lint
 - React Context for SSE — `SSEContext.tsx` manages the single shared `EventSource`; use `useSSEContext()` directly or the `useSSE(listeners)` convenience hook to subscribe to events
 - React Context for notifications — use `useNotifications()` hook from `NotificationsContext.tsx`
 - React Context for content preferences — use `useContentPreferences()` hook from `ContentPreferencesContext.tsx`
+- React Context for ignored users — use `useIgnoredUsers()` hook from `IgnoredUsersContext.tsx`; provides `ignoredUserIds`, `isIgnored()`, `addIgnoredUser()`, `removeIgnoredUser()`
 - Auth flow: 2-step registration (send code → verify), password reset (send code → verify → new password)
 - Hash-based routing via `useRoute.ts` — routes: `#/` (feed), `#/profile/{userId}`, `#/shout/{shoutId}`
 - Styling with **Tailwind CSS** utility classes (loaded via CDN in `index.html`) and CSS custom properties
@@ -641,7 +670,7 @@ cd web && npm run lint
 - @mentions are supported in shouts and comments. The composer (`MentionInput.tsx`) is a `contenteditable` div. Typing `@` opens a dropdown of up to 5 matching users (filtered client-side from a module-level cached list). Selected mentions are serialized as `@[username:userId]` tokens in the stored content string. `renderContent` in `ShoutCard.tsx` parses these tokens and renders them as `#/profile/:id` links. Character counting normalizes `@[name:id]` back to `@name` before applying the 400-char limit. The user list is fetched lazily (only on first `@` trigger) via `GET /users/mentions` and cached for the browser session.
 - Mentions automatically trigger `mention` notifications to the mentioned users. Comments also trigger a `reply` notification to the shout author (unless they are the commenter, or already received a mention notification for that comment). Both are handled in `routes/shouts.js` and `routes/comments.js` using `helpers/mentions.js`.
 - Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
-- **Embed system**: `ShoutCard.tsx` auto-detects URLs in shout/comment text via `extractEmbeds(text)` and renders rich embed cards inline. Supported platforms: **YouTube** (iframe via oEmbed API, 5s timeout), **Twitter/X** (fetches from `api.fxtwitter.com`, module-level `tweetCache`, shows author, text, photos, video thumbnails, likes/retweets; uses `pbs.fxtwitter.com` proxy for images), **Steam** (fetches from `store.steampowered.com/api/appdetails`, module-level `steamCache`, shows game name, description, header image, price, recommendation count in Russian), **Imgur** (direct images, image pages, and albums), **Coub** (iframe embed), **Tenor** (iframe embed), **Giphy** (iframe embed, multiple URL patterns). Embeds are rendered in the order they are found in the text.
+- **Embed system**: `ShoutCard.tsx` auto-detects URLs in shout/comment text via `extractEmbeds(text)` and renders rich embed cards inline. Supported platforms: **YouTube** (iframe via oEmbed API, 5s timeout), **Twitter/X** (fetches from `api.fxtwitter.com`, module-level `tweetCache`, shows author, text, photos, video thumbnails, likes/retweets; uses `pbs.fxtwitter.com` proxy for images), **Steam** (fetches via server-side proxy at `/api/v1/steam/app/:appId` to avoid CORS, module-level `steamCache`, shows game name, description, header image, price, recommendation count in Russian), **Imgur** (direct images, image pages, and albums), **Coub** (iframe embed), **Tenor** (iframe embed), **Giphy** (iframe embed, multiple URL patterns). Embeds are rendered in the order they are found in the text.
 - Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
 - Animated GIFs skip re-encoding; the original GIF is stored as `original.gif` alongside WebP thumbnail variants. The `animated: true` flag and `gif` URL are included in the media DTO.
 - Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling. Supports pinch-to-zoom (mobile) and scroll-to-zoom (desktop), pan when zoomed, and double-tap/click to toggle zoom.
@@ -652,8 +681,10 @@ cd web && npm run lint
 - Password reset follows the same email verification pattern.
 - Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
 - The `web/package.json` dev script runs both the API and Vite concurrently for local development.
-- `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<SSEProvider>` → `<ContentPreferencesProvider>` → `<NotificationsProvider>` (inner). `SSEProvider` must wrap both `NotificationsProvider` and any component that calls `useSSE` or `useSSEContext`.
+- `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<SSEProvider>` → `<ContentPreferencesProvider>` → `<IgnoredUsersProvider>` → `<NotificationsProvider>` (inner). `SSEProvider` must wrap both `NotificationsProvider` and any component that calls `useSSE` or `useSSEContext`.
 - When content preferences hide media (nsfw/politics/showMedia off), `ShoutFeed.tsx` renders a same-size placeholder div (crossed-camera icon) instead of removing the element from the DOM — this prevents layout jumps when toggling content preferences.
+- **Pinned shouts**: One shout can be pinned at a time (`is_pinned=1`). Pinned shouts are fetched separately and prepended to the first page of the "new" tab feed only (not shown in "popular" tab). Pinning is managed via the admin panel.
+- **Ignored users**: Users can ignore up to 3 other users. Ignored users' content is filtered client-side via `IgnoredUsersContext`. The ignore list is fetched on login and managed via `GET /me/ignored-users`, `POST /users/:id/ignore`, `DELETE /users/:id/ignore`.
 - Nginx CSP headers allow embeds from YouTube (nocookie), Coub, Tenor, Steam (`store.steampowered.com`); images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, fxTwitter (`pbs.fxtwitter.com`), Steam CDN (`cdn.akamai.steamstatic.com`); and connect-src to fxTwitter API (`api.fxtwitter.com`) and Steam store API.
 
 ## Background Jobs (Workers)
@@ -700,9 +731,10 @@ Backups keep the last 3 snapshots per type (configurable via `KEEP` variable in 
 
 ## Docker Services
 
-Three docker-compose files:
+Four docker-compose files:
 - `docker-compose.yml` — production (port 3005)
-- `docker-compose.dev.yml` — development (port 3006, isolated volumes)
+- `docker-compose.dev.yml` — dev droplet deployment (pre-built images from GHCR, managed by CI)
+- `docker-compose.local.yml` — local development (hot-reload, bind mounts, port 3006, isolated volumes)
 - `docker-compose.test.yml` — test runner (single service, tmpfs DB)
 
 Production and development each define six services:
