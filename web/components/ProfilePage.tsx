@@ -5,7 +5,7 @@ import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
-import { ProfileSocialsDisplay, ProfileSocialsEdit } from './ProfileSocials';
+import { ProfileSocialsDisplay, ProfileSocialsEditor } from './ProfileSocials';
 
 interface ProfilePageProps {
   userId: string;
@@ -61,6 +61,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [ignoreListUsers, setIgnoreListUsers] = useState<User[]>([]);
   const [ignoreListLoading, setIgnoreListLoading] = useState(false);
 
+  // Socials
+  const [socials, setSocials] = useState<SocialDto[]>([]);
+
   // Email change verification flow
   const [emailStep, setEmailStep] = useState<'idle' | 'sending' | 'code'>('idle');
   const [emailCode, setEmailCode] = useState('');
@@ -76,6 +79,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     setProfileError(null);
     setProfile(null);
     setShouts([]);
+    setSocials([]);
     setHasMore(true);
     offsetRef.current = 0;
 
@@ -473,12 +477,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               )}
             </div>
 
-            <div className="text-th-text-4 text-sm mb-3">
-              {profile.shoutCount} {getDeclension(profile.shoutCount ?? 0, 'вопль', 'вопля', 'воплей')}
-              <span className="mx-2">·</span>
-              На сайте с {formatDate(profile.createdAt)}
-            </div>
-
             {/* Owner actions */}
             {profile.isOwner && !isEditing && (
               <div className="flex items-center gap-2">
@@ -521,10 +519,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                 )}
               </div>
             )}
-          </div>
 
-          {/* Public socials display */}
-          {!isEditing && <ProfileSocialsDisplay userId={userId} socials={socials} />}
+            {/* Public socials display — between ignore/edit buttons and stats */}
+            {!isEditing && <ProfileSocialsDisplay socials={socials} />}
+
+            <div className="text-th-text-4 text-sm mt-3">
+              {profile.shoutCount} {getDeclension(profile.shoutCount ?? 0, 'вопль', 'вопля', 'воплей')}
+              <span className="mx-2">·</span>
+              На сайте с {formatDate(profile.createdAt)}
+            </div>
+          </div>
         </div>
 
         {/* Success message */}
@@ -660,10 +664,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               </div>
             </div>
 
-            <ProfileSocialsEdit
+            <ProfileSocialsEditor
               userId={userId}
               socials={socials}
               onSocialsChange={setSocials}
+              disabled={isSaving}
             />
 
             <div className="border-t border-th-border-2 pt-4">
