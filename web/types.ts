@@ -65,6 +65,14 @@ export interface Poll {
   totalVoters: number;
 }
 
+export type SocialType = 'steam' | 'telegram' | 'x' | 'battlenet' | 'playstation' | 'xbox' | 'epicgames' | 'youtube' | 'spotify';
+
+export interface SocialDto {
+  type: SocialType;
+  url: string;
+  display: string;
+}
+
 export interface Shout {
   id: string;
   user: User | null;

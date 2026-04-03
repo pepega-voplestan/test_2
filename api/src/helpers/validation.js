@@ -99,6 +99,19 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(6).max(200),
 });
 
+import { SOCIAL_TYPES } from "./socials.js";
+
+export const socialTypeSchema = z.enum(SOCIAL_TYPES);
+
+export const createSocialSchema = z.object({
+  type: socialTypeSchema,
+  url: z.string().url().max(500),
+});
+
+export const updateSocialSchema = z.object({
+  url: z.string().url().max(500),
+});
+
 export const CODE_EXPIRY_MINUTES = 10;
 export const CODE_MAX_ATTEMPTS = 5;
 

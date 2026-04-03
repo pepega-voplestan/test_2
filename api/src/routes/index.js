@@ -9,6 +9,7 @@ import announcementsRouter from "./announcements.js";
 import notificationsRouter from "./notifications.js";
 import ignoredUsersRouter from "./ignored-users.js";
 import pollsRouter from "./polls.js";
+import socialsRouter from "./socials.js";
 
 const steamCache = new Map();
 const STEAM_CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -59,4 +60,5 @@ export function mountRoutes(app) {
   app.use("/api/v1", notificationsRouter);
   app.use("/api/v1", ignoredUsersRouter);
   app.use("/api/v1", pollsRouter);
+  app.use("/api/v1", socialsRouter);
 }

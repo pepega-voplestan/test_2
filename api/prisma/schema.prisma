@@ -27,6 +27,7 @@ model User {
   sentNotifications     Notification[] @relation("SentNotifications")
   ignoredByMe           IgnoredUser[]  @relation("IgnoredByUser")
   ignoredByOthers       IgnoredUser[]  @relation("IgnoredTarget")
+  socials               Social[]
 
   @@map("users")
 }
@@ -205,6 +206,21 @@ model PollVote {
   @@unique([option_id, user_id])
   @@index([user_id], name: "idx_poll_votes_user")
   @@map("poll_votes")
+}
+
+model Social {
+  id         String @id @default(uuid())
+  user_id    String
+  type       String
+  url        String
+  created_at String @default(dbgenerated("(datetime('now'))"))
+  updated_at String @default(dbgenerated("(datetime('now'))"))
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, type])
+  @@index([user_id], name: "idx_socials_user")
+  @@map("socials")
 }
 
 model Notification {

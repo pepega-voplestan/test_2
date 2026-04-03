@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { UserProfile, Shout, Comment, User } from '../types';
+import { UserProfile, Shout, Comment, User, SocialDto } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
+import { ProfileSocialsDisplay, ProfileSocialsEdit } from './ProfileSocials';
 
 interface ProfilePageProps {
   userId: string;
@@ -66,6 +67,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailSending, setEmailSending] = useState(false);
 
+  // Socials
+  const [socials, setSocials] = useState<SocialDto[]>([]);
+
   // Fetch profile
   useEffect(() => {
     setIsLoadingProfile(true);
@@ -97,6 +101,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           showNsfw: !!data.profile.showNsfw,
           showPolitics: !!data.profile.showPolitics,
         });
+        // Fetch socials
+        fetch(`/api/v1/users/${userId}/socials`, { credentials: 'include' })
+          .then(r => r.ok ? r.json() : { socials: [] })
+          .then(d => setSocials(d.socials || []))
+          .catch(() => setSocials([]));
       })
       .catch((err) => {
         console.error('[ProfilePage] Profile load error:', err);
@@ -513,6 +522,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               </div>
             )}
           </div>
+
+          {/* Public socials display */}
+          {!isEditing && <ProfileSocialsDisplay userId={userId} socials={socials} />}
         </div>
 
         {/* Success message */}
@@ -647,6 +659,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                 </label>
               </div>
             </div>
+
+            <ProfileSocialsEdit
+              userId={userId}
+              socials={socials}
+              onSocialsChange={setSocials}
+            />
 
             <div className="border-t border-th-border-2 pt-4">
               <div className="text-xs text-th-text-3 mb-3">Смена пароля (оставьте пустым, чтобы не менять)</div>
