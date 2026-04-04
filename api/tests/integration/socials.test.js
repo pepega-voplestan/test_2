@@ -22,8 +22,8 @@ describe("Socials", () => {
 
     it("returns user socials with display field", async () => {
       const user = await createUser();
-      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/FlameInTheDark" });
-      await createSocial({ userId: user.id, type: "telegram", url: "https://t.me/testuser" });
+      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/FlameInTheDark", display: "FlameInTheDark" });
+      await createSocial({ userId: user.id, type: "telegram", url: "https://t.me/testuser", display: "@testuser" });
 
       const res = await (await request()).get(`/api/v1/users/${user.id}/socials`);
       expect(res.status).toBe(200);
@@ -139,7 +139,7 @@ describe("Socials", () => {
   describe("PUT /users/:id/socials/:type", () => {
     it("updates a social URL", async () => {
       const user = await createUser();
-      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/OldName" });
+      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/OldName", display: "OldName" });
       const agent = await authenticatedAgent(user);
 
       const res = await agent

@@ -213,6 +213,7 @@ model Social {
   user_id    String
   type       String
   url        String
+  display    String @default("")
   created_at String @default(dbgenerated("(datetime('now'))"))
   updated_at String @default(dbgenerated("(datetime('now'))"))
 

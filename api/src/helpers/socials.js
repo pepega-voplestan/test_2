@@ -289,7 +289,7 @@ export function normalizeSocialUrl(type, urlStr) {
 }
 
 /**
- * Extract a display name/handle from a validated social URL.
+ * Extract a display name/handle from a validated social URL (synchronous, URL-based only).
  * @param {string} type
  * @param {string} urlStr
  * @returns {string}
@@ -298,4 +298,119 @@ export function extractSocialDisplay(type, urlStr) {
   const platform = SOCIAL_PLATFORMS[type];
   const url = new URL(urlStr);
   return platform.extractDisplay(url);
+}
+
+/* ────────────────────── Async display resolution ────────────────────── */
+/* For platforms where the URL contains an opaque ID instead of a human-readable
+   name, we try to resolve the actual username/persona via public APIs.
+   Falls back to synchronous URL-based extraction on any failure. */
+
+const RESOLVE_TIMEOUT = 5000;
+
+/**
+ * Steam: /profiles/<steamId64> → fetch persona name from the public XML profile.
+ * /id/<customUrl> already contains the vanity name, so no fetch needed.
+ */
+async function resolveSteamDisplay(urlStr) {
+  const url = new URL(urlStr);
+  const match = url.pathname.match(/^\/(id|profiles)\/([^/]+)\/?$/);
+  if (!match) return null;
+
+  // /id/<vanity> — the vanity URL IS the display name
+  if (match[1] === "id") return match[2];
+
+  // /profiles/<steamId64> — fetch persona name
+  const steamId = match[2];
+  try {
+    const xmlUrl = `https://steamcommunity.com/profiles/${steamId}/?xml=1`;
+    const res = await fetch(xmlUrl, { signal: AbortSignal.timeout(RESOLVE_TIMEOUT) });
+    if (!res.ok) return null;
+    const text = await res.text();
+    // Parse <steamID> tag (persona name) from the XML
+    const nameMatch = text.match(/<steamID><!\[CDATA\[(.+?)\]\]><\/steamID>/);
+    if (nameMatch && nameMatch[1]) return nameMatch[1];
+  } catch {
+    // network error or timeout — fall back
+  }
+  return null;
+}
+
+/**
+ * YouTube: /channel/<id> → fetch channel name from oEmbed.
+ * /@handle, /c/<name>, /user/<name> already contain readable names.
+ */
+async function resolveYouTubeDisplay(urlStr) {
+  const url = new URL(urlStr);
+
+  // /@handle — already readable
+  const handleMatch = url.pathname.match(/^\/@([A-Za-z0-9_.-]+)\/?$/);
+  if (handleMatch) return `@${handleMatch[1]}`;
+
+  const pathMatch = url.pathname.match(/^\/(channel|c|user)\/([^/]+)\/?$/);
+  if (!pathMatch) return null;
+
+  // /c/<name> and /user/<name> are already readable
+  if (pathMatch[1] !== "channel") return pathMatch[2];
+
+  // /channel/<id> — try oEmbed
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(urlStr)}&format=json`;
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(RESOLVE_TIMEOUT) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.author_name) return data.author_name;
+  } catch {
+    // fall back
+  }
+  return null;
+}
+
+/**
+ * Spotify: /artist/<id> → fetch artist name from oEmbed.
+ * /user/<id> has no public resolution without auth.
+ */
+async function resolveSpotifyDisplay(urlStr) {
+  const url = new URL(urlStr);
+  const match = url.pathname.match(/^\/(user|artist)\/([^/]+)\/?$/);
+  if (!match) return null;
+
+  // /user/<id> — no public API for display name without OAuth
+  if (match[1] === "user") return null;
+
+  // /artist/<id> — try oEmbed
+  try {
+    const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(urlStr)}`;
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(RESOLVE_TIMEOUT) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // oEmbed returns "title" which is the artist/track name
+    if (data.title) return data.title;
+  } catch {
+    // fall back
+  }
+  return null;
+}
+
+/**
+ * Resolve a human-readable display name for a social URL.
+ * Tries platform-specific APIs where URL contains opaque IDs,
+ * falls back to synchronous URL-based extraction.
+ *
+ * @param {string} type - Platform type key
+ * @param {string} urlStr - Normalized URL
+ * @returns {Promise<string>} Resolved display name
+ */
+export async function resolveSocialDisplay(type, urlStr) {
+  let resolved = null;
+
+  try {
+    if (type === "steam") resolved = await resolveSteamDisplay(urlStr);
+    else if (type === "youtube") resolved = await resolveYouTubeDisplay(urlStr);
+    else if (type === "spotify") resolved = await resolveSpotifyDisplay(urlStr);
+  } catch {
+    // any unexpected error — fall back silently
+  }
+
+  // Fall back to synchronous URL-based extraction
+  return resolved || extractSocialDisplay(type, urlStr);
 }

@@ -4,16 +4,16 @@ import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { asyncHandler, toSqliteDatetime } from "../helpers/common.js";
 import { createSocialSchema, updateSocialSchema, socialTypeSchema } from "../helpers/validation.js";
-import { validateSocialUrl, normalizeSocialUrl, extractSocialDisplay } from "../helpers/socials.js";
+import { validateSocialUrl, normalizeSocialUrl, resolveSocialDisplay } from "../helpers/socials.js";
 
 const router = Router();
 
-/** Build a social DTO from a DB row */
+/** Build a social DTO from a DB row (display is pre-resolved and stored) */
 function toSocialDto(row) {
   return {
     type: row.type,
     url: row.url,
-    display: extractSocialDisplay(row.type, row.url),
+    display: row.display,
   };
 }
 
@@ -55,6 +55,9 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
     return res.status(409).json({ error: "Эта социальная сеть уже добавлена" });
   }
 
+  // Resolve display name (may call external APIs for Steam/YouTube/Spotify)
+  const display = await resolveSocialDisplay(type, normalizedUrl);
+
   const now = toSqliteDatetime();
   await prisma.social.create({
     data: {
@@ -62,19 +65,14 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
       user_id: userId,
       type,
       url: normalizedUrl,
+      display,
       created_at: now,
       updated_at: now,
     },
   });
 
-  console.log(`[Socials] Added ${type} for user ${userId}`);
-  res.status(201).json({
-    social: {
-      type,
-      url: normalizedUrl,
-      display: extractSocialDisplay(type, normalizedUrl),
-    },
-  });
+  console.log(`[Socials] Added ${type} for user ${userId} (display: ${display})`);
+  res.status(201).json({ social: { type, url: normalizedUrl, display } });
 }));
 
 /* PUT /users/:id/socials/:type — update a social */
@@ -111,19 +109,16 @@ router.put("/users/:id/socials/:type", requireAuth, asyncHandler(async (req, res
     return res.status(404).json({ error: "Социальная сеть не найдена" });
   }
 
+  // Re-resolve display name for the new URL
+  const display = await resolveSocialDisplay(type, normalizedUrl);
+
   await prisma.social.update({
     where: { id: existing.id },
-    data: { url: normalizedUrl, updated_at: toSqliteDatetime() },
+    data: { url: normalizedUrl, display, updated_at: toSqliteDatetime() },
   });
 
-  console.log(`[Socials] Updated ${type} for user ${userId}`);
-  res.json({
-    social: {
-      type,
-      url: normalizedUrl,
-      display: extractSocialDisplay(type, normalizedUrl),
-    },
-  });
+  console.log(`[Socials] Updated ${type} for user ${userId} (display: ${display})`);
+  res.json({ social: { type, url: normalizedUrl, display } });
 }));
 
 /* DELETE /users/:id/socials/:type — remove a social */

@@ -249,6 +249,7 @@ export async function createSocial(overrides = {}) {
       user_id: overrides.userId,
       type: overrides.type || "steam",
       url: overrides.url || "https://steamcommunity.com/id/testuser",
+      display: overrides.display || "testuser",
       created_at: overrides.created_at || now(),
       updated_at: overrides.updated_at || now(),
     },
