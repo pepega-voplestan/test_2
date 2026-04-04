@@ -61,9 +61,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [ignoreListUsers, setIgnoreListUsers] = useState<User[]>([]);
   const [ignoreListLoading, setIgnoreListLoading] = useState(false);
 
-  // Socials
-  const [socials, setSocials] = useState<SocialDto[]>([]);
-
   // Email change verification flow
   const [emailStep, setEmailStep] = useState<'idle' | 'sending' | 'code'>('idle');
   const [emailCode, setEmailCode] = useState('');
