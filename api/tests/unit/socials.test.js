@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   validateSocialUrl,
   normalizeSocialUrl,
   extractSocialDisplay,
+  resolveSocialDisplay,
   SOCIAL_TYPES,
 } from "../../src/helpers/socials.js";
 
@@ -211,6 +212,87 @@ describe("socials helper", () => {
     it("extracts epic games display name", () => {
       expect(extractSocialDisplay("epicgames", "https://www.epicgames.com/id/TestPlayer"))
         .toBe("TestPlayer");
+    });
+  });
+
+  describe("resolveSocialDisplay", () => {
+    it("returns vanity name for steam /id/ URL without API call", async () => {
+      const result = await resolveSocialDisplay("steam", "https://steamcommunity.com/id/FlameInTheDark");
+      expect(result).toBe("FlameInTheDark");
+    });
+
+    it("falls back to URL extraction for steam /profiles/ when API is unreachable", async () => {
+      // Mock fetch to simulate network failure
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error("network error"));
+      try {
+        const result = await resolveSocialDisplay("steam", "https://steamcommunity.com/profiles/76561199520238573");
+        // Falls back to the numeric ID from URL
+        expect(result).toBe("76561199520238573");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("resolves steam persona name from XML API", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(`<?xml version="1.0" encoding="UTF-8"?>
+          <profile>
+            <steamID><![CDATA[CoolPlayer123]]></steamID>
+            <steamID64>76561199520238573</steamID64>
+          </profile>`),
+      });
+      try {
+        const result = await resolveSocialDisplay("steam", "https://steamcommunity.com/profiles/76561199520238573");
+        expect(result).toBe("CoolPlayer123");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("resolves youtube channel name from oEmbed", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ author_name: "My Cool Channel" }),
+      });
+      try {
+        const result = await resolveSocialDisplay("youtube", "https://www.youtube.com/channel/UC12345abc");
+        expect(result).toBe("My Cool Channel");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("returns @handle for youtube handle URL without API call", async () => {
+      const result = await resolveSocialDisplay("youtube", "https://www.youtube.com/@coolname");
+      expect(result).toBe("@coolname");
+    });
+
+    it("resolves spotify artist name from oEmbed", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ title: "Arctic Monkeys" }),
+      });
+      try {
+        const result = await resolveSocialDisplay("spotify", "https://open.spotify.com/artist/7Ln80lUS6He07XvHI8qqHH");
+        expect(result).toBe("Arctic Monkeys");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("falls back to URL extraction for telegram (no API resolution)", async () => {
+      const result = await resolveSocialDisplay("telegram", "https://t.me/testuser");
+      expect(result).toBe("@testuser");
+    });
+
+    it("falls back to URL extraction for x (no API resolution)", async () => {
+      const result = await resolveSocialDisplay("x", "https://x.com/elonmusk");
+      expect(result).toBe("@elonmusk");
     });
   });
 });
