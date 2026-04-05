@@ -11,7 +11,7 @@
 
 /** @type {string[]} */
 export const SOCIAL_TYPES = [
-  "steam", "telegram", "x", "battlenet", "playstation",
+  "steam", "telegram", "x", "discord", "battlenet", "playstation",
   "xbox", "epicgames", "youtube", "spotify",
 ];
 
@@ -81,6 +81,46 @@ export const SOCIAL_PLATFORMS = {
     extractDisplay(url) {
       const match = url.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/?$/);
       return `@${match[1]}`;
+    },
+  },
+
+  discord: {
+    label: "Discord",
+    hostnames: ["discord.gg", "discord.com", "www.discord.com"],
+    validate(url) {
+      if (url.hostname === "discord.gg") {
+        // discord.gg/<invite>
+        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+        return !!match && match[1].length > 0;
+      }
+      // discord.com/invite/<code> or discord.com/users/<id>
+      const inviteMatch = url.pathname.match(/^\/invite\/([A-Za-z0-9_-]+)\/?$/);
+      if (inviteMatch) return true;
+      const userMatch = url.pathname.match(/^\/users\/([0-9]+)\/?$/);
+      return !!userMatch;
+    },
+    normalize(url) {
+      if (url.hostname === "discord.gg") {
+        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+        return `https://discord.gg/${match[1]}`;
+      }
+      const inviteMatch = url.pathname.match(/^\/invite\/([A-Za-z0-9_-]+)\/?$/);
+      if (inviteMatch) return `https://discord.gg/${inviteMatch[1]}`;
+      const userMatch = url.pathname.match(/^\/users\/([0-9]+)\/?$/);
+      if (userMatch) return `https://discord.com/users/${userMatch[1]}`;
+      return `https://discord.com${url.pathname.replace(/\/+$/, "")}`;
+    },
+    extractDisplay(url) {
+      if (url.hostname === "discord.gg") {
+        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+        return match[1];
+      }
+      const inviteMatch = url.pathname.match(/^\/invite\/([A-Za-z0-9_-]+)\/?$/);
+      if (inviteMatch) return inviteMatch[1];
+      const userMatch = url.pathname.match(/^\/users\/([0-9]+)\/?$/);
+      if (userMatch) return userMatch[1];
+      const segments = url.pathname.split("/").filter(Boolean);
+      return segments[segments.length - 1] || "Discord";
     },
   },
 

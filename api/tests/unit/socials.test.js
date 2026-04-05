@@ -13,6 +13,7 @@ describe("socials helper", () => {
       expect(SOCIAL_TYPES).toContain("steam");
       expect(SOCIAL_TYPES).toContain("telegram");
       expect(SOCIAL_TYPES).toContain("x");
+      expect(SOCIAL_TYPES).toContain("discord");
       expect(SOCIAL_TYPES).toContain("youtube");
       expect(SOCIAL_TYPES).toContain("spotify");
       expect(SOCIAL_TYPES).toContain("battlenet");
