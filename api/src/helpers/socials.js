@@ -12,7 +12,7 @@
 /** @type {string[]} */
 export const SOCIAL_TYPES = [
   "steam", "telegram", "x", "discord", "battlenet", "playstation",
-  "xbox", "epicgames", "youtube", "spotify",
+  "xbox", "epicgames", "youtube", "spotify", "boosty",
 ];
 
 /**
@@ -279,6 +279,26 @@ export const SOCIAL_PLATFORMS = {
     extractDisplay(url) {
       const match = url.pathname.match(/^\/(user|artist)\/([^/]+)\/?$/);
       return decodeURIComponent(match[2]);
+    },
+  },
+
+  boosty: {
+    label: "Boosty",
+    hostnames: ["boosty.to"],
+    validate(url) {
+      // boosty.to/<username>
+      const match = url.pathname.match(/^\/([A-Za-z0-9_.-]+)\/?$/);
+      if (!match) return false;
+      const reserved = ["app", "about", "legal", "login", "signup", "search", "explore"];
+      return !reserved.includes(match[1].toLowerCase());
+    },
+    normalize(url) {
+      const match = url.pathname.match(/^\/([A-Za-z0-9_.-]+)\/?$/);
+      return `https://boosty.to/${match[1]}`;
+    },
+    extractDisplay(url) {
+      const match = url.pathname.match(/^\/([A-Za-z0-9_.-]+)\/?$/);
+      return match[1];
     },
   },
 };
