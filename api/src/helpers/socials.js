@@ -376,21 +376,18 @@ export function extractSocialDisplay(type, urlStr) {
 const RESOLVE_TIMEOUT = 5000;
 
 /**
- * Steam: /profiles/<steamId64> → fetch persona name from the public XML profile.
- * /id/<customUrl> already contains the vanity name, so no fetch needed.
+ * Steam: fetch persona name from the public XML profile.
+ * Works for both /id/<customUrl> and /profiles/<steamId64>.
+ * The vanity URL is NOT necessarily the display name, so always fetch.
  */
 async function resolveSteamDisplay(urlStr) {
   const url = new URL(urlStr);
   const match = url.pathname.match(/^\/(id|profiles)\/([^/]+)\/?$/);
   if (!match) return null;
 
-  // /id/<vanity> — the vanity URL IS the display name
-  if (match[1] === "id") return match[2];
-
-  // /profiles/<steamId64> — fetch persona name
-  const steamId = match[2];
+  // Always fetch the XML profile to get the actual persona name
   try {
-    const xmlUrl = `https://steamcommunity.com/profiles/${steamId}/?xml=1`;
+    const xmlUrl = `${urlStr.replace(/\/+$/, "")}/?xml=1`;
     const res = await fetch(xmlUrl, { signal: AbortSignal.timeout(RESOLVE_TIMEOUT) });
     if (!res.ok) return null;
     const text = await res.text();
@@ -404,7 +401,7 @@ async function resolveSteamDisplay(urlStr) {
 }
 
 /**
- * YouTube: /channel/<id> → fetch channel name from oEmbed.
+ * YouTube: /channel/<id> → fetch channel name from the public RSS feed.
  * /@handle, /c/<name>, /user/<name> already contain readable names.
  */
 async function resolveYouTubeDisplay(urlStr) {
@@ -420,13 +417,16 @@ async function resolveYouTubeDisplay(urlStr) {
   // /c/<name> and /user/<name> are already readable
   if (pathMatch[1] !== "channel") return pathMatch[2];
 
-  // /channel/<id> — try oEmbed
+  // /channel/<id> — try RSS feed (public, no API key needed)
+  const channelId = pathMatch[2];
   try {
-    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(urlStr)}&format=json`;
-    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(RESOLVE_TIMEOUT) });
+    const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+    const res = await fetch(rssUrl, { signal: AbortSignal.timeout(RESOLVE_TIMEOUT) });
     if (!res.ok) return null;
-    const data = await res.json();
-    if (data.author_name) return data.author_name;
+    const text = await res.text();
+    // Parse <author><name>Channel Name</name></author> from RSS
+    const nameMatch = text.match(/<author>\s*<name>(.+?)<\/name>/);
+    if (nameMatch && nameMatch[1]) return nameMatch[1];
   } catch {
     // fall back
   }
@@ -435,23 +435,19 @@ async function resolveYouTubeDisplay(urlStr) {
 
 /**
  * Spotify: /artist/<id> → fetch artist name from oEmbed.
- * /user/<id> has no public resolution without auth.
+ * /user/<id> → try oEmbed (works for some public profiles).
  */
 async function resolveSpotifyDisplay(urlStr) {
   const url = new URL(urlStr);
   const match = url.pathname.match(/^\/(user|artist)\/([^/]+)\/?$/);
   if (!match) return null;
 
-  // /user/<id> — no public API for display name without OAuth
-  if (match[1] === "user") return null;
-
-  // /artist/<id> — try oEmbed
+  // Try oEmbed for both artists and users
   try {
     const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(urlStr)}`;
     const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(RESOLVE_TIMEOUT) });
     if (!res.ok) return null;
     const data = await res.json();
-    // oEmbed returns "title" which is the artist/track name
     if (data.title) return data.title;
   } catch {
     // fall back
@@ -462,13 +458,14 @@ async function resolveSpotifyDisplay(urlStr) {
 /**
  * Resolve a human-readable display name for a social URL.
  * Tries platform-specific APIs where URL contains opaque IDs,
- * falls back to synchronous URL-based extraction.
+ * then falls back to URL-based extraction, and finally to the platform label.
  *
  * @param {string} type - Platform type key
  * @param {string} urlStr - Normalized URL
  * @returns {Promise<string>} Resolved display name
  */
 export async function resolveSocialDisplay(type, urlStr) {
+  const platform = SOCIAL_PLATFORMS[type];
   let resolved = null;
 
   try {
@@ -479,6 +476,29 @@ export async function resolveSocialDisplay(type, urlStr) {
     // any unexpected error — fall back silently
   }
 
+  if (resolved) return resolved;
+
   // Fall back to synchronous URL-based extraction
-  return resolved || extractSocialDisplay(type, urlStr);
+  const fromUrl = extractSocialDisplay(type, urlStr);
+
+  // If the extracted value looks like an opaque ID (not human-readable),
+  // use the platform label instead
+  if (fromUrl && !looksOpaque(fromUrl)) return fromUrl;
+
+  return platform ? platform.label : fromUrl;
+}
+
+/**
+ * Heuristic: returns true if a string looks like an opaque/machine ID
+ * rather than a human-readable name.
+ */
+function looksOpaque(value) {
+  if (!value) return true;
+  // Long hex strings (Spotify user IDs, YouTube channel IDs like UCxxxxxxx)
+  if (/^[a-f0-9]{16,}$/i.test(value)) return true;
+  // YouTube channel IDs: UC + 22 base64 chars
+  if (/^UC[A-Za-z0-9_-]{20,}$/.test(value)) return true;
+  // Very long alphanumeric strings (>20 chars with no spaces/readable pattern)
+  if (value.length > 20 && /^[A-Za-z0-9_-]+$/.test(value)) return true;
+  return false;
 }
