@@ -105,11 +105,11 @@ export const socialTypeSchema = z.enum(SOCIAL_TYPES);
 
 export const createSocialSchema = z.object({
   type: socialTypeSchema,
-  url: z.string().url().max(500),
+  url: z.string().min(1).max(500),
 });
 
 export const updateSocialSchema = z.object({
-  url: z.string().url().max(500),
+  url: z.string().min(1).max(500),
 });
 
 export const CODE_EXPIRY_MINUTES = 10;

@@ -22,6 +22,13 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
   boosty: 'Boosty',
 };
 
+/** Platforms that accept plain text instead of (or in addition to) URLs */
+const PLATFORM_INPUT_HINTS: Partial<Record<SocialType, { label: string; placeholder: string }>> = {
+  telegram: { label: 'Имя пользователя или ссылка', placeholder: '@username' },
+  discord: { label: 'Имя пользователя', placeholder: 'username#1234' },
+  battlenet: { label: 'BattleTag', placeholder: 'Player#1234' },
+};
+
 /* ───────────────────────── SVG Icons ───────────────────────── */
 /* Inline SVGs with official brand colors */
 
@@ -108,18 +115,33 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
     <div className="flex flex-wrap gap-2 mt-3 mb-1">
       {socials.map((s) => {
         const Icon = PLATFORM_ICONS[s.type];
-        return (
+        const isLink = s.url && s.url.startsWith('http');
+        const className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-th-ring/5 hover:bg-th-ring/10 border border-th-border-2 transition-colors text-sm select-none";
+        const content = (
+          <>
+            <span className="w-5 h-5 shrink-0"><Icon /></span>
+            <span className="truncate max-w-[140px] text-th-text-2 hover:text-th-text">{s.display}</span>
+          </>
+        );
+        return isLink ? (
           <a
             key={s.type}
             href={s.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-th-ring/5 hover:bg-th-ring/10 border border-th-border-2 transition-colors text-sm select-none"
+            className={className}
             title={`${PLATFORM_LABELS[s.type]}: ${s.display}`}
           >
-            <span className="w-5 h-5 shrink-0"><Icon /></span>
-            <span className="truncate max-w-[140px] text-th-text-2 hover:text-th-text">{s.display}</span>
+            {content}
           </a>
+        ) : (
+          <span
+            key={s.type}
+            className={className + " cursor-default"}
+            title={`${PLATFORM_LABELS[s.type]}: ${s.display}`}
+          >
+            {content}
+          </span>
         );
       })}
     </div>
@@ -284,16 +306,18 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               {modal.mode === 'add' ? PLATFORM_LABELS[modal.type] : `Изменить ${PLATFORM_LABELS[modal.type]}`}
             </div>
 
-            <label className="block text-xs text-th-text-4 mb-1">Ссылка на профиль</label>
+            <label className="block text-xs text-th-text-4 mb-1">
+              {PLATFORM_INPUT_HINTS[modal.type]?.label || 'Ссылка на профиль'}
+            </label>
             <input
-              type="url"
-              inputMode="url"
-              autoComplete="url"
+              type={PLATFORM_INPUT_HINTS[modal.type] ? 'text' : 'url'}
+              inputMode={PLATFORM_INPUT_HINTS[modal.type] ? 'text' : 'url'}
+              autoComplete={PLATFORM_INPUT_HINTS[modal.type] ? 'username' : 'url'}
               autoFocus
               value={modal.url}
               onChange={(e) => setModal(m => m ? { ...m, url: e.target.value, error: null } : m)}
               onKeyDown={handleKeyDown}
-              placeholder="https://..."
+              placeholder={PLATFORM_INPUT_HINTS[modal.type]?.placeholder || 'https://...'}
               className="w-full bg-th-ring/5 rounded-lg px-3 py-2.5 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
               disabled={modal.loading}
             />
