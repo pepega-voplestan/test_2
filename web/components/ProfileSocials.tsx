@@ -22,11 +22,19 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
   boosty: 'Boosty',
 };
 
-/** Platforms that accept plain text instead of (or in addition to) URLs */
-const PLATFORM_INPUT_HINTS: Partial<Record<SocialType, { label: string; placeholder: string }>> = {
-  telegram: { label: 'Имя пользователя или ссылка', placeholder: '@username' },
-  discord: { label: 'Имя пользователя', placeholder: 'username#1234' },
-  battlenet: { label: 'BattleTag', placeholder: 'Player#1234' },
+/** Per-platform input label and placeholder */
+const PLATFORM_INPUT_HINTS: Record<SocialType, { label: string; placeholder: string; isPlainText?: boolean }> = {
+  steam: { label: 'Ссылка на профиль Steam', placeholder: 'https://steamcommunity.com/id/...' },
+  telegram: { label: 'Тэг профиля или ссылка', placeholder: '@username', isPlainText: true },
+  x: { label: 'Ссылка на профиль X', placeholder: 'https://x.com/username' },
+  discord: { label: 'Имя пользователя Discord', placeholder: 'username#1234', isPlainText: true },
+  battlenet: { label: 'BattleTag', placeholder: 'Player#1234', isPlainText: true },
+  playstation: { label: 'Ссылка на профиль PSN', placeholder: 'https://psnprofiles.com/username' },
+  xbox: { label: 'Ссылка на профиль Xbox', placeholder: 'https://www.xbox.com/profile/gamertag' },
+  epicgames: { label: 'Ссылка на профиль Epic Games', placeholder: 'https://www.epicgames.com/id/...' },
+  youtube: { label: 'Ссылка на канал YouTube', placeholder: 'https://www.youtube.com/@handle' },
+  spotify: { label: 'Ссылка на профиль Spotify', placeholder: 'https://open.spotify.com/user/...' },
+  boosty: { label: 'Ссылка на страницу Boosty', placeholder: 'https://boosty.to/username' },
 };
 
 /* ───────────────────────── SVG Icons ───────────────────────── */
@@ -307,17 +315,17 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
             </div>
 
             <label className="block text-xs text-th-text-4 mb-1">
-              {PLATFORM_INPUT_HINTS[modal.type]?.label || 'Ссылка на профиль'}
+              {PLATFORM_INPUT_HINTS[modal.type].label}
             </label>
             <input
-              type={PLATFORM_INPUT_HINTS[modal.type] ? 'text' : 'url'}
-              inputMode={PLATFORM_INPUT_HINTS[modal.type] ? 'text' : 'url'}
-              autoComplete={PLATFORM_INPUT_HINTS[modal.type] ? 'username' : 'url'}
+              type={PLATFORM_INPUT_HINTS[modal.type].isPlainText ? 'text' : 'url'}
+              inputMode={PLATFORM_INPUT_HINTS[modal.type].isPlainText ? 'text' : 'url'}
+              autoComplete={PLATFORM_INPUT_HINTS[modal.type].isPlainText ? 'username' : 'url'}
               autoFocus
               value={modal.url}
               onChange={(e) => setModal(m => m ? { ...m, url: e.target.value, error: null } : m)}
               onKeyDown={handleKeyDown}
-              placeholder={PLATFORM_INPUT_HINTS[modal.type]?.placeholder || 'https://...'}
+              placeholder={PLATFORM_INPUT_HINTS[modal.type].placeholder}
               className="w-full bg-th-ring/5 rounded-lg px-3 py-2.5 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
               disabled={modal.loading}
             />
