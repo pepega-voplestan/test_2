@@ -4,7 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { asyncHandler, toSqliteDatetime } from "../helpers/common.js";
 import { createSocialSchema, updateSocialSchema, socialTypeSchema } from "../helpers/validation.js";
-import { validateSocialUrl, normalizeSocialUrl, resolveSocialDisplay } from "../helpers/socials.js";
+import { validateSocialUrl, normalizeSocialUrl, resolveSocialDisplay, preprocessSocialInput } from "../helpers/socials.js";
 
 const router = Router();
 
@@ -38,14 +38,7 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { type, url } = parsed.data;
-
-  const validation = validateSocialUrl(type, url);
-  if (!validation.valid) {
-    return res.status(400).json({ error: validation.error });
-  }
-
-  const normalizedUrl = normalizeSocialUrl(type, url);
+  const { type, url: rawInput } = parsed.data;
 
   // Check if already exists
   const existing = await prisma.social.findUnique({
@@ -55,8 +48,22 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
     return res.status(409).json({ error: "Эта социальная сеть уже добавлена" });
   }
 
-  // Resolve display name (may call external APIs for Steam/YouTube/Spotify)
-  const display = await resolveSocialDisplay(type, normalizedUrl);
+  // Try plain-text preprocessing first (Telegram @handle, Discord tag, BattleTag)
+  const preprocessed = preprocessSocialInput(type, rawInput);
+
+  let finalUrl, display;
+  if (preprocessed) {
+    finalUrl = preprocessed.url || "";
+    display = preprocessed.display;
+  } else {
+    // Normal URL-based flow
+    const validation = validateSocialUrl(type, rawInput);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    finalUrl = normalizeSocialUrl(type, rawInput);
+    display = await resolveSocialDisplay(type, finalUrl);
+  }
 
   const now = toSqliteDatetime();
   await prisma.social.create({
@@ -64,7 +71,7 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
       id: crypto.randomUUID(),
       user_id: userId,
       type,
-      url: normalizedUrl,
+      url: finalUrl,
       display,
       created_at: now,
       updated_at: now,
@@ -72,7 +79,7 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
   });
 
   console.log(`[Socials] Added ${type} for user ${userId} (display: ${display})`);
-  res.status(201).json({ social: { type, url: normalizedUrl, display } });
+  res.status(201).json({ social: { type, url: finalUrl, display } });
 }));
 
 /* PUT /users/:id/socials/:type — update a social */
@@ -93,14 +100,7 @@ router.put("/users/:id/socials/:type", requireAuth, asyncHandler(async (req, res
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { url } = parsed.data;
-
-  const validation = validateSocialUrl(type, url);
-  if (!validation.valid) {
-    return res.status(400).json({ error: validation.error });
-  }
-
-  const normalizedUrl = normalizeSocialUrl(type, url);
+  const { url: rawInput } = parsed.data;
 
   const existing = await prisma.social.findUnique({
     where: { user_id_type: { user_id: userId, type } },
@@ -109,16 +109,29 @@ router.put("/users/:id/socials/:type", requireAuth, asyncHandler(async (req, res
     return res.status(404).json({ error: "Социальная сеть не найдена" });
   }
 
-  // Re-resolve display name for the new URL
-  const display = await resolveSocialDisplay(type, normalizedUrl);
+  // Try plain-text preprocessing first
+  const preprocessed = preprocessSocialInput(type, rawInput);
+
+  let finalUrl, display;
+  if (preprocessed) {
+    finalUrl = preprocessed.url || "";
+    display = preprocessed.display;
+  } else {
+    const validation = validateSocialUrl(type, rawInput);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    finalUrl = normalizeSocialUrl(type, rawInput);
+    display = await resolveSocialDisplay(type, finalUrl);
+  }
 
   await prisma.social.update({
     where: { id: existing.id },
-    data: { url: normalizedUrl, display, updated_at: toSqliteDatetime() },
+    data: { url: finalUrl, display, updated_at: toSqliteDatetime() },
   });
 
   console.log(`[Socials] Updated ${type} for user ${userId} (display: ${display})`);
-  res.json({ social: { type, url: normalizedUrl, display } });
+  res.json({ social: { type, url: finalUrl, display } });
 }));
 
 /* DELETE /users/:id/socials/:type — remove a social */

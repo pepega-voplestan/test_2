@@ -142,9 +142,9 @@ describe("socials helper", () => {
       expect(validateSocialUrl("xbox", "https://www.xbox.com/profile/TestGamer").valid).toBe(true);
     });
 
-    // Battle.net
-    it("accepts battle.net profile URL", () => {
-      expect(validateSocialUrl("battlenet", "https://battle.net/en-us/profile/Player-1234").valid).toBe(true);
+    // Battle.net — now uses BattleTag format, not URLs
+    it("rejects battle.net URLs (BattleTag only)", () => {
+      expect(validateSocialUrl("battlenet", "https://battle.net/en-us/profile/Player-1234").valid).toBe(false);
     });
   });
 

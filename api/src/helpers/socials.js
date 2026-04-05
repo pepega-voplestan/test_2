@@ -47,6 +47,15 @@ export const SOCIAL_PLATFORMS = {
   telegram: {
     label: "Telegram",
     hostnames: ["t.me"],
+    /** Accept @username plain text — auto-converts to t.me URL */
+    preprocessInput(raw) {
+      const trimmed = raw.trim();
+      const match = trimmed.match(/^@?([A-Za-z0-9_]{5,32})$/);
+      if (match) {
+        return { url: `https://t.me/${match[1]}`, display: `@${match[1]}` };
+      }
+      return null;
+    },
     validate(url) {
       // /username only — reject /joinchat, /+, /s/, /share, /addstickers, etc.
       const match = url.pathname.match(/^\/([A-Za-z0-9_]{5,32})\/?$/);
@@ -86,70 +95,38 @@ export const SOCIAL_PLATFORMS = {
 
   discord: {
     label: "Discord",
-    hostnames: ["discord.gg", "discord.com", "www.discord.com"],
-    validate(url) {
-      if (url.hostname === "discord.gg") {
-        // discord.gg/<invite>
-        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
-        return !!match && match[1].length > 0;
+    hostnames: [],
+    /** Accept username#1234 plain text — Discord has no public profile URLs */
+    preprocessInput(raw) {
+      const trimmed = raw.trim();
+      // username#1234 (legacy discriminator) or just username (new format)
+      const match = trimmed.match(/^([A-Za-z0-9_.]{2,32})(#\d{1,4})?$/);
+      if (match) {
+        return { url: null, display: trimmed };
       }
-      // discord.com/invite/<code> or discord.com/users/<id>
-      const inviteMatch = url.pathname.match(/^\/invite\/([A-Za-z0-9_-]+)\/?$/);
-      if (inviteMatch) return true;
-      const userMatch = url.pathname.match(/^\/users\/([0-9]+)\/?$/);
-      return !!userMatch;
+      return null;
     },
-    normalize(url) {
-      if (url.hostname === "discord.gg") {
-        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
-        return `https://discord.gg/${match[1]}`;
-      }
-      const inviteMatch = url.pathname.match(/^\/invite\/([A-Za-z0-9_-]+)\/?$/);
-      if (inviteMatch) return `https://discord.gg/${inviteMatch[1]}`;
-      const userMatch = url.pathname.match(/^\/users\/([0-9]+)\/?$/);
-      if (userMatch) return `https://discord.com/users/${userMatch[1]}`;
-      return `https://discord.com${url.pathname.replace(/\/+$/, "")}`;
-    },
-    extractDisplay(url) {
-      if (url.hostname === "discord.gg") {
-        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
-        return match[1];
-      }
-      const inviteMatch = url.pathname.match(/^\/invite\/([A-Za-z0-9_-]+)\/?$/);
-      if (inviteMatch) return inviteMatch[1];
-      const userMatch = url.pathname.match(/^\/users\/([0-9]+)\/?$/);
-      if (userMatch) return userMatch[1];
-      const segments = url.pathname.split("/").filter(Boolean);
-      return segments[segments.length - 1] || "Discord";
-    },
+    validate() { return false; },
+    normalize() { return ""; },
+    extractDisplay() { return ""; },
   },
 
   battlenet: {
-    // Battle.net does not have a universal public profile URL.
-    // The most common pattern is the Blizzard career profile for games like Overwatch/Diablo.
-    // MVP: accept battle.net or blizzard.com profile-like URLs.
     label: "Battle.net",
-    hostnames: ["battle.net", "www.battle.net"],
-    validate(url) {
-      // Accept: /en-us/profile/... or similar locale+profile paths
-      // Also accept short paths like /<locale>/... that look profile-ish
-      // Intentionally narrow for MVP — we require at least a path segment beyond locale
-      const match = url.pathname.match(/^\/[a-z]{2}(-[a-z]{2})?\/profile\/([^/]+)\/?/i);
-      if (match) return true;
-      // Also accept direct paths like /account or broader profile patterns
-      // Fallback: any non-trivial path on battle.net
-      return url.pathname.length > 1 && url.pathname !== "/";
+    hostnames: [],
+    /** Accept BattleTag#1234 plain text — Battle.net has no public profile URLs */
+    preprocessInput(raw) {
+      const trimmed = raw.trim();
+      // BattleTag#1234 format
+      const match = trimmed.match(/^([A-Za-z0-9а-яА-ЯёЁ]{2,12})#(\d{4,6})$/u);
+      if (match) {
+        return { url: null, display: trimmed };
+      }
+      return null;
     },
-    normalize(url) {
-      const path = url.pathname.replace(/\/+$/, "");
-      return `https://battle.net${path}`;
-    },
-    extractDisplay(url) {
-      // Try to extract a meaningful identifier from the path
-      const segments = url.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
-      // Return the last meaningful segment
-      return segments[segments.length - 1] || "Battle.net";
-    },
+    validate() { return false; },
+    normalize() { return ""; },
+    extractDisplay() { return ""; },
   },
 
   playstation: {
@@ -302,6 +279,19 @@ export const SOCIAL_PLATFORMS = {
     },
   },
 };
+
+/**
+ * Pre-process raw user input for platforms that accept non-URL values.
+ * Returns { url, display } if the input was handled, or null to fall through to URL validation.
+ * @param {string} type - Platform type key
+ * @param {string} rawInput - Raw user input (may be a URL or plain text)
+ * @returns {{ url: string|null, display: string } | null}
+ */
+export function preprocessSocialInput(type, rawInput) {
+  const platform = SOCIAL_PLATFORMS[type];
+  if (!platform || !platform.preprocessInput) return null;
+  return platform.preprocessInput(rawInput);
+}
 
 /**
  * Validate a URL string against a specific platform's rules.
