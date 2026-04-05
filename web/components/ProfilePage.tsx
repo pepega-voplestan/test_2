@@ -69,8 +69,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
   // Socials
   const [socials, setSocials] = useState<SocialDto[]>([]);
+  const [initialSocials, setInitialSocials] = useState<SocialDto[]>([]);
 
   // Track whether edit form has unsaved changes
+  const socialsChanged = JSON.stringify(socials.map(s => `${s.type}:${s.url}`).sort()) !==
+    JSON.stringify(initialSocials.map(s => `${s.type}:${s.url}`).sort());
   const hasChanges = profile ? (
     editForm.username !== profile.name ||
     editForm.email.trim() !== (profile.email || '') ||
@@ -78,7 +81,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     editForm.currentPassword !== '' ||
     editForm.newPassword !== '' ||
     editForm.showNsfw !== !!profile.showNsfw ||
-    editForm.showPolitics !== !!profile.showPolitics
+    editForm.showPolitics !== !!profile.showPolitics ||
+    socialsChanged
   ) : false;
 
   // Fetch profile
@@ -116,8 +120,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         // Fetch socials
         fetch(`/api/v1/users/${userId}/socials`, { credentials: 'include' })
           .then(r => r.ok ? r.json() : { socials: [] })
-          .then(d => setSocials(d.socials || []))
-          .catch(() => setSocials([]));
+          .then(d => { setSocials(d.socials || []); setInitialSocials(d.socials || []); })
+          .catch(() => { setSocials([]); setInitialSocials([]); });
       })
       .catch((err) => {
         console.error('[ProfilePage] Profile load error:', err);
@@ -400,6 +404,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       setEditForm(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
       setPendingAvatarFile(null);
       setPendingAvatarPreview(null);
+      setInitialSocials(socials);
 
       // If email changed, trigger verification flow instead of closing editor
       if (emailChanged) {
@@ -456,18 +461,18 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       {/* Profile Header */}
       <div className="bg-th-feed rounded-xl p-6 mb-6">
         {/* Avatar + Username row */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-11 h-11 rounded-full overflow-hidden bg-th-input shrink-0">
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-16 h-16 rounded-full overflow-hidden bg-th-input shrink-0">
             {profile.avatar ? (
               <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-th-text-3 text-lg font-bold">
+              <div className="w-full h-full flex items-center justify-center text-th-text-3 text-2xl font-bold">
                 {profile.name.charAt(0).toUpperCase()}
               </div>
             )}
           </div>
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className={`text-xl font-bold ${profile.isBanned ? 'text-th-text-4 line-through' : 'text-th-text'} truncate`}>
+            <h1 className={`text-2xl font-bold ${profile.isBanned ? 'text-th-text-4 line-through' : 'text-th-text'} truncate`}>
               {profile.name}
             </h1>
             {profile.isBanned && (
