@@ -4,7 +4,7 @@ import { SocialDto, SocialType } from '../types';
 /* ───────────────────────── Platform config ───────────────────────── */
 
 const PLATFORM_ORDER: SocialType[] = [
-  'steam', 'telegram', 'x', 'battlenet', 'playstation',
+  'steam', 'telegram', 'x', 'discord', 'battlenet', 'playstation',
   'xbox', 'epicgames', 'youtube', 'spotify',
 ];
 
@@ -12,6 +12,7 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
   steam: 'Steam',
   telegram: 'Telegram',
   x: 'X',
+  discord: 'Discord',
   battlenet: 'Battle.net',
   playstation: 'PlayStation',
   xbox: 'Xbox',
@@ -24,8 +25,20 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
 /* Inline SVGs with official brand colors */
 
 const SteamIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-full h-full">
-    <path fill="#1b2838" d="M12 2a10 10 0 0 0-9.96 9.04l5.12 2.11a2.85 2.85 0 0 1 1.57-.47c.18 0 .35.02.53.05l2.35-3.4v-.06a3.56 3.56 0 1 1 3.56 3.56h-.1l-3.34 2.38c.01.16.02.33.02.5a2.85 2.85 0 0 1-5.65.5L2.1 14.83A10 10 0 1 0 12 2zm-2.43 16.41a2.14 2.14 0 0 0 1.18-2.78 2.14 2.14 0 0 0-1-.97l1.23-.51c.32.2.59.48.78.82a2.86 2.86 0 0 1-1.57 3.72l-.62-.28zm6.97-7.13a2.37 2.37 0 1 0-2.38-2.37 2.37 2.37 0 0 0 2.38 2.37z"/>
+  <svg viewBox="0 0 256 256" className="w-full h-full">
+    <defs>
+      <linearGradient id="steam-grad" x1="0%" y1="0%" x2="50%" y2="100%">
+        <stop offset="0%" stopColor="#111d2e"/>
+        <stop offset="21%" stopColor="#051839"/>
+        <stop offset="41%" stopColor="#0a1b48"/>
+        <stop offset="59%" stopColor="#132e62"/>
+        <stop offset="74%" stopColor="#144b7e"/>
+        <stop offset="88%" stopColor="#136497"/>
+        <stop offset="100%" stopColor="#1387b8"/>
+      </linearGradient>
+    </defs>
+    <circle cx="128" cy="128" r="128" fill="url(#steam-grad)"/>
+    <path fill="#fff" d="M127.7 56c-27.6 0-50.8 19-57.3 44.6l30.7 12.7a17.1 17.1 0 0 1 9.4-2.8c.5 0 1 0 1.5.1l14.1-20.4v-.3a26.9 26.9 0 1 1 26.9 26.9h-.6l-20.1 14.3c0 .4.1.8.1 1.2a20.2 20.2 0 0 1-40.3 3l-22-9.1A57.4 57.4 0 1 0 127.7 56zm-17 88.3a15.2 15.2 0 0 0-7.1-5.8l-8.2-3.4a15.2 15.2 0 0 0 14.5 10c1.9 0 3.7-.4 5.4-1a15.2 15.2 0 0 0 8.5-19.7 15.2 15.2 0 0 0-7.1-5.8l8.5 3.5a12.2 12.2 0 0 1-1.1 22.8 12.2 12.2 0 0 1-13.4-.6zm46.8-51.5a17.9 17.9 0 1 0-17.9-17.9 17.9 17.9 0 0 0 17.9 17.9zm0-28.7a10.8 10.8 0 1 1-10.8 10.8 10.8 10.8 0 0 1 10.8-10.8z"/>
   </svg>
 );
 
@@ -39,6 +52,12 @@ const TelegramIcon = () => (
 const XIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+);
+
+const DiscordIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-full h-full">
+    <path fill="#5865F2" d="M19.27 5.33C17.94 4.71 16.5 4.26 15 4a.09.09 0 0 0-.07.03c-.18.33-.39.76-.53 1.09a16.09 16.09 0 0 0-4.8 0c-.14-.34-.36-.76-.54-1.09-.01-.02-.04-.03-.07-.03-1.5.26-2.93.71-4.27 1.33-.01 0-.02.01-.03.02-2.72 4.07-3.47 8.03-3.1 11.95 0 .02.01.04.03.05 1.8 1.32 3.53 2.12 5.24 2.65.03.01.06 0 .07-.02.4-.55.76-1.13 1.07-1.74.02-.04 0-.08-.04-.09-.57-.22-1.11-.48-1.64-.78-.04-.02-.04-.08-.01-.11.11-.08.22-.17.33-.25.02-.02.05-.02.07-.01 3.44 1.57 7.15 1.57 10.55 0 .02-.01.05-.01.07.01.11.09.22.17.33.26.04.03.04.09-.01.11-.52.31-1.07.56-1.64.78-.04.01-.05.06-.04.09.32.61.68 1.19 1.07 1.74.03.01.06.02.09.01 1.72-.53 3.45-1.33 5.25-2.65.02-.01.03-.03.03-.05.44-4.53-.73-8.46-3.1-11.95-.01-.01-.02-.02-.04-.02zM8.52 14.91c-1.03 0-1.89-.95-1.89-2.12s.84-2.12 1.89-2.12c1.06 0 1.9.96 1.89 2.12 0 1.17-.84 2.12-1.89 2.12zm6.97 0c-1.03 0-1.89-.95-1.89-2.12s.84-2.12 1.89-2.12c1.06 0 1.9.96 1.89 2.12 0 1.17-.83 2.12-1.89 2.12z"/>
   </svg>
 );
 
@@ -83,6 +102,7 @@ const PLATFORM_ICONS: Record<SocialType, React.FC> = {
   steam: SteamIcon,
   telegram: TelegramIcon,
   x: XIcon,
+  discord: DiscordIcon,
   battlenet: BattlenetIcon,
   playstation: PlayStationIcon,
   xbox: XboxIcon,
@@ -227,7 +247,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       <div className="text-xs text-th-text-3 mb-3">Социальные сети</div>
 
       {/* Icon grid — 5 cols on mobile (44px+ touch targets), row of 9 on sm+ */}
-      <div className="grid grid-cols-5 sm:grid-cols-9 gap-2">
+      <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
         {PLATFORM_ORDER.map((type) => {
           const isActive = activeSocials.has(type);
           const Icon = PLATFORM_ICONS[type];
