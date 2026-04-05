@@ -65,7 +65,7 @@ export interface Poll {
   totalVoters: number;
 }
 
-export type SocialType = 'steam' | 'telegram' | 'x' | 'discord' | 'battlenet' | 'playstation' | 'xbox' | 'epicgames' | 'youtube' | 'spotify' | 'boosty';
+export type SocialType = 'steam' | 'telegram' | 'x' | 'discord' | 'battlenet' | 'playstation' | 'xbox' | 'epicgames' | 'youtube' | 'spotify' | 'boosty' | 'retroachievements';
 
 export interface SocialDto {
   type: SocialType;

@@ -5,7 +5,7 @@ import { SocialDto, SocialType } from '../types';
 
 const PLATFORM_ORDER: SocialType[] = [
   'steam', 'telegram', 'x', 'discord', 'battlenet', 'playstation',
-  'xbox', 'epicgames', 'youtube', 'spotify', 'boosty',
+  'xbox', 'epicgames', 'youtube', 'spotify', 'boosty', 'retroachievements',
 ];
 
 const PLATFORM_LABELS: Record<SocialType, string> = {
@@ -20,6 +20,7 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
   youtube: 'YouTube',
   spotify: 'Spotify',
   boosty: 'Boosty',
+  retroachievements: 'RetroAchievements',
 };
 
 /** Per-platform input label and placeholder */
@@ -35,6 +36,7 @@ const PLATFORM_INPUT_HINTS: Record<SocialType, { label: string; placeholder: str
   youtube: { label: 'Ссылка на канал YouTube', placeholder: 'https://www.youtube.com/@handle' },
   spotify: { label: 'Ссылка на профиль Spotify', placeholder: 'https://open.spotify.com/user/...' },
   boosty: { label: 'Ссылка на страницу Boosty', placeholder: 'https://boosty.to/username' },
+  retroachievements: { label: 'Ссылка на профиль RetroAchievements', placeholder: 'https://retroachievements.org/user/...' },
 };
 
 /* ───────────────────────── SVG Icons ───────────────────────── */
@@ -92,6 +94,10 @@ const SpotifyIcon = () => (
   </svg>
 );
 
+const RetroAchievementsIcon = () => (
+  <img src="/retroachievements.png" alt="RetroAchievements" className="w-full h-full rounded-sm" />
+);
+
 const BoostyIcon = () => (
   <img src="/boosty.png" alt="Boosty" className="w-full h-full rounded-sm" />
 );
@@ -108,6 +114,7 @@ const PLATFORM_ICONS: Record<SocialType, React.FC> = {
   youtube: YouTubeIcon,
   spotify: SpotifyIcon,
   boosty: BoostyIcon,
+  retroachievements: RetroAchievementsIcon,
 };
 
 /* ───────────────────────── Public display ───────────────────────── */
@@ -261,7 +268,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       <div className="text-xs text-th-text-3 mb-3">Социальные сети</div>
 
       {/* Icon grid — 5 cols on mobile (44px+ touch targets), row of 9 on sm+ */}
-      <div className="grid grid-cols-5 sm:grid-cols-11 gap-2">
+      <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
         {PLATFORM_ORDER.map((type) => {
           const isActive = activeSocials.has(type);
           const Icon = PLATFORM_ICONS[type];

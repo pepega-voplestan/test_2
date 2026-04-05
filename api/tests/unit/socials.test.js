@@ -21,6 +21,7 @@ describe("socials helper", () => {
       expect(SOCIAL_TYPES).toContain("xbox");
       expect(SOCIAL_TYPES).toContain("epicgames");
       expect(SOCIAL_TYPES).toContain("boosty");
+      expect(SOCIAL_TYPES).toContain("retroachievements");
     });
   });
 
