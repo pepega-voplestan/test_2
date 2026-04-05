@@ -12,7 +12,7 @@
 /** @type {string[]} */
 export const SOCIAL_TYPES = [
   "steam", "telegram", "x", "discord", "battlenet", "playstation",
-  "xbox", "epicgames", "youtube", "spotify", "boosty",
+  "xbox", "epicgames", "youtube", "spotify", "boosty", "retroachievements",
 ];
 
 /**
@@ -256,6 +256,24 @@ export const SOCIAL_PLATFORMS = {
     extractDisplay(url) {
       const match = url.pathname.match(/^\/(user|artist)\/([^/]+)\/?$/);
       return decodeURIComponent(match[2]);
+    },
+  },
+
+  retroachievements: {
+    label: "RetroAchievements",
+    hostnames: ["retroachievements.org", "www.retroachievements.org"],
+    validate(url) {
+      // /user/<username>
+      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_.-]+)\/?$/);
+      return !!match && match[1].length > 0;
+    },
+    normalize(url) {
+      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_.-]+)\/?$/);
+      return `https://retroachievements.org/user/${match[1]}`;
+    },
+    extractDisplay(url) {
+      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_.-]+)\/?$/);
+      return match[1];
     },
   },
 
