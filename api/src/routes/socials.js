@@ -4,7 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { asyncHandler, toSqliteDatetime } from "../helpers/common.js";
 import { createSocialSchema, updateSocialSchema, socialTypeSchema } from "../helpers/validation.js";
-import { validateSocialUrl, normalizeSocialUrl, resolveSocialDisplay, preprocessSocialInput } from "../helpers/socials.js";
+import { validateSocialUrl, normalizeSocialUrl, resolveSocialDisplay, preprocessSocialInput, ensureProtocol } from "../helpers/socials.js";
 
 const router = Router();
 
@@ -56,12 +56,13 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
     finalUrl = preprocessed.url || "";
     display = preprocessed.display;
   } else {
-    // Normal URL-based flow
-    const validation = validateSocialUrl(type, rawInput);
+    // Normal URL-based flow — auto-prepend https:// if missing
+    const urlInput = ensureProtocol(rawInput);
+    const validation = validateSocialUrl(type, urlInput);
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
-    finalUrl = normalizeSocialUrl(type, rawInput);
+    finalUrl = normalizeSocialUrl(type, urlInput);
     display = await resolveSocialDisplay(type, finalUrl);
   }
 
@@ -117,11 +118,13 @@ router.put("/users/:id/socials/:type", requireAuth, asyncHandler(async (req, res
     finalUrl = preprocessed.url || "";
     display = preprocessed.display;
   } else {
-    const validation = validateSocialUrl(type, rawInput);
+    // Normal URL-based flow — auto-prepend https:// if missing
+    const urlInput = ensureProtocol(rawInput);
+    const validation = validateSocialUrl(type, urlInput);
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
-    finalUrl = normalizeSocialUrl(type, rawInput);
+    finalUrl = normalizeSocialUrl(type, urlInput);
     display = await resolveSocialDisplay(type, finalUrl);
   }
 

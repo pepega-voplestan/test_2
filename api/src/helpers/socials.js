@@ -312,6 +312,20 @@ export function preprocessSocialInput(type, rawInput) {
 }
 
 /**
+ * Auto-prepend https:// if the input looks like a URL without a protocol.
+ * E.g. "youtube.com/@handle" → "https://youtube.com/@handle"
+ * @param {string} raw
+ * @returns {string}
+ */
+export function ensureProtocol(raw) {
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // Looks like a domain (contains a dot, starts with a word char)
+  if (/^\w[^\s]*\.[^\s]+/.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
+
+/**
  * Validate a URL string against a specific platform's rules.
  * @param {string} type - Platform type key
  * @param {string} urlStr - Raw URL string

@@ -4,6 +4,7 @@ import {
   normalizeSocialUrl,
   extractSocialDisplay,
   resolveSocialDisplay,
+  ensureProtocol,
   SOCIAL_TYPES,
 } from "../../src/helpers/socials.js";
 
@@ -309,6 +310,36 @@ describe("socials helper", () => {
     it("falls back to URL extraction for x (no API resolution)", async () => {
       const result = await resolveSocialDisplay("x", "https://x.com/elonmusk");
       expect(result).toBe("@elonmusk");
+    });
+  });
+
+  describe("ensureProtocol", () => {
+    it("leaves https:// URLs unchanged", () => {
+      expect(ensureProtocol("https://youtube.com/@test")).toBe("https://youtube.com/@test");
+    });
+
+    it("leaves http:// URLs unchanged", () => {
+      expect(ensureProtocol("http://youtube.com/@test")).toBe("http://youtube.com/@test");
+    });
+
+    it("prepends https:// to bare domain", () => {
+      expect(ensureProtocol("youtube.com/@MadHighlights")).toBe("https://youtube.com/@MadHighlights");
+    });
+
+    it("prepends https:// to www domain", () => {
+      expect(ensureProtocol("www.youtube.com/@MadHighlights")).toBe("https://www.youtube.com/@MadHighlights");
+    });
+
+    it("prepends https:// to steamcommunity.com", () => {
+      expect(ensureProtocol("steamcommunity.com/id/test")).toBe("https://steamcommunity.com/id/test");
+    });
+
+    it("does not prepend to plain text without dots", () => {
+      expect(ensureProtocol("hardo#1234")).toBe("hardo#1234");
+    });
+
+    it("trims whitespace", () => {
+      expect(ensureProtocol("  youtube.com/@test  ")).toBe("https://youtube.com/@test");
     });
   });
 });
