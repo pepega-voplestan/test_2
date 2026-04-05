@@ -5,7 +5,7 @@ import { SocialDto, SocialType } from '../types';
 
 const PLATFORM_ORDER: SocialType[] = [
   'steam', 'telegram', 'x', 'discord', 'battlenet', 'playstation',
-  'xbox', 'epicgames', 'youtube', 'spotify',
+  'xbox', 'epicgames', 'youtube', 'spotify', 'boosty',
 ];
 
 const PLATFORM_LABELS: Record<SocialType, string> = {
@@ -19,6 +19,7 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
   epicgames: 'Epic Games',
   youtube: 'YouTube',
   spotify: 'Spotify',
+  boosty: 'Boosty',
 };
 
 /* ───────────────────────── SVG Icons ───────────────────────── */
@@ -76,6 +77,10 @@ const SpotifyIcon = () => (
   </svg>
 );
 
+const BoostyIcon = () => (
+  <img src="/boosty.png" alt="Boosty" className="w-full h-full rounded-sm" />
+);
+
 const PLATFORM_ICONS: Record<SocialType, React.FC> = {
   steam: SteamIcon,
   telegram: TelegramIcon,
@@ -87,6 +92,7 @@ const PLATFORM_ICONS: Record<SocialType, React.FC> = {
   epicgames: EpicGamesIcon,
   youtube: YouTubeIcon,
   spotify: SpotifyIcon,
+  boosty: BoostyIcon,
 };
 
 /* ───────────────────────── Public display ───────────────────────── */
@@ -225,7 +231,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       <div className="text-xs text-th-text-3 mb-3">Социальные сети</div>
 
       {/* Icon grid — 5 cols on mobile (44px+ touch targets), row of 9 on sm+ */}
-      <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+      <div className="grid grid-cols-5 sm:grid-cols-11 gap-2">
         {PLATFORM_ORDER.map((type) => {
           const isActive = activeSocials.has(type);
           const Icon = PLATFORM_ICONS[type];
