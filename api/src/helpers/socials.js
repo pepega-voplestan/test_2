@@ -342,7 +342,7 @@ export function validateSocialUrl(type, urlStr) {
     return { valid: false, error: "Неверный формат ссылки" };
   }
 
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
+  if (url.protocol !== "https:") {
     return { valid: false, error: "Ссылка должна начинаться с https://" };
   }
 
@@ -387,7 +387,7 @@ export function extractSocialDisplay(type, urlStr) {
    name, we try to resolve the actual username/persona via public APIs.
    Falls back to synchronous URL-based extraction on any failure. */
 
-const RESOLVE_TIMEOUT = 5000;
+const RESOLVE_TIMEOUT = 3000;
 
 /**
  * Steam: fetch persona name from the public XML profile.
