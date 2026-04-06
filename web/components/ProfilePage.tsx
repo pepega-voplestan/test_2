@@ -718,7 +718,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               <button
                 type="submit"
                 disabled={isSaving || !hasChanges}
-                className="px-5 py-2 bg-th-text text-th-page text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                className="px-5 py-2 text-sm font-semibold bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900 hover:bg-neutral-700 dark:hover:bg-neutral-300 border border-neutral-800 dark:border-neutral-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSaving ? 'Сохранение...' : 'Сохранить'}
               </button>
@@ -744,7 +744,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   });
                 }}
                 disabled={isSaving}
-                className="px-5 py-2 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 rounded-lg transition-colors"
+                className="px-5 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 rounded-lg transition-colors"
               >
                 Отмена
               </button>
