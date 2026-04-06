@@ -2,6 +2,17 @@ import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { cleanDb, disconnectDb, authenticatedAgent, request } from "../helpers.js";
 import { createUser, createSocial } from "../fixtures/index.js";
 
+vi.mock("../../src/helpers/socials.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    resolveSocialDisplay: vi.fn((_type, url) => {
+      // Return URL-extracted display synchronously to avoid external API calls
+      return Promise.resolve(actual.extractSocialDisplay(_type, url));
+    }),
+  };
+});
+
 describe("Socials", () => {
   beforeEach(async () => {
     await cleanDb();
