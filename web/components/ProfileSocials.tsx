@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SocialDto, SocialType } from '../types';
 
 /* ───────────────────────── Platform config ───────────────────────── */
@@ -124,6 +124,18 @@ interface ProfileSocialsDisplayProps {
 }
 
 export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ socials }) => {
+  const [copiedType, setCopiedType] = useState<SocialType | null>(null);
+
+  const handleCopy = useCallback(async (type: SocialType, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedType(type);
+      setTimeout(() => setCopiedType(null), 1500);
+    } catch {
+      // clipboard not available
+    }
+  }, []);
+
   if (socials.length === 0) return null;
 
   return (
@@ -152,10 +164,16 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
         ) : (
           <span
             key={s.type}
-            className={className + " cursor-default"}
+            className={className + " cursor-pointer relative"}
             title={`${PLATFORM_LABELS[s.type]}: ${s.display}`}
+            onClick={() => handleCopy(s.type, s.display)}
           >
             {content}
+            {copiedType === s.type && (
+              <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs bg-th-card text-th-text border border-th-border px-2 py-1 rounded shadow-lg z-10">
+                Скопировано в буфер обмена!
+              </span>
+            )}
           </span>
         );
       })}
@@ -166,14 +184,12 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
 /* ───────────────────────── Edit mode ───────────────────────── */
 
 interface ProfileSocialsEditorProps {
-  userId: string;
   socials: SocialDto[];
   onSocialsChange: (socials: SocialDto[]) => void;
   disabled?: boolean;
 }
 
 export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
-  userId,
   socials,
   onSocialsChange,
   disabled,
@@ -183,11 +199,9 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
     mode: 'add' | 'manage' | 'edit';
     url: string;
     error: string | null;
-    loading: boolean;
   } | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<SocialType | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const activeSocials = new Map(socials.map(s => [s.type, s]));
 
@@ -195,69 +209,34 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
     if (disabled) return;
     const existing = activeSocials.get(type);
     if (existing) {
-      setModal({ type, mode: 'manage', url: existing.url, error: null, loading: false });
+      setModal({ type, mode: 'manage', url: existing.url, error: null });
     } else {
-      setModal({ type, mode: 'add', url: '', error: null, loading: false });
+      setModal({ type, mode: 'add', url: '', error: null });
     }
   };
 
-  const handleSubmit = async () => {
-    if (!modal) return;
-    const isAdd = modal.mode === 'add';
-    setModal(m => m ? { ...m, loading: true, error: null } : m);
+  /** Local-only add/edit — actual API calls happen in ProfilePage.handleSave */
+  const handleSubmit = () => {
+    if (!modal || !modal.url.trim()) return;
+    const trimmed = modal.url.trim();
 
-    try {
-      const res = await fetch(
-        isAdd
-          ? `/api/v1/users/${userId}/socials`
-          : `/api/v1/users/${userId}/socials/${modal.type}`,
-        {
-          method: isAdd ? 'POST' : 'PUT',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(isAdd
-            ? { type: modal.type, url: modal.url.trim() }
-            : { url: modal.url.trim() }
-          ),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка');
-
-      if (isAdd) {
-        onSocialsChange([...socials, data.social]);
-      } else {
-        onSocialsChange(socials.map(s => s.type === modal.type ? data.social : s));
-      }
-      setModal(null);
-    } catch (err: unknown) {
-      setModal(m => m ? { ...m, loading: false, error: err instanceof Error ? err.message : 'Ошибка' } : m);
+    if (modal.mode === 'add') {
+      onSocialsChange([...socials, { type: modal.type, url: trimmed, display: trimmed }]);
+    } else {
+      onSocialsChange(socials.map(s => s.type === modal.type ? { ...s, url: trimmed, display: trimmed } : s));
     }
+    setModal(null);
   };
 
-  const handleDelete = async (type: SocialType) => {
-    setDeleteLoading(true);
-    try {
-      const res = await fetch(`/api/v1/users/${userId}/socials/${type}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Ошибка');
-      }
-      onSocialsChange(socials.filter(s => s.type !== type));
-      setConfirmDelete(null);
-      setModal(null);
-    } catch {
-      // item stays in place — user sees it is still there
-    } finally {
-      setDeleteLoading(false);
-    }
+  /** Local-only delete */
+  const handleDelete = (type: SocialType) => {
+    onSocialsChange(socials.filter(s => s.type !== type));
+    setConfirmDelete(null);
+    setModal(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && modal && !modal.loading && modal.url.trim()) {
+    if (e.key === 'Enter' && modal && modal.url.trim()) {
       e.preventDefault();
       handleSubmit();
     }
@@ -267,7 +246,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
     <div className="border-t border-th-border-2 pt-4">
       <div className="text-xs text-th-text-3 mb-3">Социальные сети</div>
 
-      {/* Icon grid — 5 cols on mobile (44px+ touch targets), row of 9 on sm+ */}
+      {/* Icon grid */}
       <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
         {PLATFORM_ORDER.map((type) => {
           const isActive = activeSocials.has(type);
@@ -278,7 +257,6 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               type="button"
               onClick={() => handleIconClick(type)}
               disabled={disabled}
-              /* 44×44px minimum tap target per Apple HIG / Material 3 guidelines */
               className={`
                 flex items-center justify-center w-full aspect-square rounded-lg border transition-all
                 ${isActive
@@ -301,17 +279,11 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {modal && modal.mode !== 'manage' && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => !modal.loading && setModal(null)}
-          /* Escape key support */
-          onKeyDown={(e) => e.key === 'Escape' && !modal.loading && setModal(null)}
+          onClick={() => setModal(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setModal(null)}
           role="dialog"
           aria-modal="true"
         >
-          {/*
-            Mobile: bottom-sheet (items-end + rounded-t-xl)
-            Desktop: centered card (sm:rounded-xl)
-            iOS safe area: env(safe-area-inset-bottom) padding
-          */}
           <div
             className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-sm sm:mx-4 shadow-2xl"
             style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
@@ -334,7 +306,6 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={PLATFORM_INPUT_HINTS[modal.type].placeholder}
               className="w-full bg-th-ring/5 rounded-lg px-3 py-2.5 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
-              disabled={modal.loading}
             />
 
             {modal.error && (
@@ -345,7 +316,6 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setModal(null)}
-                disabled={modal.loading}
                 className="px-4 py-2 text-sm text-th-text-4 hover:text-th-text transition-colors rounded"
               >
                 Отмена
@@ -353,13 +323,10 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={modal.loading || !modal.url.trim()}
+                disabled={!modal.url.trim()}
                 className="px-4 py-2 text-sm bg-th-text text-th-page rounded-lg font-medium disabled:opacity-50 transition-opacity hover:opacity-90"
               >
-                {modal.loading
-                  ? 'Сохранение...'
-                  : modal.mode === 'add' ? 'Добавить' : 'Сохранить'
-                }
+                {modal.mode === 'add' ? 'Добавить' : 'Сохранить'}
               </button>
             </div>
           </div>
@@ -414,7 +381,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {confirmDelete && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => !deleteLoading && setConfirmDelete(null)}
+          onClick={() => setConfirmDelete(null)}
           role="dialog"
           aria-modal="true"
         >
@@ -431,7 +398,6 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(null)}
-                disabled={deleteLoading}
                 className="px-4 py-1.5 text-sm text-th-text-4 hover:text-th-text transition-colors rounded"
               >
                 Отмена
@@ -439,10 +405,9 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={() => handleDelete(confirmDelete)}
-                disabled={deleteLoading}
-                className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
+                className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
               >
-                {deleteLoading ? 'Удаление...' : 'Удалить'}
+                Удалить
               </button>
             </div>
           </div>
