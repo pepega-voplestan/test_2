@@ -401,10 +401,80 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         setProfile(prev => prev ? { ...prev, avatar: newAvatarUrl! } : prev);
       }
 
+      // Step 3: Save social changes (add/remove/update via API)
+      if (socialsChanged) {
+        const initialMap = new Map(initialSocials.map(s => [s.type, s]));
+        const currentMap = new Map(socials.map(s => [s.type, s]));
+
+        const errors: string[] = [];
+        const savedSocials: SocialDto[] = [];
+
+        // Deletions: in initial but not in current
+        for (const [type] of initialMap) {
+          if (!currentMap.has(type)) {
+            try {
+              const res = await fetch(`/api/v1/users/${userId}/socials/${type}`, {
+                method: 'DELETE', credentials: 'include',
+              });
+              if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                errors.push(d.error || `Ошибка удаления ${type}`);
+              }
+            } catch {
+              errors.push(`Ошибка удаления ${type}`);
+            }
+          }
+        }
+
+        // Additions and updates
+        for (const [type, social] of currentMap) {
+          const initial = initialMap.get(type);
+          if (!initial) {
+            // Add
+            try {
+              const res = await fetch(`/api/v1/users/${userId}/socials`, {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, url: social.url }),
+              });
+              const d = await res.json();
+              if (!res.ok) { errors.push(d.error || `Ошибка добавления ${type}`); }
+              else { savedSocials.push(d.social); }
+            } catch {
+              errors.push(`Ошибка добавления ${type}`);
+            }
+          } else if (initial.url !== social.url) {
+            // Update
+            try {
+              const res = await fetch(`/api/v1/users/${userId}/socials/${type}`, {
+                method: 'PUT', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: social.url }),
+              });
+              const d = await res.json();
+              if (!res.ok) { errors.push(d.error || `Ошибка обновления ${type}`); }
+              else { savedSocials.push(d.social); }
+            } catch {
+              errors.push(`Ошибка обновления ${type}`);
+            }
+          } else {
+            // Unchanged — keep as-is
+            savedSocials.push(social);
+          }
+        }
+
+        if (errors.length > 0) {
+          throw new Error(errors[0]);
+        }
+
+        // Update socials with server-resolved display names
+        setSocials(savedSocials);
+        setInitialSocials(savedSocials);
+      }
+
       setEditForm(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
       setPendingAvatarFile(null);
       setPendingAvatarPreview(null);
-      setInitialSocials(socials);
 
       // If email changed, trigger verification flow instead of closing editor
       if (emailChanged) {
@@ -667,7 +737,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             </div>
 
             <ProfileSocialsEditor
-              userId={userId}
               socials={socials}
               onSocialsChange={setSocials}
               disabled={isSaving}
@@ -747,6 +816,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                     showNsfw: !!profile.showNsfw,
                     showPolitics: !!profile.showPolitics,
                   });
+                  setSocials(initialSocials);
                 }}
                 disabled={isSaving}
                 className="px-5 py-2 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 rounded-lg transition-colors"
