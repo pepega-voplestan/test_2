@@ -237,6 +237,26 @@ export async function createPollVote(overrides = {}) {
 }
 
 /**
+ * Create a social link for a user.
+ */
+export async function createSocial(overrides = {}) {
+  const prisma = getTestPrisma();
+  if (!overrides.userId) throw new Error("createSocial requires userId");
+
+  return prisma.social.create({
+    data: {
+      id: overrides.id || uuid(),
+      user_id: overrides.userId,
+      type: overrides.type || "steam",
+      url: overrides.url || "https://steamcommunity.com/id/testuser",
+      display_name: overrides.display_name || "testuser",
+      created_at: overrides.created_at || now(),
+      updated_at: overrides.updated_at || now(),
+    },
+  });
+}
+
+/**
  * Create a verification code.
  */
 export async function createVerificationCode(overrides = {}) {

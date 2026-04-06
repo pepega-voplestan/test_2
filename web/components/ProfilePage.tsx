@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { UserProfile, Shout, Comment, User } from '../types';
+import { UserProfile, Shout, Comment, User, SocialDto } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
+import { ProfileSocialsDisplay, ProfileSocialsEditor } from './ProfileSocials';
 
 interface ProfilePageProps {
   userId: string;
@@ -66,12 +67,27 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailSending, setEmailSending] = useState(false);
 
+  // Socials
+  const [socials, setSocials] = useState<SocialDto[]>([]);
+
+  // Track whether edit form has unsaved changes
+  const hasChanges = profile ? (
+    editForm.username !== profile.name ||
+    editForm.email.trim() !== (profile.email || '') ||
+    pendingAvatarFile !== null ||
+    editForm.currentPassword !== '' ||
+    editForm.newPassword !== '' ||
+    editForm.showNsfw !== !!profile.showNsfw ||
+    editForm.showPolitics !== !!profile.showPolitics
+  ) : false;
+
   // Fetch profile
   useEffect(() => {
     setIsLoadingProfile(true);
     setProfileError(null);
     setProfile(null);
     setShouts([]);
+    setSocials([]);
     setHasMore(true);
     offsetRef.current = 0;
 
@@ -97,6 +113,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           showNsfw: !!data.profile.showNsfw,
           showPolitics: !!data.profile.showPolitics,
         });
+        // Fetch socials
+        fetch(`/api/v1/users/${userId}/socials`, { credentials: 'include' })
+          .then(r => r.ok ? r.json() : { socials: [] })
+          .then(d => setSocials(d.socials || []))
+          .catch(() => setSocials([]));
       })
       .catch((err) => {
         console.error('[ProfilePage] Profile load error:', err);
@@ -354,13 +375,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
       const hasProfileChanges = Object.keys(body).length > 0 || pendingAvatarFile;
 
-      // Nothing changed at all
-      if (!hasProfileChanges && !emailChanged) {
-        setEditError('Нет изменений');
-        setIsSaving(false);
-        return;
-      }
-
       // Save non-email profile changes
       if (Object.keys(body).length > 0) {
         const res = await fetch(`/api/v1/users/${userId}`, {
@@ -441,9 +455,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
       {/* Profile Header */}
       <div className="bg-th-feed rounded-xl p-6 mb-6">
-        <div className="flex items-start gap-5">
-          {/* Avatar */}
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-th-input shrink-0">
+        {/* Avatar + Username row */}
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-16 h-16 rounded-full overflow-hidden bg-th-input shrink-0">
             {profile.avatar ? (
               <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
             ) : (
@@ -452,68 +466,67 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               </div>
             )}
           </div>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className={`text-xl font-bold ${profile.isBanned ? 'text-th-text-4 line-through' : 'text-th-text'}`}>
-                {profile.name}
-              </h1>
-              {profile.isBanned && (
-                <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded">Забанен</span>
-              )}
-            </div>
-
-            <div className="text-th-text-4 text-sm mb-3">
-              {profile.shoutCount} {getDeclension(profile.shoutCount ?? 0, 'вопль', 'вопля', 'воплей')}
-              <span className="mx-2">·</span>
-              На сайте с {formatDate(profile.createdAt)}
-            </div>
-
-            {/* Owner actions */}
-            {profile.isOwner && !isEditing && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setAvatarUploadError(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
-                  className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
-                >
-                  Редактировать профиль
-                </button>
-                <button
-                  onClick={openIgnoreList}
-                  className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
-                >
-                  Список игнора
-                </button>
-              </div>
-            )}
-            {/* Ignore button for non-owner */}
-            {!profile.isOwner && user && (
-              <div className="flex items-center gap-2">
-                {isIgnored(userId) ? (
-                  <button
-                    onClick={() => setConfirmUnignore(true)}
-                    disabled={ignoreLoading}
-                    className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border border-red-400/50 dark:border-red-500/40 hover:border-red-500 dark:hover:border-red-400/60 bg-red-50 dark:bg-red-500/10 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    Убрать из игнора
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setConfirmIgnore(true)}
-                    disabled={ignoreLoading}
-                    className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    Добавить в игнор
-                  </button>
-                )}
-                {ignoreError && (
-                  <span className="text-xs text-red-400">{ignoreError}</span>
-                )}
-              </div>
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className={`text-2xl font-bold ${profile.isBanned ? 'text-th-text-4 line-through' : 'text-th-text'} truncate`}>
+              {profile.name}
+            </h1>
+            {profile.isBanned && (
+              <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded shrink-0">Забанен</span>
             )}
           </div>
         </div>
+
+        <div className="text-th-text-4 text-sm mb-3">
+          {profile.shoutCount} {getDeclension(profile.shoutCount ?? 0, 'вопль', 'вопля', 'воплей')}
+          <span className="mx-2">·</span>
+          На сайте с {formatDate(profile.createdAt)}
+        </div>
+
+        {/* Owner actions */}
+        {profile.isOwner && !isEditing && (
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => { setIsEditing(true); setEditError(null); setEditSuccess(null); setPendingAvatarFile(null); setPendingAvatarPreview(null); setAvatarUploadError(null); setEmailStep('idle'); setEmailCode(''); setEmailError(null); }}
+              className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
+            >
+              Редактировать профиль
+            </button>
+            <button
+              onClick={openIgnoreList}
+              className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors"
+            >
+              Список игнора
+            </button>
+          </div>
+        )}
+        {/* Ignore button for non-owner */}
+        {!profile.isOwner && user && (
+          <div className="flex items-center gap-2 mb-3">
+            {isIgnored(userId) ? (
+              <button
+                onClick={() => setConfirmUnignore(true)}
+                disabled={ignoreLoading}
+                className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border border-red-400/50 dark:border-red-500/40 hover:border-red-500 dark:hover:border-red-400/60 bg-red-50 dark:bg-red-500/10 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Убрать из игнора
+              </button>
+            ) : (
+              <button
+                onClick={() => setConfirmIgnore(true)}
+                disabled={ignoreLoading}
+                className="text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Добавить в игнор
+              </button>
+            )}
+            {ignoreError && (
+              <span className="text-xs text-red-400">{ignoreError}</span>
+            )}
+          </div>
+        )}
+
+        {/* Public socials display */}
+        {!isEditing && <ProfileSocialsDisplay socials={socials} />}
 
         {/* Success message */}
         {editSuccess && (
@@ -648,6 +661,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               </div>
             </div>
 
+            <ProfileSocialsEditor
+              userId={userId}
+              socials={socials}
+              onSocialsChange={setSocials}
+              disabled={isSaving}
+            />
+
             <div className="border-t border-th-border-2 pt-4">
               <div className="text-xs text-th-text-3 mb-3">Смена пароля (оставьте пустым, чтобы не менять)</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -697,8 +717,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
-                disabled={isSaving}
-                className="px-5 py-2 bg-th-text text-th-page text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                disabled={isSaving || !hasChanges}
+                className="px-5 py-2 text-sm font-semibold bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900 hover:bg-neutral-700 dark:hover:bg-neutral-300 border border-neutral-800 dark:border-neutral-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSaving ? 'Сохранение...' : 'Сохранить'}
               </button>
@@ -724,7 +744,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   });
                 }}
                 disabled={isSaving}
-                className="px-5 py-2 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 rounded-lg transition-colors"
+                className="px-5 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 rounded-lg transition-colors"
               >
                 Отмена
               </button>
