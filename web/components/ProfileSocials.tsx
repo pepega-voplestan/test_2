@@ -128,7 +128,19 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
 
   const handleCopy = useCallback(async (type: SocialType, text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for non-HTTPS contexts
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
       setCopiedType(type);
       setTimeout(() => setCopiedType(null), 1500);
     } catch {
