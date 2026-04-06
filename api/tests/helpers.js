@@ -90,6 +90,7 @@ const TABLES = [
   "shout",
   "verificationCode",
   "announcement",
+  "social",
   "setting",
   "user",
 ];
