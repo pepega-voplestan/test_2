@@ -155,7 +155,7 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
       {socials.map((s) => {
         const Icon = PLATFORM_ICONS[s.type];
         const isLink = s.url && s.url.startsWith('http');
-        const className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-th-ring/5 hover:bg-th-ring/10 border border-th-border-2 transition-colors text-sm select-none";
+        const className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 transition-colors text-sm select-none";
         const content = (
           <>
             <span className="w-5 h-5 shrink-0"><Icon /></span>
@@ -311,8 +311,8 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               className={`
                 flex items-center justify-center w-full aspect-square rounded-lg border transition-all
                 ${isActive
-                  ? 'bg-th-ring/10 border-th-border hover:bg-th-ring/15'
-                  : 'bg-th-ring/[0.03] border-th-border-2 opacity-40 hover:opacity-70 hover:bg-th-ring/5 grayscale hover:grayscale-0'
+                  ? 'bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                  : 'bg-neutral-50 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 opacity-40 hover:opacity-70 hover:bg-neutral-100 dark:hover:bg-neutral-700 grayscale hover:grayscale-0'
                 }
                 disabled:pointer-events-none
               `}
@@ -369,7 +369,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
                 type="button"
                 onClick={() => setModal(null)}
                 disabled={modal.loading}
-                className="px-4 py-2 text-sm text-th-text-4 hover:text-th-text transition-colors rounded"
+                className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 rounded-lg transition-colors"
               >
                 Отмена
               </button>
@@ -377,7 +377,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
                 type="button"
                 onClick={handleSubmit}
                 disabled={modal.loading || !modal.url.trim()}
-                className="px-4 py-2 text-sm bg-th-text text-th-page rounded-lg font-medium disabled:opacity-50 transition-opacity hover:opacity-90"
+                className="px-4 py-2 text-sm font-medium bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900 hover:bg-neutral-700 dark:hover:bg-neutral-300 border border-neutral-800 dark:border-neutral-200 rounded-lg disabled:opacity-50 transition-colors"
               >
                 {modal.loading
                   ? 'Сохранение...'
@@ -409,14 +409,14 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setModal(m => m ? { ...m, mode: 'edit' } : m)}
-                className="w-full px-4 py-2.5 text-sm text-th-text bg-th-ring/5 hover:bg-th-ring/10 border border-th-border-2 rounded-lg transition-colors text-left"
+                className="w-full px-4 py-2.5 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-lg transition-colors text-left"
               >
                 Поменять
               </button>
               <button
                 type="button"
                 onClick={() => { setConfirmDelete(modal.type); setModal(null); }}
-                className="w-full px-4 py-2.5 text-sm text-red-500 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 rounded-lg transition-colors text-left"
+                className="w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-300 dark:border-red-500/30 rounded-lg transition-colors text-left"
               >
                 Удалить
               </button>
@@ -425,7 +425,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
             <button
               type="button"
               onClick={() => setModal(null)}
-              className="w-full mt-2 px-4 py-2 text-sm text-th-text-4 hover:text-th-text transition-colors text-center"
+              className="w-full mt-2 px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-lg transition-colors text-center"
             >
               Отмена
             </button>
@@ -455,7 +455,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
                 type="button"
                 onClick={() => setConfirmDelete(null)}
                 disabled={deleteLoading}
-                className="px-4 py-1.5 text-sm text-th-text-4 hover:text-th-text transition-colors rounded"
+                className="px-4 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 rounded-lg transition-colors"
               >
                 Отмена
               </button>
@@ -463,7 +463,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
                 type="button"
                 onClick={() => handleDelete(confirmDelete)}
                 disabled={deleteLoading}
-                className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
+                className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-500 border border-red-600 hover:border-red-500 rounded-lg font-medium disabled:opacity-50 transition-colors"
               >
                 {deleteLoading ? 'Удаление...' : 'Удалить'}
               </button>
