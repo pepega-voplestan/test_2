@@ -481,6 +481,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
           </div>
         </div>
 
+        <div className="text-th-text-4 text-sm mb-3">
+          {profile.shoutCount} {getDeclension(profile.shoutCount ?? 0, 'вопль', 'вопля', 'воплей')}
+          <span className="mx-2">·</span>
+          На сайте с {formatDate(profile.createdAt)}
+        </div>
+
         {/* Owner actions */}
         {profile.isOwner && !isEditing && (
           <div className="flex items-center gap-2 mb-3">
@@ -526,12 +532,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
         {/* Public socials display */}
         {!isEditing && <ProfileSocialsDisplay socials={socials} />}
-
-        <div className="text-th-text-4 text-sm">
-          {profile.shoutCount} {getDeclension(profile.shoutCount ?? 0, 'вопль', 'вопля', 'воплей')}
-          <span className="mx-2">·</span>
-          На сайте с {formatDate(profile.createdAt)}
-        </div>
 
         {/* Success message */}
         {editSuccess && (
