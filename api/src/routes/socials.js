@@ -13,7 +13,7 @@ function toSocialDto(row) {
   return {
     type: row.type,
     url: row.url,
-    display: row.display,
+    display_name: row.display_name,
   };
 }
 
@@ -73,14 +73,14 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
       user_id: userId,
       type,
       url: finalUrl,
-      display,
+      display_name: display,
       created_at: now,
       updated_at: now,
     },
   });
 
-  console.log(`[Socials] Added ${type} for user ${userId} (display: ${display})`);
-  res.status(201).json({ social: { type, url: finalUrl, display } });
+  console.log(`[Socials] Added ${type} for user ${userId} (display_name: ${display})`);
+  res.status(201).json({ social: { type, url: finalUrl, display_name: display } });
 }));
 
 /* PUT /users/:id/socials/:type — update a social */
@@ -130,11 +130,11 @@ router.put("/users/:id/socials/:type", requireAuth, asyncHandler(async (req, res
 
   await prisma.social.update({
     where: { id: existing.id },
-    data: { url: finalUrl, display, updated_at: toSqliteDatetime() },
+    data: { url: finalUrl, display_name: display, updated_at: toSqliteDatetime() },
   });
 
-  console.log(`[Socials] Updated ${type} for user ${userId} (display: ${display})`);
-  res.json({ social: { type, url: finalUrl, display } });
+  console.log(`[Socials] Updated ${type} for user ${userId} (display_name: ${display})`);
+  res.json({ social: { type, url: finalUrl, display_name: display } });
 }));
 
 /* DELETE /users/:id/socials/:type — remove a social */
