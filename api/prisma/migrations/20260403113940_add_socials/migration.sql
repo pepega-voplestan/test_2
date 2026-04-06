@@ -4,6 +4,7 @@ CREATE TABLE "socials" (
     "user_id" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "url" TEXT NOT NULL,
+    "display_name" TEXT NOT NULL DEFAULT '',
     "created_at" TEXT NOT NULL DEFAULT (datetime('now')),
     "updated_at" TEXT NOT NULL DEFAULT (datetime('now')),
     CONSTRAINT "socials_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
