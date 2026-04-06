@@ -184,12 +184,14 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
 /* ───────────────────────── Edit mode ───────────────────────── */
 
 interface ProfileSocialsEditorProps {
+  userId: string;
   socials: SocialDto[];
   onSocialsChange: (socials: SocialDto[]) => void;
   disabled?: boolean;
 }
 
 export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
+  userId,
   socials,
   onSocialsChange,
   disabled,
@@ -199,9 +201,11 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
     mode: 'add' | 'manage' | 'edit';
     url: string;
     error: string | null;
+    loading: boolean;
   } | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<SocialType | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const activeSocials = new Map(socials.map(s => [s.type, s]));
 
@@ -209,34 +213,69 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
     if (disabled) return;
     const existing = activeSocials.get(type);
     if (existing) {
-      setModal({ type, mode: 'manage', url: existing.url, error: null });
+      setModal({ type, mode: 'manage', url: existing.url, error: null, loading: false });
     } else {
-      setModal({ type, mode: 'add', url: '', error: null });
+      setModal({ type, mode: 'add', url: '', error: null, loading: false });
     }
   };
 
-  /** Local-only add/edit — actual API calls happen in ProfilePage.handleSave */
-  const handleSubmit = () => {
-    if (!modal || !modal.url.trim()) return;
-    const trimmed = modal.url.trim();
+  const handleSubmit = async () => {
+    if (!modal) return;
+    const isAdd = modal.mode === 'add';
+    setModal(m => m ? { ...m, loading: true, error: null } : m);
 
-    if (modal.mode === 'add') {
-      onSocialsChange([...socials, { type: modal.type, url: trimmed, display: trimmed }]);
-    } else {
-      onSocialsChange(socials.map(s => s.type === modal.type ? { ...s, url: trimmed, display: trimmed } : s));
+    try {
+      const res = await fetch(
+        isAdd
+          ? `/api/v1/users/${userId}/socials`
+          : `/api/v1/users/${userId}/socials/${modal.type}`,
+        {
+          method: isAdd ? 'POST' : 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(isAdd
+            ? { type: modal.type, url: modal.url.trim() }
+            : { url: modal.url.trim() }
+          ),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка');
+
+      if (isAdd) {
+        onSocialsChange([...socials, data.social]);
+      } else {
+        onSocialsChange(socials.map(s => s.type === modal.type ? data.social : s));
+      }
+      setModal(null);
+    } catch (err: unknown) {
+      setModal(m => m ? { ...m, loading: false, error: err instanceof Error ? err.message : 'Ошибка' } : m);
     }
-    setModal(null);
   };
 
-  /** Local-only delete */
-  const handleDelete = (type: SocialType) => {
-    onSocialsChange(socials.filter(s => s.type !== type));
-    setConfirmDelete(null);
-    setModal(null);
+  const handleDelete = async (type: SocialType) => {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/v1/users/${userId}/socials/${type}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Ошибка');
+      }
+      onSocialsChange(socials.filter(s => s.type !== type));
+      setConfirmDelete(null);
+      setModal(null);
+    } catch {
+      // item stays in place — user sees it is still there
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && modal && modal.url.trim()) {
+    if (e.key === 'Enter' && modal && !modal.loading && modal.url.trim()) {
       e.preventDefault();
       handleSubmit();
     }
@@ -279,8 +318,8 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {modal && modal.mode !== 'manage' && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setModal(null)}
-          onKeyDown={(e) => e.key === 'Escape' && setModal(null)}
+          onClick={() => !modal.loading && setModal(null)}
+          onKeyDown={(e) => e.key === 'Escape' && !modal.loading && setModal(null)}
           role="dialog"
           aria-modal="true"
         >
@@ -306,6 +345,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={PLATFORM_INPUT_HINTS[modal.type].placeholder}
               className="w-full bg-th-ring/5 rounded-lg px-3 py-2.5 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+              disabled={modal.loading}
             />
 
             {modal.error && (
@@ -316,6 +356,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setModal(null)}
+                disabled={modal.loading}
                 className="px-4 py-2 text-sm text-th-text-4 hover:text-th-text transition-colors rounded"
               >
                 Отмена
@@ -323,10 +364,13 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!modal.url.trim()}
+                disabled={modal.loading || !modal.url.trim()}
                 className="px-4 py-2 text-sm bg-th-text text-th-page rounded-lg font-medium disabled:opacity-50 transition-opacity hover:opacity-90"
               >
-                {modal.mode === 'add' ? 'Добавить' : 'Сохранить'}
+                {modal.loading
+                  ? 'Сохранение...'
+                  : modal.mode === 'add' ? 'Добавить' : 'Сохранить'
+                }
               </button>
             </div>
           </div>
@@ -381,7 +425,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {confirmDelete && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setConfirmDelete(null)}
+          onClick={() => !deleteLoading && setConfirmDelete(null)}
           role="dialog"
           aria-modal="true"
         >
@@ -398,6 +442,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(null)}
+                disabled={deleteLoading}
                 className="px-4 py-1.5 text-sm text-th-text-4 hover:text-th-text transition-colors rounded"
               >
                 Отмена
@@ -405,9 +450,10 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               <button
                 type="button"
                 onClick={() => handleDelete(confirmDelete)}
-                className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
+                disabled={deleteLoading}
+                className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
               >
-                Удалить
+                {deleteLoading ? 'Удаление...' : 'Удалить'}
               </button>
             </div>
           </div>
