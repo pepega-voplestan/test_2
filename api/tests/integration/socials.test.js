@@ -20,10 +20,10 @@ describe("Socials", () => {
       expect(res.body.socials).toEqual([]);
     });
 
-    it("returns user socials with display field", async () => {
+    it("returns user socials with display_name field", async () => {
       const user = await createUser();
-      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/FlameInTheDark", display: "FlameInTheDark" });
-      await createSocial({ userId: user.id, type: "telegram", url: "https://t.me/testuser", display: "@testuser" });
+      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/FlameInTheDark", display_name: "FlameInTheDark" });
+      await createSocial({ userId: user.id, type: "telegram", url: "https://t.me/testuser", display_name: "@testuser" });
 
       const res = await (await request()).get(`/api/v1/users/${user.id}/socials`);
       expect(res.status).toBe(200);
@@ -31,11 +31,11 @@ describe("Socials", () => {
       expect(res.body.socials[0]).toMatchObject({
         type: "steam",
         url: "https://steamcommunity.com/id/FlameInTheDark",
-        display: "FlameInTheDark",
+        display_name: "FlameInTheDark",
       });
       expect(res.body.socials[1]).toMatchObject({
         type: "telegram",
-        display: "@testuser",
+        display_name: "@testuser",
       });
     });
   });
@@ -53,7 +53,7 @@ describe("Socials", () => {
       expect(res.body.social).toMatchObject({
         type: "steam",
         url: "https://steamcommunity.com/id/TestUser",
-        display: "TestUser",
+        display_name: "TestUser",
       });
     });
 
@@ -139,7 +139,7 @@ describe("Socials", () => {
   describe("PUT /users/:id/socials/:type", () => {
     it("updates a social URL", async () => {
       const user = await createUser();
-      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/OldName", display: "OldName" });
+      await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/OldName", display_name: "OldName" });
       const agent = await authenticatedAgent(user);
 
       const res = await agent
@@ -150,7 +150,7 @@ describe("Socials", () => {
       expect(res.body.social).toMatchObject({
         type: "steam",
         url: "https://steamcommunity.com/id/NewName",
-        display: "NewName",
+        display_name: "NewName",
       });
     });
 

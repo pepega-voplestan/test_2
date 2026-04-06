@@ -159,7 +159,7 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
         const content = (
           <>
             <span className="w-5 h-5 shrink-0"><Icon /></span>
-            <span className="truncate max-w-[140px] text-th-text-2 hover:text-th-text">{s.display}</span>
+            <span className="truncate max-w-[140px] text-th-text-2 hover:text-th-text">{s.display_name}</span>
           </>
         );
         return isLink ? (
@@ -169,7 +169,7 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
             target="_blank"
             rel="noopener noreferrer"
             className={className}
-            title={`${PLATFORM_LABELS[s.type]}: ${s.display}`}
+            title={`${PLATFORM_LABELS[s.type]}: ${s.display_name}`}
           >
             {content}
           </a>
@@ -177,8 +177,8 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
           <span
             key={s.type}
             className={className + " cursor-pointer relative"}
-            title={`${PLATFORM_LABELS[s.type]}: ${s.display}`}
-            onClick={() => handleCopy(s.type, s.display)}
+            title={`${PLATFORM_LABELS[s.type]}: ${s.display_name}`}
+            onClick={() => handleCopy(s.type, s.display_name)}
           >
             {content}
             {copiedType === s.type && (
@@ -403,7 +403,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-th-text font-medium mb-1">{PLATFORM_LABELS[modal.type]}</div>
-            <div className="text-th-text-4 text-xs mb-4 truncate">{activeSocials.get(modal.type)?.display}</div>
+            <div className="text-th-text-4 text-xs mb-4 truncate">{activeSocials.get(modal.type)?.display_name}</div>
 
             <div className="flex flex-col gap-2">
               <button

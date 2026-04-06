@@ -70,7 +70,7 @@ export type SocialType = 'steam' | 'telegram' | 'x' | 'discord' | 'battlenet' | 
 export interface SocialDto {
   type: SocialType;
   url: string;
-  display: string;
+  display_name: string;
 }
 
 export interface Shout {
