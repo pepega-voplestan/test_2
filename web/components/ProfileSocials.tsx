@@ -339,15 +339,6 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
 
   return (
     <div className="border-t border-th-border-2 pt-4 relative">
-      {banner && (
-        <div className={`mb-3 text-sm rounded-lg px-3 py-2 ${
-          banner.color === 'green' ? 'text-green-400 bg-green-500/10 border border-green-500/20' :
-          banner.color === 'amber' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' :
-          'text-red-400 bg-red-500/10 border border-red-500/20'
-        }`}>
-          {banner.message}
-        </div>
-      )}
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
@@ -394,6 +385,16 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {banner && (
+        <div className={`mt-3 text-sm rounded-lg px-3 py-2 ${
+          banner.color === 'green' ? 'text-green-400 bg-green-500/10 border border-green-500/20' :
+          banner.color === 'amber' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' :
+          'text-red-400 bg-red-500/10 border border-red-500/20'
+        }`}>
+          {banner.message}
         </div>
       )}
 
