@@ -147,6 +147,58 @@ describe("Socials", () => {
       expect(res.status).toBe(400);
     });
 
+    it("rejects bare steam username (URL only)", async () => {
+      const user = await createUser();
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent
+        .post(`/api/v1/users/${user.id}/socials`)
+        .send({ type: "steam", url: "FlameInTheDark" });
+      expect(res.status).toBe(400);
+    });
+
+    it("accepts epicgames username as plain text", async () => {
+      const user = await createUser();
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent
+        .post(`/api/v1/users/${user.id}/socials`)
+        .send({ type: "epicgames", url: "TestPlayer" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.social).toMatchObject({
+        type: "epicgames",
+        url: "",
+        display_name: "TestPlayer",
+      });
+    });
+
+    it("accepts discord username#number format", async () => {
+      const user = await createUser();
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent
+        .post(`/api/v1/users/${user.id}/socials`)
+        .send({ type: "discord", url: "cooluser#1234" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.social).toMatchObject({
+        type: "discord",
+        url: "",
+        display_name: "cooluser#1234",
+      });
+    });
+
+    it("rejects discord username without discriminator", async () => {
+      const user = await createUser();
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent
+        .post(`/api/v1/users/${user.id}/socials`)
+        .send({ type: "discord", url: "cooluser" });
+      expect(res.status).toBe(400);
+    });
+
     it("rejects duplicate social type", async () => {
       const user = await createUser();
       const agent = await authenticatedAgent(user);
