@@ -5,6 +5,7 @@ import {
   extractSocialDisplay,
   resolveSocialDisplay,
   ensureProtocol,
+  preprocessSocialInput,
   SOCIAL_TYPES,
 } from "../../src/helpers/socials.js";
 
@@ -16,13 +17,20 @@ describe("socials helper", () => {
       expect(SOCIAL_TYPES).toContain("x");
       expect(SOCIAL_TYPES).toContain("discord");
       expect(SOCIAL_TYPES).toContain("youtube");
-      expect(SOCIAL_TYPES).toContain("spotify");
       expect(SOCIAL_TYPES).toContain("battlenet");
       expect(SOCIAL_TYPES).toContain("playstation");
       expect(SOCIAL_TYPES).toContain("xbox");
       expect(SOCIAL_TYPES).toContain("epicgames");
       expect(SOCIAL_TYPES).toContain("boosty");
       expect(SOCIAL_TYPES).toContain("retroachievements");
+      expect(SOCIAL_TYPES).toContain("exophase");
+      expect(SOCIAL_TYPES).toContain("backloggd");
+      expect(SOCIAL_TYPES).toContain("myshows");
+      expect(SOCIAL_TYPES).toContain("shikimori");
+    });
+
+    it("does not contain removed platforms", () => {
+      expect(SOCIAL_TYPES).not.toContain("spotify");
     });
   });
 
@@ -112,23 +120,6 @@ describe("socials helper", () => {
       expect(validateSocialUrl("youtube", "https://www.youtube.com/shorts/abc123").valid).toBe(false);
     });
 
-    // Spotify
-    it("accepts spotify /user/ URL", () => {
-      expect(validateSocialUrl("spotify", "https://open.spotify.com/user/testuser123").valid).toBe(true);
-    });
-
-    it("accepts spotify /artist/ URL", () => {
-      expect(validateSocialUrl("spotify", "https://open.spotify.com/artist/abc123").valid).toBe(true);
-    });
-
-    it("rejects spotify track URL", () => {
-      expect(validateSocialUrl("spotify", "https://open.spotify.com/track/abc123").valid).toBe(false);
-    });
-
-    it("rejects spotify playlist URL", () => {
-      expect(validateSocialUrl("spotify", "https://open.spotify.com/playlist/abc123").valid).toBe(false);
-    });
-
     // Epic Games
     it("accepts epicgames /id/ URL", () => {
       expect(validateSocialUrl("epicgames", "https://www.epicgames.com/id/TestPlayer").valid).toBe(true);
@@ -144,9 +135,58 @@ describe("socials helper", () => {
       expect(validateSocialUrl("xbox", "https://www.xbox.com/profile/TestGamer").valid).toBe(true);
     });
 
-    // Battle.net — now uses BattleTag format, not URLs
+    // Battle.net — uses BattleTag format, not URLs
     it("rejects battle.net URLs (BattleTag only)", () => {
       expect(validateSocialUrl("battlenet", "https://battle.net/en-us/profile/Player-1234").valid).toBe(false);
+    });
+
+    // Exophase
+    it("accepts exophase user URL", () => {
+      expect(validateSocialUrl("exophase", "https://www.exophase.com/user/TestPlayer").valid).toBe(true);
+    });
+
+    it("rejects exophase non-user URL", () => {
+      expect(validateSocialUrl("exophase", "https://www.exophase.com/game/test").valid).toBe(false);
+    });
+
+    // Backloggd
+    it("accepts backloggd user URL", () => {
+      expect(validateSocialUrl("backloggd", "https://www.backloggd.com/u/TestPlayer").valid).toBe(true);
+    });
+
+    it("rejects backloggd non-user URL", () => {
+      expect(validateSocialUrl("backloggd", "https://www.backloggd.com/games/test").valid).toBe(false);
+    });
+
+    // MyShows
+    it("accepts myshows profile URL", () => {
+      expect(validateSocialUrl("myshows", "https://myshows.me/m/testuser").valid).toBe(true);
+    });
+
+    it("accepts myshows en subdomain", () => {
+      expect(validateSocialUrl("myshows", "https://en.myshows.me/m/testuser").valid).toBe(true);
+    });
+
+    it("rejects myshows non-profile URL", () => {
+      expect(validateSocialUrl("myshows", "https://myshows.me/view/123").valid).toBe(false);
+    });
+
+    // Shikimori
+    it("accepts shikimori profile URL", () => {
+      expect(validateSocialUrl("shikimori", "https://shikimori.one/TestUser").valid).toBe(true);
+    });
+
+    it("accepts shikimori profile URL with +id", () => {
+      expect(validateSocialUrl("shikimori", "https://shikimori.one/TestUser+12345").valid).toBe(true);
+    });
+
+    it("accepts shikimori.me domain", () => {
+      expect(validateSocialUrl("shikimori", "https://shikimori.me/TestUser").valid).toBe(true);
+    });
+
+    it("rejects shikimori reserved paths", () => {
+      expect(validateSocialUrl("shikimori", "https://shikimori.one/animes").valid).toBe(false);
+      expect(validateSocialUrl("shikimori", "https://shikimori.one/forum").valid).toBe(false);
     });
   });
 
@@ -165,6 +205,11 @@ describe("socials helper", () => {
       expect(normalizeSocialUrl("youtube", "https://youtube.com/@coolname/"))
         .toBe("https://www.youtube.com/@coolname");
     });
+
+    it("normalizes shikimori.me to shikimori.one", () => {
+      expect(normalizeSocialUrl("shikimori", "https://shikimori.me/TestUser"))
+        .toBe("https://shikimori.one/TestUser");
+    });
   });
 
   describe("extractSocialDisplay", () => {
@@ -178,29 +223,24 @@ describe("socials helper", () => {
         .toBe("76561198000000000");
     });
 
-    it("extracts telegram username with @", () => {
+    it("extracts telegram username without @", () => {
       expect(extractSocialDisplay("telegram", "https://t.me/testuser"))
-        .toBe("@testuser");
+        .toBe("testuser");
     });
 
-    it("extracts x handle with @", () => {
+    it("extracts x handle without @", () => {
       expect(extractSocialDisplay("x", "https://x.com/maxozornin"))
-        .toBe("@maxozornin");
+        .toBe("maxozornin");
     });
 
-    it("extracts youtube @handle", () => {
+    it("extracts youtube handle without @", () => {
       expect(extractSocialDisplay("youtube", "https://www.youtube.com/@coolname"))
-        .toBe("@coolname");
+        .toBe("coolname");
     });
 
     it("extracts youtube channel id", () => {
       expect(extractSocialDisplay("youtube", "https://www.youtube.com/channel/UC12345"))
         .toBe("UC12345");
-    });
-
-    it("extracts spotify user id", () => {
-      expect(extractSocialDisplay("spotify", "https://open.spotify.com/user/testuser123"))
-        .toBe("testuser123");
     });
 
     it("extracts psnprofiles username", () => {
@@ -216,6 +256,131 @@ describe("socials helper", () => {
     it("extracts epic games display name", () => {
       expect(extractSocialDisplay("epicgames", "https://www.epicgames.com/id/TestPlayer"))
         .toBe("TestPlayer");
+    });
+
+    it("extracts exophase username", () => {
+      expect(extractSocialDisplay("exophase", "https://www.exophase.com/user/TestPlayer/"))
+        .toBe("TestPlayer");
+    });
+
+    it("extracts backloggd username", () => {
+      expect(extractSocialDisplay("backloggd", "https://www.backloggd.com/u/TestPlayer/"))
+        .toBe("TestPlayer");
+    });
+
+    it("extracts myshows username", () => {
+      expect(extractSocialDisplay("myshows", "https://myshows.me/m/testuser"))
+        .toBe("testuser");
+    });
+
+    it("extracts shikimori username (strips +id)", () => {
+      expect(extractSocialDisplay("shikimori", "https://shikimori.one/TestUser+12345"))
+        .toBe("TestUser");
+    });
+  });
+
+  describe("preprocessSocialInput", () => {
+    it("converts bare steam username to URL", () => {
+      const result = preprocessSocialInput("steam", "FlameInTheDark");
+      expect(result).toEqual({ url: "https://steamcommunity.com/id/FlameInTheDark", display: "FlameInTheDark" });
+    });
+
+    it("converts bare X username to URL", () => {
+      const result = preprocessSocialInput("x", "maxozornin");
+      expect(result).toEqual({ url: "https://x.com/maxozornin", display: "maxozornin" });
+    });
+
+    it("converts @username for X to URL", () => {
+      const result = preprocessSocialInput("x", "@maxozornin");
+      expect(result).toEqual({ url: "https://x.com/maxozornin", display: "maxozornin" });
+    });
+
+    it("rejects reserved X usernames", () => {
+      expect(preprocessSocialInput("x", "home")).toBeNull();
+      expect(preprocessSocialInput("x", "settings")).toBeNull();
+    });
+
+    it("converts telegram @username", () => {
+      const result = preprocessSocialInput("telegram", "@testuser");
+      expect(result).toEqual({ url: "https://t.me/testuser", display: "testuser" });
+    });
+
+    it("converts telegram bare username", () => {
+      const result = preprocessSocialInput("telegram", "testuser");
+      expect(result).toEqual({ url: "https://t.me/testuser", display: "testuser" });
+    });
+
+    it("handles Discord username", () => {
+      const result = preprocessSocialInput("discord", "cooluser#1234");
+      expect(result).toEqual({ url: null, display: "cooluser#1234" });
+    });
+
+    it("handles Battle.net tag", () => {
+      const result = preprocessSocialInput("battlenet", "Player#12345");
+      expect(result).toEqual({ url: null, display: "Player#12345" });
+    });
+
+    it("converts YouTube @handle", () => {
+      const result = preprocessSocialInput("youtube", "@coolchannel");
+      expect(result).toEqual({ url: "https://www.youtube.com/@coolchannel", display: "coolchannel" });
+    });
+
+    it("converts bare YouTube handle", () => {
+      const result = preprocessSocialInput("youtube", "coolchannel");
+      expect(result).toEqual({ url: "https://www.youtube.com/@coolchannel", display: "coolchannel" });
+    });
+
+    it("converts boosty username", () => {
+      const result = preprocessSocialInput("boosty", "coolcreator");
+      expect(result).toEqual({ url: "https://boosty.to/coolcreator", display: "coolcreator" });
+    });
+
+    it("rejects reserved boosty names", () => {
+      expect(preprocessSocialInput("boosty", "login")).toBeNull();
+    });
+
+    it("converts retroachievements username", () => {
+      const result = preprocessSocialInput("retroachievements", "retrogamer");
+      expect(result).toEqual({ url: "https://retroachievements.org/user/retrogamer", display: "retrogamer" });
+    });
+
+    it("converts playstation username", () => {
+      const result = preprocessSocialInput("playstation", "TestGamer");
+      expect(result).toEqual({ url: "https://psnprofiles.com/TestGamer", display: "TestGamer" });
+    });
+
+    it("converts epicgames username", () => {
+      const result = preprocessSocialInput("epicgames", "TestPlayer");
+      expect(result).toEqual({ url: "https://www.epicgames.com/id/TestPlayer", display: "TestPlayer" });
+    });
+
+    it("converts exophase username", () => {
+      const result = preprocessSocialInput("exophase", "TestPlayer");
+      expect(result).toEqual({ url: "https://www.exophase.com/user/TestPlayer/", display: "TestPlayer" });
+    });
+
+    it("converts backloggd username", () => {
+      const result = preprocessSocialInput("backloggd", "TestPlayer");
+      expect(result).toEqual({ url: "https://www.backloggd.com/u/TestPlayer/", display: "TestPlayer" });
+    });
+
+    it("converts myshows username", () => {
+      const result = preprocessSocialInput("myshows", "testuser");
+      expect(result).toEqual({ url: "https://myshows.me/m/testuser", display: "testuser" });
+    });
+
+    it("converts shikimori username", () => {
+      const result = preprocessSocialInput("shikimori", "TestUser");
+      expect(result).toEqual({ url: "https://shikimori.one/TestUser", display: "TestUser" });
+    });
+
+    it("strips +id from shikimori display", () => {
+      const result = preprocessSocialInput("shikimori", "TestUser+12345");
+      expect(result).toEqual({ url: "https://shikimori.one/TestUser+12345", display: "TestUser" });
+    });
+
+    it("returns null for platforms without preprocessInput", () => {
+      expect(preprocessSocialInput("xbox", "TestGamer")).toBeNull();
     });
   });
 
@@ -238,12 +403,10 @@ describe("socials helper", () => {
     });
 
     it("falls back to platform label for steam /profiles/ when API is unreachable", async () => {
-      // Mock fetch to simulate network failure
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn().mockRejectedValue(new Error("network error"));
       try {
         const result = await resolveSocialDisplay("steam", "https://steamcommunity.com/profiles/76561199520238573");
-        // Falls back to platform label since numeric ID is opaque
         expect(result).toBe("Steam");
       } finally {
         globalThis.fetch = originalFetch;
@@ -283,33 +446,26 @@ describe("socials helper", () => {
       }
     });
 
-    it("returns @handle for youtube handle URL without API call", async () => {
+    it("returns handle without @ for youtube handle URL", async () => {
       const result = await resolveSocialDisplay("youtube", "https://www.youtube.com/@coolname");
-      expect(result).toBe("@coolname");
-    });
-
-    it("resolves spotify artist name from oEmbed", async () => {
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ title: "Arctic Monkeys" }),
-      });
-      try {
-        const result = await resolveSocialDisplay("spotify", "https://open.spotify.com/artist/7Ln80lUS6He07XvHI8qqHH");
-        expect(result).toBe("Arctic Monkeys");
-      } finally {
-        globalThis.fetch = originalFetch;
-      }
+      expect(result).toBe("coolname");
     });
 
     it("falls back to URL extraction for telegram (no API resolution)", async () => {
       const result = await resolveSocialDisplay("telegram", "https://t.me/testuser");
-      expect(result).toBe("@testuser");
+      expect(result).toBe("testuser");
     });
 
     it("falls back to URL extraction for x (no API resolution)", async () => {
       const result = await resolveSocialDisplay("x", "https://x.com/elonmusk");
-      expect(result).toBe("@elonmusk");
+      expect(result).toBe("elonmusk");
+    });
+
+    it("falls back to URL extraction for new platforms", async () => {
+      expect(await resolveSocialDisplay("exophase", "https://www.exophase.com/user/TestPlayer/")).toBe("TestPlayer");
+      expect(await resolveSocialDisplay("backloggd", "https://www.backloggd.com/u/TestPlayer/")).toBe("TestPlayer");
+      expect(await resolveSocialDisplay("myshows", "https://myshows.me/m/testuser")).toBe("testuser");
+      expect(await resolveSocialDisplay("shikimori", "https://shikimori.one/TestUser")).toBe("TestUser");
     });
   });
 
