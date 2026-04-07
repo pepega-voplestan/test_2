@@ -28,12 +28,14 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │   │   ├── announcements.js # Announcement read/write
 │   │   │   ├── notifications.js # Notification fetch + mark-read endpoints
 │   │   │   ├── ignored-users.js # Ignored users list, add, remove
-│   │   │   └── polls.js        # Poll voting endpoint
+│   │   │   ├── polls.js        # Poll voting endpoint
+│   │   │   └── socials.js      # User social links CRUD (12 platforms)
 │   │   ├── helpers/        # Shared utilities
 │   │   │   ├── common.js       # asyncHandler, requireAuth, and other shared middleware
 │   │   │   ├── feed.js         # enrichFeed: joins users/media/likes/polls onto shout/comment rows
 │   │   │   ├── media.js        # Sharp image processing, GIF handling, avatar generation
 │   │   │   ├── mentions.js     # extractMentionedUserIds, buildSnippet for notification system
+│   │   │   ├── socials.js      # Social platform validation, URL normalization, display extraction (12 platforms)
 │   │   │   └── validation.js   # Zod schemas shared across routes
 │   │   ├── db.js           # Prisma client init (WAL mode, foreign keys)
 │   │   ├── auth.js         # Password hashing, session auth utilities
@@ -49,10 +51,10 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │   ├── env.js          # Vitest setupFiles: loads env vars written by globalSetup
 │   │   ├── helpers.js      # Shared test utilities (request, authenticatedAgent, cleanDb, disconnectDb)
 │   │   ├── fixtures/
-│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, createPoll, createPollVote, createIgnoredUser, etc.)
-│   │   ├── unit/           # Unit tests (auth, admin, common, email, media, mentions, sse, validation, app.setup)
+│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, createPoll, createPollVote, createIgnoredUser, createSocial, etc.)
+│   │   ├── unit/           # Unit tests (auth, admin, common, email, media, mentions, socials, sse, validation, app.setup)
 │   │   └── integration/    # Integration tests (health, auth, shouts, comments, likes, announcements,
-│   │                       #   notifications, feed, upload, users, polls, index)
+│   │                       #   notifications, feed, upload, users, polls, socials, index)
 │   ├── vitest.config.js    # Vitest config: node env, globalSetup, sequential files, coverage
 │   ├── eslint.config.js    # ESLint flat config: @eslint/js recommended, Node globals, allows console, _-prefix unused vars
 │   ├── package.json
@@ -68,7 +70,8 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │   ├── ShoutPage.tsx     # Single shout detail view (route: #/shout/:id)
 │   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
 │   │   ├── NotificationDropdown.tsx # Bell icon + unread badge + hover-to-read notification list
-│   │   ├── ProfilePage.tsx   # User profile view and edit form
+│   │   ├── ProfilePage.tsx   # User profile view and edit form (includes social links display/editor)
+│   │   ├── ProfileSocials.tsx # Social links display (icons grid with copy-to-clipboard) and editor (modal-based add/edit/delete)
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
 │   │   ├── EmojiPicker.tsx   # Emoji picker: 500+ emojis, 13 categories (faces, gestures, people, hearts, nature, food, activities, travel, objects, symbols, flags + frequent), search (Russian + English keywords), sticky headers, quick-nav bar
 │   │   ├── PollEditor.tsx    # Poll creation UI: 2-7 options, multi-select toggle, validation
@@ -99,10 +102,13 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   │   └── unit/
 │   │       └── effectiveLength.test.ts # Tests: char counting, mention normalization, spoiler stripping, newline cost
 │   ├── public/
-│   │   └── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
+│   │   ├── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
+│   │   ├── steam.svg, xbox.svg, playstation.svg  # Social platform SVG icons
+│   │   ├── epicgames.png, boosty.png, retroachievements.png  # Social platform raster icons
+│   │   └── battlenet.webp    # Battle.net social platform icon
 │   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider + IgnoredUsersProvider + NotificationsProvider
 │   ├── index.tsx             # React entry point (StrictMode)
-│   ├── types.ts              # TypeScript type definitions (includes Notification interface)
+│   ├── types.ts              # TypeScript type definitions (includes Notification, SocialType, SocialDto)
 │   ├── index.html            # HTML template (Tailwind CDN, CSS custom properties for theming)
 │   ├── tsconfig.json
 │   ├── vite.config.ts        # Dev proxy: /api and /media → localhost:3000
@@ -128,6 +134,11 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 │   ├── eslint.config.js
 │   ├── Dockerfile          # Multi-stage: base → builder → app (prod) / dev (tsx watch)
 │   └── .dockerignore
+├── infra/                    # Terraform infrastructure as code (DigitalOcean)
+│   ├── main.tf, variables.tf, outputs.tf, locals.tf  # Core Terraform config
+│   ├── droplet.tf, volume.tf, firewall.tf, dns.tf, ssh_key.tf  # Resource definitions
+│   ├── cloud-init.yml        # Cloud initialization script
+│   └── envs/dev.tfvars       # Development environment variables
 ├── scripts/
 │   ├── backup.sh             # Backup Docker volumes (DB + media) with rotation, optional rclone upload
 │   └── restore.sh            # Restore Docker volumes from a timestamped backup
@@ -263,6 +274,10 @@ All endpoints are prefixed with `/api/v1/`.
 | POST | `/users/:id/ignore` | Yes | Add user to ignore list (max 3) |
 | DELETE | `/users/:id/ignore` | Yes | Remove user from ignore list |
 | POST | `/polls/:pollId/vote` | Yes | Vote on a poll (single or multi-select); body: `{ optionIds: string[] }` |
+| GET | `/users/:id/socials` | No | List a user's social links |
+| POST | `/users/:id/socials` | Yes | Add a social link (type + url); validates and normalizes URL per platform |
+| PUT | `/users/:id/socials/:type` | Yes | Update a social link URL |
+| DELETE | `/users/:id/socials/:type` | Yes | Delete a social link |
 
 ## Admin Panel
 
@@ -370,7 +385,7 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - `show_nsfw` (Int, default 0) — user preference to show NSFW-tagged shouts
 - `show_politics` (Int, default 0) — user preference to show politics-tagged shouts
 - `created_at` (String, ISO datetime)
-- Relations: `receivedNotifications`, `sentNotifications`, `ignoredByMe`, `ignoredByOthers`
+- Relations: `receivedNotifications`, `sentNotifications`, `ignoredByMe`, `ignoredByOthers`, `socials`
 
 **Shout** (`shouts`)
 - `id` (String, UUID, PK)
@@ -472,6 +487,17 @@ On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing
 - Unique constraint: `(owner_user_id, target_user_id)`
 - Max 3 ignored users per owner (enforced in route handler)
 
+**Social** (`socials`)
+- `id` (String, UUID, PK)
+- `user_id` (String, FK → users, CASCADE)
+- `type` (String) — platform type: `steam`, `telegram`, `x`, `discord`, `battlenet`, `playstation`, `xbox`, `epicgames`, `youtube`, `spotify`, `boosty`, `retroachievements`
+- `url` (String) — normalized platform URL
+- `display_name` (String, default `""`) — human-readable identifier extracted from URL (e.g. Steam vanity name, YouTube channel name)
+- `created_at` (String, ISO datetime)
+- `updated_at` (String, ISO datetime)
+- Unique constraint: `(user_id, type)` — one link per platform per user
+- Index: `(user_id)`
+
 Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/app.db`). Sessions stored separately at `/data/sessions.sqlite`.
 
 ## Environment Variables
@@ -527,7 +553,7 @@ Tests are run sequentially (not in parallel) to avoid SQLite write conflicts.
 - `tests/setup.js` — Vitest `globalSetup`: creates a fresh SQLite DB at `tests/test.db`, runs Prisma migrations, writes a temp `.env.test` file, and cleans everything up in teardown.
 - `tests/env.js` — Vitest `setupFiles`: loads `.env.test` into `process.env` for each test worker.
 - `tests/helpers.js` — Shared utilities: `getApp()` (lazy app import), `request()` (supertest), `authenticatedAgent(user)` (supertest agent with session cookie), `cleanDb()` (truncate all tables), `disconnectDb()`.
-- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, `createIgnoredUser()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
+- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, `createIgnoredUser()`, `createSocial()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
 
 **Mocked modules in tests:**
 - `../src/email.js` — `sendVerificationEmail` is a no-op
@@ -685,6 +711,7 @@ cd web && npm run lint
 - When content preferences hide media (nsfw/politics/showMedia off), `ShoutFeed.tsx` renders a same-size placeholder div (crossed-camera icon) instead of removing the element from the DOM — this prevents layout jumps when toggling content preferences.
 - **Pinned shouts**: One shout can be pinned at a time (`is_pinned=1`). Pinned shouts are fetched separately and prepended to the first page of the "new" tab feed only (not shown in "popular" tab). Pinning is managed via the admin panel.
 - **Ignored users**: Users can ignore up to 3 other users. Ignored users' content is filtered client-side via `IgnoredUsersContext`. The ignore list is fetched on login and managed via `GET /me/ignored-users`, `POST /users/:id/ignore`, `DELETE /users/:id/ignore`.
+- **Social links**: Users can add social media profile links to their profile (one per platform, 12 platforms supported: Steam, Telegram, X/Twitter, Discord, Battle.net, PlayStation, Xbox, Epic Games, YouTube, Spotify, Boosty, RetroAchievements). URLs are validated per platform (hostname + path pattern), normalized to canonical form, and display names are extracted (e.g. Steam vanity URL → username). Some platforms (Steam, YouTube, Spotify) resolve display names asynchronously via external APIs. The frontend (`ProfileSocials.tsx`) shows a grid of platform icons with active/inactive states; editing uses modal dialogs. Non-URL socials (Discord, Battle.net, PlayStation, Xbox, Epic Games) support copy-to-clipboard.
 - Nginx CSP headers allow embeds from YouTube (nocookie), Coub, Tenor, Steam (`store.steampowered.com`); images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, fxTwitter (`pbs.fxtwitter.com`), Steam CDN (`cdn.akamai.steamstatic.com`); and connect-src to fxTwitter API (`api.fxtwitter.com`) and Steam store API.
 
 ## Background Jobs (Workers)
