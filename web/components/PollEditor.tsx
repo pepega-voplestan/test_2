@@ -142,7 +142,7 @@ const PollEditor = forwardRef<PollEditorHandle, PollEditorProps>(({ onClose, onC
               onKeyDown={(e) => handleKeyDown(e, i)}
               maxLength={POLL_OPTION_MAX_LENGTH}
               placeholder={`Опция ${i + 1}`}
-              className={`flex-1 bg-th-input border rounded px-2 py-1 text-sm text-th-text placeholder-th-text-4 outline-none focus:border-[#0087ff]/50 ${
+              className={`flex-1 bg-th-input border rounded px-2 py-1 text-base text-th-text placeholder-th-text-4 outline-none focus:border-[#0087ff]/50 ${
                 emptyError && !opt.trim() ? 'border-red-400' : 'border-th-border'
               }`}
             />
