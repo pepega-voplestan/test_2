@@ -285,6 +285,8 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
           ),
         },
       );
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) throw new Error('Сервер недоступен');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка');
 
@@ -310,7 +312,8 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
         credentials: 'include',
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const ct = res.headers.get('content-type') || '';
+        const data = ct.includes('application/json') ? await res.json().catch(() => ({})) : {};
         throw new Error(data.error || 'Ошибка');
       }
       const label = PLATFORM_LABELS[type];
