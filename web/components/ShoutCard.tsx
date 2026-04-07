@@ -3,6 +3,7 @@ import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
+import { useScrollLock } from '../hooks/useScrollLock';
 import EmojiPicker from './EmojiPicker';
 import Lightbox from './Lightbox';
 import MentionInput, { MentionInputHandle, effectiveLength, isIOS } from './MentionInput';
@@ -543,6 +544,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const isCommentAuthorIgnored = isIgnored(comment.user.id);
   const isCommentIgnored = isCommentAuthorIgnored && !ignoreRevealed;
 
+  useScrollLock(confirmDelete);
+
   // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
     setLikes(comment.likes);
@@ -723,7 +726,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
       </div>
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !isDeleting && setConfirmDelete(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ touchAction: 'none' }} onClick={() => !isDeleting && setConfirmDelete(false)}>
           <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-th-text font-medium mb-2">Удалить комментарий?</div>
             <div className="text-th-text-3 text-sm mb-4">Это действие нельзя отменить. Комментарий будет скрыт от всех пользователей.</div>
@@ -786,6 +789,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [isLiked, setIsLiked] = useState(
     user && shout.likedBy ? shout.likedBy.includes(user.id) : false
   );
+
+  useScrollLock(confirmDelete);
 
   // Separate effects: update likes count from props, but only update isLiked when likedBy changes
   useEffect(() => {
@@ -1282,7 +1287,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       </div>
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !isDeleting && setConfirmDelete(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ touchAction: 'none' }} onClick={() => !isDeleting && setConfirmDelete(false)}>
           <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-th-text font-medium mb-2">Удалить вопль?</div>
             <div className="text-th-text-3 text-sm mb-4">Содержимое вопля будет скрыто, но комментарии останутся доступны.</div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface LightboxProps {
   src: string;
@@ -37,18 +38,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
   const initialPinchDist = useRef(0);
   const initialPinchZoom = useRef(1);
 
-  // Scroll lock — use overflow on <html> to avoid the iOS position:fixed flash
-  useEffect(() => {
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    document.body.style.paddingRight = `${scrollbarWidth}px`;
-    return () => {
-      document.documentElement.style.overflow = '';
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-    };
-  }, []);
+  useScrollLock(true);
 
   // Escape key
   useEffect(() => {
