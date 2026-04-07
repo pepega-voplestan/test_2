@@ -120,9 +120,9 @@ describe("socials helper", () => {
       expect(validateSocialUrl("youtube", "https://www.youtube.com/shorts/abc123").valid).toBe(false);
     });
 
-    // Epic Games
-    it("accepts epicgames /id/ URL", () => {
-      expect(validateSocialUrl("epicgames", "https://www.epicgames.com/id/TestPlayer").valid).toBe(true);
+    // Epic Games — username only, no URL validation
+    it("rejects epicgames URLs (username only)", () => {
+      expect(validateSocialUrl("epicgames", "https://www.epicgames.com/id/TestPlayer").valid).toBe(false);
     });
 
     // PlayStation
@@ -250,9 +250,9 @@ describe("socials helper", () => {
         .toBe("TestGamer");
     });
 
-    it("extracts epic games display name", () => {
+    it("returns empty for epicgames (username-only platform)", () => {
       expect(extractSocialDisplay("epicgames", "https://www.epicgames.com/id/TestPlayer"))
-        .toBe("TestPlayer");
+        .toBe("");
     });
 
     it("extracts exophase username", () => {
@@ -273,9 +273,8 @@ describe("socials helper", () => {
   });
 
   describe("preprocessSocialInput", () => {
-    it("converts bare steam username to URL", () => {
-      const result = preprocessSocialInput("steam", "FlameInTheDark");
-      expect(result).toEqual({ url: "https://steamcommunity.com/id/FlameInTheDark", display: "FlameInTheDark" });
+    it("returns null for steam bare username (URL only)", () => {
+      expect(preprocessSocialInput("steam", "FlameInTheDark")).toBeNull();
     });
 
     it("converts bare X username to URL", () => {
@@ -303,9 +302,13 @@ describe("socials helper", () => {
       expect(result).toEqual({ url: "https://t.me/testuser", display: "testuser" });
     });
 
-    it("handles Discord username", () => {
+    it("handles Discord username#number format", () => {
       const result = preprocessSocialInput("discord", "cooluser#1234");
       expect(result).toEqual({ url: null, display: "cooluser#1234" });
+    });
+
+    it("rejects Discord username without discriminator", () => {
+      expect(preprocessSocialInput("discord", "cooluser")).toBeNull();
     });
 
     it("handles Battle.net tag", () => {
@@ -342,9 +345,9 @@ describe("socials helper", () => {
       expect(result).toEqual({ url: "https://psnprofiles.com/TestGamer", display: "TestGamer" });
     });
 
-    it("converts epicgames username", () => {
+    it("handles epicgames username (plain text)", () => {
       const result = preprocessSocialInput("epicgames", "TestPlayer");
-      expect(result).toEqual({ url: "https://www.epicgames.com/id/TestPlayer", display: "TestPlayer" });
+      expect(result).toEqual({ url: null, display: "TestPlayer" });
     });
 
     it("converts backloggd username", () => {
@@ -358,6 +361,7 @@ describe("socials helper", () => {
     });
 
     it("returns null for platforms without preprocessInput", () => {
+      expect(preprocessSocialInput("steam", "FlameInTheDark")).toBeNull();
       expect(preprocessSocialInput("xbox", "TestGamer")).toBeNull();
       expect(preprocessSocialInput("exophase", "TestPlayer")).toBeNull();
     });
