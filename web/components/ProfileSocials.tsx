@@ -6,7 +6,7 @@ import { SocialDto, SocialType } from '../types';
 const PLATFORM_ORDER: SocialType[] = [
   'steam', 'playstation', 'xbox', 'battlenet', 'epicgames',
   'retroachievements', 'exophase', 'backloggd',
-  'youtube', 'myshows', 'shikimori',
+  'youtube', 'myshows',
   'telegram', 'x', 'discord',
   'boosty',
 ];
@@ -22,7 +22,6 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
   backloggd: 'Backloggd',
   youtube: 'YouTube',
   myshows: 'MyShows',
-  shikimori: 'Shikimori',
   telegram: 'Telegram',
   x: 'X',
   discord: 'Discord',
@@ -37,11 +36,10 @@ const PLATFORM_INPUT_HINTS: Record<SocialType, { label: string; placeholder: str
   battlenet: { label: 'BattleTag', placeholder: 'Player#1234', isPlainText: true },
   epicgames: { label: 'Имя или ссылка Epic Games', placeholder: 'username или epicgames.com/id/...' },
   retroachievements: { label: 'Имя или ссылка', placeholder: 'username или retroachievements.org/user/...' },
-  exophase: { label: 'Имя или ссылка', placeholder: 'username или exophase.com/user/...' },
+  exophase: { label: 'Ссылка на профиль', placeholder: 'https://www.exophase.com/user/...' },
   backloggd: { label: 'Имя или ссылка', placeholder: 'username или backloggd.com/u/...' },
   youtube: { label: 'Канал или ссылка', placeholder: '@handle или youtube.com/@...' },
-  myshows: { label: 'Имя или ссылка', placeholder: 'username или myshows.me/m/...' },
-  shikimori: { label: 'Имя или ссылка', placeholder: 'username или shikimori.one/...' },
+  myshows: { label: 'Имя или ссылка', placeholder: 'username или myshows.me/...' },
   telegram: { label: 'Имя пользователя или ссылка', placeholder: 'username или t.me/...', isPlainText: true },
   x: { label: 'Имя или ссылка', placeholder: 'username или x.com/...' },
   discord: { label: 'Имя пользователя Discord', placeholder: 'username или username#1234', isPlainText: true },
@@ -123,12 +121,6 @@ const MyShowsIcon = () => (
   </div>
 );
 
-const ShikimoriIcon = () => (
-  <div className="w-full h-full rounded-sm bg-[#2e51a2] flex items-center justify-center">
-    <span className="text-white font-bold text-[10px] leading-none">SH</span>
-  </div>
-);
-
 const PLATFORM_ICONS: Record<SocialType, React.FC> = {
   steam: SteamIcon,
   playstation: PlayStationIcon,
@@ -140,7 +132,6 @@ const PLATFORM_ICONS: Record<SocialType, React.FC> = {
   backloggd: BackloggdIcon,
   youtube: YouTubeIcon,
   myshows: MyShowsIcon,
-  shikimori: ShikimoriIcon,
   telegram: TelegramIcon,
   x: XIcon,
   discord: DiscordIcon,
@@ -257,6 +248,12 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
 
   const [confirmDelete, setConfirmDelete] = useState<SocialType | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [successTooltip, setSuccessTooltip] = useState<string | null>(null);
+
+  const showSuccessTooltip = useCallback((message: string) => {
+    setSuccessTooltip(message);
+    setTimeout(() => setSuccessTooltip(null), 1500);
+  }, []);
 
   const activeSocials = new Map(socials.map(s => [s.type, s]));
 
@@ -306,10 +303,13 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка');
 
+      const label = PLATFORM_LABELS[modal.type];
       if (isAdd) {
         onSocialsChange([...socials, data.social]);
+        showSuccessTooltip(`${label} добавлен успешно!`);
       } else {
         onSocialsChange(socials.map(s => s.type === modal.type ? data.social : s));
+        showSuccessTooltip(`${label} изменен успешно!`);
       }
       setModal(null);
     } catch (err: unknown) {
@@ -328,9 +328,11 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Ошибка');
       }
+      const label = PLATFORM_LABELS[type];
       onSocialsChange(socials.filter(s => s.type !== type));
       setConfirmDelete(null);
       setModal(null);
+      showSuccessTooltip(`${label} удален успешно!`);
     } catch {
       // item stays in place — user sees it is still there
     } finally {
@@ -348,11 +350,16 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
   const activeCount = activeSocials.size;
 
   return (
-    <div className="border-t border-th-border-2 pt-4">
+    <div className="border-t border-th-border-2 pt-4 relative">
+      {successTooltip && (
+        <span className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap text-xs bg-th-card text-th-text border border-th-border px-2 py-1 rounded shadow-lg z-10">
+          {successTooltip}
+        </span>
+      )}
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
-        className="flex items-center gap-2 text-xs text-th-text-3 hover:text-th-text-2 transition-colors mb-3 select-none"
+        className="flex items-center gap-2 text-sm text-th-text-3 hover:text-th-text-2 transition-colors mb-3 select-none"
       >
         <svg
           className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
