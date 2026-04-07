@@ -102,23 +102,16 @@ const BoostyIcon = () => (
   <img src="/boosty.png" alt="Boosty" className="w-full h-full rounded-sm" />
 );
 
-/* Placeholder icons for new platforms (simple text-based) */
 const ExophaseIcon = () => (
-  <div className="w-full h-full rounded-sm bg-[#4285f4] flex items-center justify-center">
-    <span className="text-white font-bold text-[10px] leading-none">EX</span>
-  </div>
+  <img src="/exophase-com-icon.png" alt="Exophase" className="w-full h-full rounded-sm" />
 );
 
 const BackloggdIcon = () => (
-  <div className="w-full h-full rounded-sm bg-[#1a1a2e] flex items-center justify-center">
-    <span className="text-white font-bold text-[10px] leading-none">BL</span>
-  </div>
+  <img src="/backloggd-icon-filled-256.webp" alt="Backloggd" className="w-full h-full rounded-sm" />
 );
 
 const MyShowsIcon = () => (
-  <div className="w-full h-full rounded-sm bg-[#02b3e4] flex items-center justify-center">
-    <span className="text-white font-bold text-[10px] leading-none">MS</span>
-  </div>
+  <img src="/myshows.png" alt="MyShows" className="w-full h-full rounded-sm" />
 );
 
 const PLATFORM_ICONS: Record<SocialType, React.FC> = {
