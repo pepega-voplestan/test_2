@@ -30,11 +30,11 @@ const PLATFORM_LABELS: Record<SocialType, string> = {
 
 /** Per-platform input label and placeholder */
 const PLATFORM_INPUT_HINTS: Record<SocialType, { label: string; placeholder: string; isPlainText?: boolean }> = {
-  steam: { label: 'Имя профиля или ссылка', placeholder: 'username или steamcommunity.com/id/...' },
+  steam: { label: 'Ссылка на профиль Steam', placeholder: 'https://steamcommunity.com/id/...' },
   playstation: { label: 'PSN ID или ссылка', placeholder: 'username или psnprofiles.com/...' },
   xbox: { label: 'Ссылка на профиль Xbox', placeholder: 'https://www.xbox.com/profile/gamertag' },
   battlenet: { label: 'BattleTag', placeholder: 'Player#1234', isPlainText: true },
-  epicgames: { label: 'Имя или ссылка Epic Games', placeholder: 'username или epicgames.com/id/...' },
+  epicgames: { label: 'Имя пользователя Epic Games', placeholder: 'username', isPlainText: true },
   retroachievements: { label: 'Имя или ссылка', placeholder: 'username или retroachievements.org/user/...' },
   exophase: { label: 'Ссылка на профиль', placeholder: 'https://www.exophase.com/user/...' },
   backloggd: { label: 'Имя или ссылка', placeholder: 'username или backloggd.com/u/...' },
@@ -42,7 +42,7 @@ const PLATFORM_INPUT_HINTS: Record<SocialType, { label: string; placeholder: str
   myshows: { label: 'Имя или ссылка', placeholder: 'username или myshows.me/...' },
   telegram: { label: 'Имя пользователя или ссылка', placeholder: 'username или t.me/...', isPlainText: true },
   x: { label: 'Имя или ссылка', placeholder: 'username или x.com/...' },
-  discord: { label: 'Имя пользователя Discord', placeholder: 'username или username#1234', isPlainText: true },
+  discord: { label: 'Имя пользователя Discord', placeholder: 'username#1234', isPlainText: true },
   boosty: { label: 'Имя или ссылка', placeholder: 'username или boosty.to/...' },
 };
 
@@ -241,12 +241,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
 
   const [confirmDelete, setConfirmDelete] = useState<SocialType | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [successTooltip, setSuccessTooltip] = useState<string | null>(null);
-
-  const showSuccessTooltip = useCallback((message: string) => {
-    setSuccessTooltip(message);
-    setTimeout(() => setSuccessTooltip(null), 1500);
-  }, []);
+  const [banner, setBanner] = useState<{ message: string; color: 'green' | 'amber' | 'red' } | null>(null);
 
   const activeSocials = new Map(socials.map(s => [s.type, s]));
 
@@ -299,10 +294,10 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       const label = PLATFORM_LABELS[modal.type];
       if (isAdd) {
         onSocialsChange([...socials, data.social]);
-        showSuccessTooltip(`${label} добавлен успешно!`);
+        setBanner({ message: `${label} добавлен успешно!`, color: 'green' });
       } else {
         onSocialsChange(socials.map(s => s.type === modal.type ? data.social : s));
-        showSuccessTooltip(`${label} изменен успешно!`);
+        setBanner({ message: `${label} изменен успешно!`, color: 'amber' });
       }
       setModal(null);
     } catch (err: unknown) {
@@ -325,7 +320,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       onSocialsChange(socials.filter(s => s.type !== type));
       setConfirmDelete(null);
       setModal(null);
-      showSuccessTooltip(`${label} удален успешно!`);
+      setBanner({ message: `${label} удален успешно!`, color: 'red' });
     } catch {
       // item stays in place — user sees it is still there
     } finally {
@@ -344,10 +339,14 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
 
   return (
     <div className="border-t border-th-border-2 pt-4 relative">
-      {successTooltip && (
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap text-xs bg-th-card text-th-text border border-th-border px-2 py-1 rounded shadow-lg z-10">
-          {successTooltip}
-        </span>
+      {banner && (
+        <div className={`mb-3 text-sm rounded-lg px-3 py-2 ${
+          banner.color === 'green' ? 'text-green-400 bg-green-500/10 border border-green-500/20' :
+          banner.color === 'amber' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' :
+          'text-red-400 bg-red-500/10 border border-red-500/20'
+        }`}>
+          {banner.message}
+        </div>
       )}
       <button
         type="button"

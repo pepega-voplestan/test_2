@@ -34,15 +34,6 @@ export const SOCIAL_PLATFORMS = {
   steam: {
     label: "Steam",
     hostnames: ["steamcommunity.com"],
-    preprocessInput(raw) {
-      const trimmed = raw.trim();
-      // Accept bare username (alphanumeric, underscore, hyphen, 2-32 chars)
-      const match = trimmed.match(/^([A-Za-z0-9_-]{2,32})$/);
-      if (match) {
-        return { url: `https://steamcommunity.com/id/${match[1]}`, display: match[1] };
-      }
-      return null;
-    },
     validate(url) {
       // /id/<customUrl> or /profiles/<steamId64>
       const match = url.pathname.match(/^\/(id|profiles)\/([^/]+)\/?$/);
@@ -143,40 +134,21 @@ export const SOCIAL_PLATFORMS = {
   },
 
   epicgames: {
-    // Epic Games public profiles are at: epicgames.com/id/<displayName>
     label: "Epic Games",
-    hostnames: ["www.epicgames.com", "epicgames.com"],
+    hostnames: [],
+    /** Accept username plain text — Epic Games has no reliable public profile URLs */
     preprocessInput(raw) {
       const trimmed = raw.trim();
+      // Username: 3-32 chars, alphanumeric + underscore, dot, hyphen
       const match = trimmed.match(/^([A-Za-z0-9_.-]{3,32})$/);
       if (match) {
-        return { url: `https://www.epicgames.com/id/${match[1]}`, display: match[1] };
+        return { url: null, display: trimmed };
       }
       return null;
     },
-    validate(url) {
-      // /id/<name>
-      const match = url.pathname.match(/^\/id\/([^/]+)\/?$/);
-      if (match) return true;
-      // Also accept /u/<hexId>
-      const uMatch = url.pathname.match(/^\/u\/([a-f0-9]+)\/?$/i);
-      return !!uMatch;
-    },
-    normalize(url) {
-      const idMatch = url.pathname.match(/^\/id\/([^/]+)\/?$/);
-      if (idMatch) return `https://www.epicgames.com/id/${idMatch[1]}`;
-      const uMatch = url.pathname.match(/^\/u\/([a-f0-9]+)\/?$/i);
-      if (uMatch) return `https://www.epicgames.com/u/${uMatch[1]}`;
-      return `https://www.epicgames.com${url.pathname.replace(/\/+$/, "")}`;
-    },
-    extractDisplay(url) {
-      const idMatch = url.pathname.match(/^\/id\/([^/]+)\/?$/);
-      if (idMatch) return decodeURIComponent(idMatch[1]);
-      const uMatch = url.pathname.match(/^\/u\/([a-f0-9]+)\/?$/i);
-      if (uMatch) return uMatch[1];
-      const segments = url.pathname.split("/").filter(Boolean);
-      return segments[segments.length - 1] || "Epic Games";
-    },
+    validate() { return false; },
+    normalize() { return ""; },
+    extractDisplay() { return ""; },
   },
 
   retroachievements: {
@@ -382,8 +354,8 @@ export const SOCIAL_PLATFORMS = {
     /** Accept username#1234 plain text — Discord has no public profile URLs */
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      // username#1234 (legacy discriminator) or just username (new format)
-      const match = trimmed.match(/^([A-Za-z0-9_.]{2,32})(#\d{1,4})?$/);
+      // username#1234 format required (discriminator mandatory)
+      const match = trimmed.match(/^([A-Za-z0-9_.]{2,32})#(\d{1,4})$/);
       if (match) {
         return { url: null, display: trimmed };
       }
