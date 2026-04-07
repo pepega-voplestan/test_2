@@ -3,6 +3,7 @@ import { UserProfile, Shout, Comment, User, SocialDto } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
+import { useScrollLock } from '../hooks/useScrollLock';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
 import { ProfileSocialsDisplay, ProfileSocialsEditor } from './ProfileSocials';
@@ -60,6 +61,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [showIgnoreList, setShowIgnoreList] = useState(false);
   const [ignoreListUsers, setIgnoreListUsers] = useState<User[]>([]);
   const [ignoreListLoading, setIgnoreListLoading] = useState(false);
+
+  useScrollLock(confirmIgnore || confirmUnignore || showIgnoreList);
 
   // Email change verification flow
   const [emailStep, setEmailStep] = useState<'idle' | 'sending' | 'code'>('idle');
@@ -549,7 +552,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               <input
                 value={editForm.username}
                 onChange={(e) => setEditForm(f => ({ ...f, username: e.target.value }))}
-                className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
+                className="w-full bg-th-ring/5 rounded-lg px-3 py-2 text-base text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
                 disabled={isSaving}
               />
             </label>
@@ -563,7 +566,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                     value={editForm.email}
                     onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
                     placeholder="user@example.com"
-                    className="flex-1 bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    className="flex-1 bg-th-ring/5 rounded-lg px-3 py-2 text-base text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                     disabled={isSaving || emailSending}
                   />
                   {editForm.email.trim() !== (profile?.email || '') && editForm.email.trim() !== '' && (
@@ -590,7 +593,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                       value={emailCode}
                       onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="000000"
-                      className="w-32 bg-th-ring/5 rounded-lg px-3 py-2 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20 text-center tracking-widest font-mono"
+                      className="w-32 bg-th-ring/5 rounded-lg px-3 py-2 text-base text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20 text-center tracking-widest font-mono"
                       disabled={emailSending}
                       autoFocus
                     />
@@ -671,7 +674,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                       type={showCurrentPassword ? "text" : "password"}
                       value={editForm.currentPassword}
                       onChange={(e) => setEditForm(f => ({ ...f, currentPassword: e.target.value }))}
-                      className="w-full bg-th-ring/5 rounded-lg px-3 py-2 pr-10 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
+                      className="w-full bg-th-ring/5 rounded-lg px-3 py-2 pr-10 text-base text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
                       disabled={isSaving}
                       autoComplete="current-password"
                     />
@@ -691,7 +694,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                       type={showNewPassword ? "text" : "password"}
                       value={editForm.newPassword}
                       onChange={(e) => setEditForm(f => ({ ...f, newPassword: e.target.value }))}
-                      className="w-full bg-th-ring/5 rounded-lg px-3 py-2 pr-10 text-sm text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
+                      className="w-full bg-th-ring/5 rounded-lg px-3 py-2 pr-10 text-base text-th-text outline-none ring-1 ring-th-ring/10 focus:ring-2 focus:ring-th-ring/20"
                       disabled={isSaving}
                       autoComplete="new-password"
                     />
@@ -811,7 +814,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
       {/* Confirm ignore modal */}
       {confirmIgnore && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !ignoreLoading && setConfirmIgnore(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ touchAction: 'none' }} onClick={() => !ignoreLoading && setConfirmIgnore(false)}>
           <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-th-text font-medium mb-2">Добавить в игнор?</div>
             <div className="text-th-text-3 text-sm mb-4">Контент пользователя <span className="font-medium text-th-text-2">{profile.name}</span> будет скрыт в ленте и комментариях.</div>
@@ -828,7 +831,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
       {/* Confirm unignore modal */}
       {confirmUnignore && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !ignoreLoading && setConfirmUnignore(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ touchAction: 'none' }} onClick={() => !ignoreLoading && setConfirmUnignore(false)}>
           <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-th-text font-medium mb-2">Убрать из игнора?</div>
             <div className="text-th-text-3 text-sm mb-4">Контент пользователя <span className="font-medium text-th-text-2">{profile.name}</span> снова будет отображаться.</div>
@@ -844,7 +847,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
 
       {/* Ignore list modal */}
       {showIgnoreList && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowIgnoreList(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ touchAction: 'none' }} onClick={() => setShowIgnoreList(false)}>
           <div className="bg-th-card border border-th-border rounded-xl p-5 max-w-md w-full mx-4 shadow-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-th-text font-bold text-lg">Список игнора</h3>
