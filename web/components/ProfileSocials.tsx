@@ -1,46 +1,54 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { SocialDto, SocialType } from '../types';
 
 /* ───────────────────────── Platform config ───────────────────────── */
 
 const PLATFORM_ORDER: SocialType[] = [
-  'steam', 'telegram', 'x', 'discord', 'battlenet', 'playstation',
-  'xbox', 'epicgames', 'youtube', 'spotify', 'boosty', 'retroachievements',
+  'steam', 'playstation', 'xbox', 'battlenet', 'epicgames',
+  'retroachievements', 'exophase', 'backloggd',
+  'youtube', 'myshows', 'shikimori',
+  'telegram', 'x', 'discord',
+  'boosty',
 ];
 
 const PLATFORM_LABELS: Record<SocialType, string> = {
   steam: 'Steam',
+  playstation: 'PlayStation',
+  xbox: 'Xbox',
+  battlenet: 'Battle.net',
+  epicgames: 'Epic Games',
+  retroachievements: 'RetroAchievements',
+  exophase: 'Exophase',
+  backloggd: 'Backloggd',
+  youtube: 'YouTube',
+  myshows: 'MyShows',
+  shikimori: 'Shikimori',
   telegram: 'Telegram',
   x: 'X',
   discord: 'Discord',
-  battlenet: 'Battle.net',
-  playstation: 'PlayStation',
-  xbox: 'Xbox',
-  epicgames: 'Epic Games',
-  youtube: 'YouTube',
-  spotify: 'Spotify',
   boosty: 'Boosty',
-  retroachievements: 'RetroAchievements',
 };
 
 /** Per-platform input label and placeholder */
 const PLATFORM_INPUT_HINTS: Record<SocialType, { label: string; placeholder: string; isPlainText?: boolean }> = {
-  steam: { label: 'Ссылка на профиль Steam', placeholder: 'https://steamcommunity.com/id/...' },
-  telegram: { label: 'Тэг профиля или ссылка', placeholder: '@username', isPlainText: true },
-  x: { label: 'Ссылка на профиль X', placeholder: 'https://x.com/username' },
-  discord: { label: 'Имя пользователя Discord', placeholder: 'username#1234', isPlainText: true },
-  battlenet: { label: 'BattleTag', placeholder: 'Player#1234', isPlainText: true },
-  playstation: { label: 'Ссылка на профиль PSN', placeholder: 'https://psnprofiles.com/username' },
+  steam: { label: 'Имя профиля или ссылка', placeholder: 'username или steamcommunity.com/id/...' },
+  playstation: { label: 'PSN ID или ссылка', placeholder: 'username или psnprofiles.com/...' },
   xbox: { label: 'Ссылка на профиль Xbox', placeholder: 'https://www.xbox.com/profile/gamertag' },
-  epicgames: { label: 'Ссылка на профиль Epic Games', placeholder: 'https://www.epicgames.com/id/...' },
-  youtube: { label: 'Ссылка на канал YouTube', placeholder: 'https://www.youtube.com/@handle' },
-  spotify: { label: 'Ссылка на профиль Spotify', placeholder: 'https://open.spotify.com/user/...' },
-  boosty: { label: 'Ссылка на страницу Boosty', placeholder: 'https://boosty.to/username' },
-  retroachievements: { label: 'Ссылка на профиль RetroAchievements', placeholder: 'https://retroachievements.org/user/...' },
+  battlenet: { label: 'BattleTag', placeholder: 'Player#1234', isPlainText: true },
+  epicgames: { label: 'Имя или ссылка Epic Games', placeholder: 'username или epicgames.com/id/...' },
+  retroachievements: { label: 'Имя или ссылка', placeholder: 'username или retroachievements.org/user/...' },
+  exophase: { label: 'Имя или ссылка', placeholder: 'username или exophase.com/user/...' },
+  backloggd: { label: 'Имя или ссылка', placeholder: 'username или backloggd.com/u/...' },
+  youtube: { label: 'Канал или ссылка', placeholder: '@handle или youtube.com/@...' },
+  myshows: { label: 'Имя или ссылка', placeholder: 'username или myshows.me/m/...' },
+  shikimori: { label: 'Имя или ссылка', placeholder: 'username или shikimori.one/...' },
+  telegram: { label: 'Имя пользователя или ссылка', placeholder: 'username или t.me/...', isPlainText: true },
+  x: { label: 'Имя или ссылка', placeholder: 'username или x.com/...' },
+  discord: { label: 'Имя пользователя Discord', placeholder: 'username или username#1234', isPlainText: true },
+  boosty: { label: 'Имя или ссылка', placeholder: 'username или boosty.to/...' },
 };
 
 /* ───────────────────────── SVG Icons ───────────────────────── */
-/* Inline SVGs with official brand colors */
 
 const SteamIcon = () => (
   <img src="/steam.svg" alt="Steam" className="w-full h-full rounded-sm" />
@@ -88,12 +96,6 @@ const YouTubeIcon = () => (
   </svg>
 );
 
-const SpotifyIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-full h-full">
-    <path fill="#1DB954" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-  </svg>
-);
-
 const RetroAchievementsIcon = () => (
   <img src="/retroachievements.png" alt="RetroAchievements" className="w-full h-full rounded-sm" />
 );
@@ -102,22 +104,56 @@ const BoostyIcon = () => (
   <img src="/boosty.png" alt="Boosty" className="w-full h-full rounded-sm" />
 );
 
+/* Placeholder icons for new platforms (simple text-based) */
+const ExophaseIcon = () => (
+  <div className="w-full h-full rounded-sm bg-[#4285f4] flex items-center justify-center">
+    <span className="text-white font-bold text-[10px] leading-none">EX</span>
+  </div>
+);
+
+const BackloggdIcon = () => (
+  <div className="w-full h-full rounded-sm bg-[#1a1a2e] flex items-center justify-center">
+    <span className="text-white font-bold text-[10px] leading-none">BL</span>
+  </div>
+);
+
+const MyShowsIcon = () => (
+  <div className="w-full h-full rounded-sm bg-[#02b3e4] flex items-center justify-center">
+    <span className="text-white font-bold text-[10px] leading-none">MS</span>
+  </div>
+);
+
+const ShikimoriIcon = () => (
+  <div className="w-full h-full rounded-sm bg-[#2e51a2] flex items-center justify-center">
+    <span className="text-white font-bold text-[10px] leading-none">SH</span>
+  </div>
+);
+
 const PLATFORM_ICONS: Record<SocialType, React.FC> = {
   steam: SteamIcon,
+  playstation: PlayStationIcon,
+  xbox: XboxIcon,
+  battlenet: BattlenetIcon,
+  epicgames: EpicGamesIcon,
+  retroachievements: RetroAchievementsIcon,
+  exophase: ExophaseIcon,
+  backloggd: BackloggdIcon,
+  youtube: YouTubeIcon,
+  myshows: MyShowsIcon,
+  shikimori: ShikimoriIcon,
   telegram: TelegramIcon,
   x: XIcon,
   discord: DiscordIcon,
-  battlenet: BattlenetIcon,
-  playstation: PlayStationIcon,
-  xbox: XboxIcon,
-  epicgames: EpicGamesIcon,
-  youtube: YouTubeIcon,
-  spotify: SpotifyIcon,
   boosty: BoostyIcon,
-  retroachievements: RetroAchievementsIcon,
 };
 
 /* ───────────────────────── Public display ───────────────────────── */
+
+/** Sort socials by the fixed platform order */
+function sortSocials(socials: SocialDto[]): SocialDto[] {
+  const orderMap = new Map(PLATFORM_ORDER.map((t, i) => [t, i]));
+  return [...socials].sort((a, b) => (orderMap.get(a.type) ?? 99) - (orderMap.get(b.type) ?? 99));
+}
 
 interface ProfileSocialsDisplayProps {
   socials: SocialDto[];
@@ -150,9 +186,11 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
 
   if (socials.length === 0) return null;
 
+  const sorted = sortSocials(socials);
+
   return (
     <div className="flex flex-wrap gap-2 mt-3 mb-1">
-      {socials.map((s) => {
+      {sorted.map((s) => {
         const Icon = PLATFORM_ICONS[s.type];
         const isLink = s.url && s.url.startsWith('http');
         const className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 transition-colors text-sm select-none";
@@ -208,6 +246,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
   onSocialsChange,
   disabled,
 }) => {
+  const [expanded, setExpanded] = useState(false);
   const [modal, setModal] = useState<{
     type: SocialType;
     mode: 'add' | 'manage' | 'edit';
@@ -220,6 +259,19 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const activeSocials = new Map(socials.map(s => [s.type, s]));
+
+  // Lock body scroll when any modal is open
+  useEffect(() => {
+    if (modal || confirmDelete) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [modal, confirmDelete]);
+
+  const closeModal = () => {
+    if (modal?.loading) return;
+    setModal(null);
+  };
 
   const handleIconClick = (type: SocialType) => {
     if (disabled) return;
@@ -293,54 +345,84 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
     }
   };
 
+  const activeCount = activeSocials.size;
+
   return (
     <div className="border-t border-th-border-2 pt-4">
-      <div className="text-xs text-th-text-3 mb-3">Социальные сети</div>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="flex items-center gap-2 text-xs text-th-text-3 hover:text-th-text-2 transition-colors mb-3 select-none"
+      >
+        <svg
+          className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        Социальные сети{activeCount > 0 && ` (${activeCount})`}
+      </button>
 
-      {/* Icon grid */}
-      <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
-        {PLATFORM_ORDER.map((type) => {
-          const isActive = activeSocials.has(type);
-          const Icon = PLATFORM_ICONS[type];
-          return (
-            <button
-              key={type}
-              type="button"
-              onClick={() => handleIconClick(type)}
-              disabled={disabled}
-              className={`
-                flex items-center justify-center w-full aspect-square rounded-lg border transition-all
-                ${isActive
-                  ? 'bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700'
-                  : 'bg-neutral-50 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 opacity-40 hover:opacity-70 hover:bg-neutral-100 dark:hover:bg-neutral-700 grayscale hover:grayscale-0'
-                }
-                disabled:pointer-events-none
-              `}
-              style={{ minWidth: 44, minHeight: 44 }}
-              title={PLATFORM_LABELS[type]}
-              aria-label={PLATFORM_LABELS[type]}
-            >
-              <span className="w-6 h-6"><Icon /></span>
-            </button>
-          );
-        })}
-      </div>
+      {expanded && (
+        <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+          {PLATFORM_ORDER.map((type) => {
+            const isActive = activeSocials.has(type);
+            const Icon = PLATFORM_ICONS[type];
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => handleIconClick(type)}
+                disabled={disabled}
+                className={`
+                  flex items-center justify-center w-full aspect-square rounded-lg border transition-all
+                  ${isActive
+                    ? 'bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                    : 'bg-neutral-50 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 opacity-40 hover:opacity-70 hover:bg-neutral-100 dark:hover:bg-neutral-700 grayscale hover:grayscale-0'
+                  }
+                  disabled:pointer-events-none
+                `}
+                style={{ minWidth: 40, minHeight: 40 }}
+                title={PLATFORM_LABELS[type]}
+                aria-label={PLATFORM_LABELS[type]}
+              >
+                <span className="w-6 h-6"><Icon /></span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Add / Edit URL modal ── */}
       {modal && modal.mode !== 'manage' && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => !modal.loading && setModal(null)}
-          onKeyDown={(e) => e.key === 'Escape' && !modal.loading && setModal(null)}
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-sm sm:mx-4 shadow-2xl"
+            className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-sm sm:mx-4 shadow-2xl relative"
             style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-th-text font-medium mb-3">
+            {/* X close button */}
+            <button
+              type="button"
+              onClick={closeModal}
+              disabled={modal.loading}
+              className="absolute top-3 right-3 p-1 text-th-text-4 hover:text-th-text-2 transition-colors disabled:opacity-50"
+              aria-label="Закрыть"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+
+            <div className="text-th-text font-medium mb-3 pr-8">
               {modal.mode === 'add' ? PLATFORM_LABELS[modal.type] : `Изменить ${PLATFORM_LABELS[modal.type]}`}
             </div>
 
@@ -367,7 +449,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
             <div className="flex gap-3 mt-4 justify-end">
               <button
                 type="button"
-                onClick={() => setModal(null)}
+                onClick={closeModal}
                 disabled={modal.loading}
                 className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 rounded-lg transition-colors"
               >
@@ -393,16 +475,26 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {modal && modal.mode === 'manage' && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setModal(null)}
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-xs sm:mx-4 shadow-2xl"
+            className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-xs sm:mx-4 shadow-2xl relative"
             style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-th-text font-medium mb-1">{PLATFORM_LABELS[modal.type]}</div>
+            {/* X close button */}
+            <button
+              type="button"
+              onClick={closeModal}
+              className="absolute top-3 right-3 p-1 text-th-text-4 hover:text-th-text-2 transition-colors"
+              aria-label="Закрыть"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+
+            <div className="text-th-text font-medium mb-1 pr-8">{PLATFORM_LABELS[modal.type]}</div>
             <div className="text-th-text-4 text-xs mb-4 truncate">{activeSocials.get(modal.type)?.display_name}</div>
 
             <div className="flex flex-col gap-2">
@@ -421,14 +513,6 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
                 Удалить
               </button>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setModal(null)}
-              className="w-full mt-2 px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-lg transition-colors text-center"
-            >
-              Отмена
-            </button>
           </div>
         </div>
       )}

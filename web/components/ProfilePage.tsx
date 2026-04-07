@@ -661,13 +661,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
               </div>
             </div>
 
-            <ProfileSocialsEditor
-              userId={userId}
-              socials={socials}
-              onSocialsChange={setSocials}
-              disabled={isSaving}
-            />
-
             <div className="border-t border-th-border-2 pt-4">
               <div className="text-xs text-th-text-3 mb-3">Смена пароля (оставьте пустым, чтобы не менять)</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -749,6 +742,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                 Отмена
               </button>
             </div>
+
+            <ProfileSocialsEditor
+              userId={userId}
+              socials={socials}
+              onSocialsChange={setSocials}
+              disabled={isSaving}
+            />
           </form>
         )}
       </div>
