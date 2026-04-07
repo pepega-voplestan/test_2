@@ -15,7 +15,7 @@
 export const SOCIAL_TYPES = [
   "steam", "playstation", "xbox", "battlenet", "epicgames",
   "retroachievements", "exophase", "backloggd",
-  "youtube", "myshows", "shikimori",
+  "youtube", "myshows",
   "telegram", "x", "discord",
   "boosty",
 ];
@@ -208,24 +208,17 @@ export const SOCIAL_PLATFORMS = {
   exophase: {
     label: "Exophase",
     hostnames: ["www.exophase.com", "exophase.com"],
-    preprocessInput(raw) {
-      const trimmed = raw.trim();
-      const match = trimmed.match(/^([A-Za-z0-9_-]{2,32})$/);
-      if (match) {
-        return { url: `https://www.exophase.com/user/${match[1]}/`, display: match[1] };
-      }
-      return null;
-    },
     validate(url) {
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)\/?$/);
+      // Accept /user/<name> and any sub-paths (e.g. /user/name/xbox/, /user/name/achievements/)
+      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)(\/|$)/);
       return !!match && match[1].length > 0;
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)\/?$/);
+      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)(\/|$)/);
       return `https://www.exophase.com/user/${match[1]}/`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)\/?$/);
+      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)(\/|$)/);
       return match[1];
     },
   },
@@ -301,46 +294,26 @@ export const SOCIAL_PLATFORMS = {
       return null;
     },
     validate(url) {
-      const match = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
-      return !!match && match[1].length > 0;
+      // Accept /m/<username> or /<username> (direct profile URL)
+      const mMatch = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
+      if (mMatch && mMatch[1].length > 0) return true;
+      const directMatch = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+      if (!directMatch) return false;
+      const reserved = ["m", "search", "login", "signup", "api", "about", "news", "profile"];
+      return !reserved.includes(directMatch[1].toLowerCase());
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
-      return `https://myshows.me/m/${match[1]}`;
+      const mMatch = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
+      if (mMatch) return `https://myshows.me/m/${mMatch[1]}`;
+      // Direct /<username> → normalize to /m/<username>
+      const directMatch = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+      return `https://myshows.me/m/${directMatch[1]}`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
-      return match[1];
-    },
-  },
-
-  shikimori: {
-    label: "Shikimori",
-    hostnames: ["shikimori.one", "shikimori.me"],
-    preprocessInput(raw) {
-      const trimmed = raw.trim();
-      // Accept bare username (may contain +id suffix)
-      const match = trimmed.match(/^([A-Za-z0-9_-]{2,32}(\+\d+)?)$/);
-      if (match) {
-        return { url: `https://shikimori.one/${match[1]}`, display: match[1].replace(/\+\d+$/, "") };
-      }
-      return null;
-    },
-    validate(url) {
-      // /<username> or /<username>+<id>
-      const match = url.pathname.match(/^\/([A-Za-z0-9_-]+(\+\d+)?)\/?$/);
-      if (!match) return false;
-      const reserved = ["animes", "mangas", "ranobe", "characters", "people", "clubs", "collections", "reviews", "forum", "users", "api", "oauth"];
-      return !reserved.includes(match[1].toLowerCase().replace(/\+\d+$/, ""));
-    },
-    normalize(url) {
-      const match = url.pathname.match(/^\/([A-Za-z0-9_-]+(\+\d+)?)\/?$/);
-      return `https://shikimori.one/${match[1]}`;
-    },
-    extractDisplay(url) {
-      const match = url.pathname.match(/^\/([A-Za-z0-9_-]+(\+\d+)?)\/?$/);
-      // Strip +id suffix for cleaner display
-      return match[1].replace(/\+\d+$/, "");
+      const mMatch = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
+      if (mMatch) return mMatch[1];
+      const directMatch = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+      return directMatch[1];
     },
   },
 
