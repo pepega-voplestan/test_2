@@ -34,7 +34,7 @@ describe("Socials", () => {
     it("returns user socials with display_name field", async () => {
       const user = await createUser();
       await createSocial({ userId: user.id, type: "steam", url: "https://steamcommunity.com/id/FlameInTheDark", display_name: "FlameInTheDark" });
-      await createSocial({ userId: user.id, type: "telegram", url: "https://t.me/testuser", display_name: "@testuser" });
+      await createSocial({ userId: user.id, type: "telegram", url: "https://t.me/testuser", display_name: "testuser" });
 
       const res = await (await request()).get(`/api/v1/users/${user.id}/socials`);
       expect(res.status).toBe(200);
@@ -46,7 +46,7 @@ describe("Socials", () => {
       });
       expect(res.body.socials[1]).toMatchObject({
         type: "telegram",
-        display_name: "@testuser",
+        display_name: "testuser",
       });
     });
   });
@@ -78,6 +78,22 @@ describe("Socials", () => {
 
       expect(res.status).toBe(201);
       expect(res.body.social.url).toBe("https://steamcommunity.com/id/TestUser");
+    });
+
+    it("accepts bare username via preprocessInput", async () => {
+      const user = await createUser();
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent
+        .post(`/api/v1/users/${user.id}/socials`)
+        .send({ type: "x", url: "testhandle" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.social).toMatchObject({
+        type: "x",
+        url: "https://x.com/testhandle",
+        display_name: "testhandle",
+      });
     });
 
     it("normalizes twitter.com to x.com", async () => {
