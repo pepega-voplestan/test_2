@@ -26,11 +26,11 @@ describe("socials helper", () => {
       expect(SOCIAL_TYPES).toContain("exophase");
       expect(SOCIAL_TYPES).toContain("backloggd");
       expect(SOCIAL_TYPES).toContain("myshows");
-      expect(SOCIAL_TYPES).toContain("shikimori");
     });
 
     it("does not contain removed platforms", () => {
       expect(SOCIAL_TYPES).not.toContain("spotify");
+      expect(SOCIAL_TYPES).not.toContain("shikimori");
     });
   });
 
@@ -167,27 +167,23 @@ describe("socials helper", () => {
       expect(validateSocialUrl("myshows", "https://en.myshows.me/m/testuser").valid).toBe(true);
     });
 
+    it("accepts myshows direct profile URL", () => {
+      expect(validateSocialUrl("myshows", "https://myshows.me/Eristea").valid).toBe(true);
+    });
+
+    it("rejects myshows reserved paths", () => {
+      expect(validateSocialUrl("myshows", "https://myshows.me/login").valid).toBe(false);
+    });
+
     it("rejects myshows non-profile URL", () => {
       expect(validateSocialUrl("myshows", "https://myshows.me/view/123").valid).toBe(false);
     });
 
-    // Shikimori
-    it("accepts shikimori profile URL", () => {
-      expect(validateSocialUrl("shikimori", "https://shikimori.one/TestUser").valid).toBe(true);
+    // Exophase sub-paths
+    it("accepts exophase user sub-path URL", () => {
+      expect(validateSocialUrl("exophase", "https://www.exophase.com/user/TestPlayer/xbox/").valid).toBe(true);
     });
 
-    it("accepts shikimori profile URL with +id", () => {
-      expect(validateSocialUrl("shikimori", "https://shikimori.one/TestUser+12345").valid).toBe(true);
-    });
-
-    it("accepts shikimori.me domain", () => {
-      expect(validateSocialUrl("shikimori", "https://shikimori.me/TestUser").valid).toBe(true);
-    });
-
-    it("rejects shikimori reserved paths", () => {
-      expect(validateSocialUrl("shikimori", "https://shikimori.one/animes").valid).toBe(false);
-      expect(validateSocialUrl("shikimori", "https://shikimori.one/forum").valid).toBe(false);
-    });
   });
 
   describe("normalizeSocialUrl", () => {
@@ -206,10 +202,11 @@ describe("socials helper", () => {
         .toBe("https://www.youtube.com/@coolname");
     });
 
-    it("normalizes shikimori.me to shikimori.one", () => {
-      expect(normalizeSocialUrl("shikimori", "https://shikimori.me/TestUser"))
-        .toBe("https://shikimori.one/TestUser");
+    it("normalizes myshows direct URL to /m/ form", () => {
+      expect(normalizeSocialUrl("myshows", "https://myshows.me/Eristea"))
+        .toBe("https://myshows.me/m/Eristea");
     });
+
   });
 
   describe("extractSocialDisplay", () => {
@@ -273,10 +270,6 @@ describe("socials helper", () => {
         .toBe("testuser");
     });
 
-    it("extracts shikimori username (strips +id)", () => {
-      expect(extractSocialDisplay("shikimori", "https://shikimori.one/TestUser+12345"))
-        .toBe("TestUser");
-    });
   });
 
   describe("preprocessSocialInput", () => {
@@ -354,11 +347,6 @@ describe("socials helper", () => {
       expect(result).toEqual({ url: "https://www.epicgames.com/id/TestPlayer", display: "TestPlayer" });
     });
 
-    it("converts exophase username", () => {
-      const result = preprocessSocialInput("exophase", "TestPlayer");
-      expect(result).toEqual({ url: "https://www.exophase.com/user/TestPlayer/", display: "TestPlayer" });
-    });
-
     it("converts backloggd username", () => {
       const result = preprocessSocialInput("backloggd", "TestPlayer");
       expect(result).toEqual({ url: "https://www.backloggd.com/u/TestPlayer/", display: "TestPlayer" });
@@ -369,18 +357,9 @@ describe("socials helper", () => {
       expect(result).toEqual({ url: "https://myshows.me/m/testuser", display: "testuser" });
     });
 
-    it("converts shikimori username", () => {
-      const result = preprocessSocialInput("shikimori", "TestUser");
-      expect(result).toEqual({ url: "https://shikimori.one/TestUser", display: "TestUser" });
-    });
-
-    it("strips +id from shikimori display", () => {
-      const result = preprocessSocialInput("shikimori", "TestUser+12345");
-      expect(result).toEqual({ url: "https://shikimori.one/TestUser+12345", display: "TestUser" });
-    });
-
     it("returns null for platforms without preprocessInput", () => {
       expect(preprocessSocialInput("xbox", "TestGamer")).toBeNull();
+      expect(preprocessSocialInput("exophase", "TestPlayer")).toBeNull();
     });
   });
 
@@ -465,7 +444,6 @@ describe("socials helper", () => {
       expect(await resolveSocialDisplay("exophase", "https://www.exophase.com/user/TestPlayer/")).toBe("TestPlayer");
       expect(await resolveSocialDisplay("backloggd", "https://www.backloggd.com/u/TestPlayer/")).toBe("TestPlayer");
       expect(await resolveSocialDisplay("myshows", "https://myshows.me/m/testuser")).toBe("testuser");
-      expect(await resolveSocialDisplay("shikimori", "https://shikimori.one/TestUser")).toBe("TestUser");
     });
   });
 
