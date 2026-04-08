@@ -145,6 +145,12 @@ describe("socials helper", () => {
       expect(validateSocialUrl("exophase", "https://www.exophase.com/user/TestPlayer").valid).toBe(true);
     });
 
+    it("accepts exophase platform-prefixed user URL", () => {
+      expect(validateSocialUrl("exophase", "https://www.exophase.com/psn/user/Warped_Tonttu/").valid).toBe(true);
+      expect(validateSocialUrl("exophase", "https://www.exophase.com/xbox/user/TestPlayer/").valid).toBe(true);
+      expect(validateSocialUrl("exophase", "https://www.exophase.com/steam/user/TestPlayer/").valid).toBe(true);
+    });
+
     it("rejects exophase non-user URL", () => {
       expect(validateSocialUrl("exophase", "https://www.exophase.com/game/test").valid).toBe(false);
     });
@@ -207,6 +213,11 @@ describe("socials helper", () => {
         .toBe("https://myshows.me/m/Eristea");
     });
 
+    it("normalizes exophase platform-prefixed URL to base /user/ form", () => {
+      expect(normalizeSocialUrl("exophase", "https://www.exophase.com/psn/user/Warped_Tonttu/"))
+        .toBe("https://www.exophase.com/user/Warped_Tonttu/");
+    });
+
   });
 
   describe("extractSocialDisplay", () => {
@@ -258,6 +269,11 @@ describe("socials helper", () => {
     it("extracts exophase username", () => {
       expect(extractSocialDisplay("exophase", "https://www.exophase.com/user/TestPlayer/"))
         .toBe("TestPlayer");
+    });
+
+    it("extracts exophase username from platform-prefixed URL", () => {
+      expect(extractSocialDisplay("exophase", "https://www.exophase.com/psn/user/Warped_Tonttu/"))
+        .toBe("Warped_Tonttu");
     });
 
     it("extracts backloggd username", () => {
