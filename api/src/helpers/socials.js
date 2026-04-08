@@ -181,16 +181,16 @@ export const SOCIAL_PLATFORMS = {
     label: "Exophase",
     hostnames: ["www.exophase.com", "exophase.com"],
     validate(url) {
-      // Accept /user/<name> and any sub-paths (e.g. /user/name/xbox/, /user/name/achievements/)
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)(\/|$)/);
+      // Accept /user/<name> or /<platform>/user/<name> (e.g. /psn/user/Name/, /xbox/user/Name/)
+      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
       return !!match && match[1].length > 0;
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)(\/|$)/);
+      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
       return `https://www.exophase.com/user/${match[1]}/`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_-]+)(\/|$)/);
+      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
       return match[1];
     },
   },
