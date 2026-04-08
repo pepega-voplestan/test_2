@@ -186,8 +186,12 @@ export const SOCIAL_PLATFORMS = {
       return !!match && match[1].length > 0;
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
-      return `https://www.exophase.com/user/${match[1]}/`;
+      const match = url.pathname.match(/^\/(?:([a-z]+)\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
+      const platform = match[1];
+      const username = match[2];
+      return platform
+        ? `https://www.exophase.com/${platform}/user/${username}/`
+        : `https://www.exophase.com/user/${username}/`;
     },
     extractDisplay(url) {
       const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
