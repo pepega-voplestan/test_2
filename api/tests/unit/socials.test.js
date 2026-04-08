@@ -213,9 +213,14 @@ describe("socials helper", () => {
         .toBe("https://myshows.me/m/Eristea");
     });
 
-    it("normalizes exophase platform-prefixed URL to base /user/ form", () => {
+    it("preserves exophase platform prefix in normalized URL", () => {
       expect(normalizeSocialUrl("exophase", "https://www.exophase.com/psn/user/Warped_Tonttu/"))
-        .toBe("https://www.exophase.com/user/Warped_Tonttu/");
+        .toBe("https://www.exophase.com/psn/user/Warped_Tonttu/");
+    });
+
+    it("normalizes exophase plain user URL", () => {
+      expect(normalizeSocialUrl("exophase", "https://www.exophase.com/user/TestPlayer"))
+        .toBe("https://www.exophase.com/user/TestPlayer/");
     });
 
   });
