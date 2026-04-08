@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SocialDto, SocialType } from '../types';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 /* ───────────────────────── Platform config ───────────────────────── */
 
@@ -173,11 +174,11 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
   const sorted = sortSocials(socials);
 
   return (
-    <div className="flex flex-wrap gap-2 mt-3 mb-1">
+    <div className="flex flex-wrap gap-2 mt-3 mb-1 relative">
       {sorted.map((s) => {
         const Icon = PLATFORM_ICONS[s.type];
         const isLink = s.url && s.url.startsWith('http');
-        const className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 transition-colors text-sm select-none";
+        const badgeClass = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 transition-colors text-sm select-none";
         const content = (
           <>
             <span className="w-5 h-5 shrink-0"><Icon /></span>
@@ -190,7 +191,7 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
             href={s.url}
             target="_blank"
             rel="noopener noreferrer"
-            className={className}
+            className={badgeClass}
             title={`${PLATFORM_LABELS[s.type]}: ${s.display_name}`}
           >
             {content}
@@ -198,19 +199,21 @@ export const ProfileSocialsDisplay: React.FC<ProfileSocialsDisplayProps> = ({ so
         ) : (
           <span
             key={s.type}
-            className={className + " cursor-pointer relative"}
+            className={badgeClass + " cursor-pointer"}
             title={`${PLATFORM_LABELS[s.type]}: ${s.display_name}`}
             onClick={() => handleCopy(s.type, s.display_name)}
           >
             {content}
-            {copiedType === s.type && (
-              <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs bg-th-card text-th-text border border-th-border px-2 py-1 rounded shadow-lg z-10">
-                Скопировано в буфер обмена!
-              </span>
-            )}
           </span>
         );
       })}
+
+      {/* Fixed toast — always visible and centered at bottom of viewport */}
+      {copiedType && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap text-sm bg-th-card text-th-text border border-th-border px-4 py-2 rounded-xl shadow-lg pointer-events-none" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+          Скопировано!
+        </div>
+      )}
     </div>
   );
 };
@@ -245,13 +248,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
 
   const activeSocials = new Map(socials.map(s => [s.type, s]));
 
-  // Lock body scroll when any modal is open
-  useEffect(() => {
-    if (modal || confirmDelete) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [modal, confirmDelete]);
+  useScrollLock(!!(modal || confirmDelete));
 
   const closeModal = () => {
     if (modal?.loading) return;
@@ -288,6 +285,8 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
           ),
         },
       );
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) throw new Error('Сервер недоступен');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка');
 
@@ -313,7 +312,8 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
         credentials: 'include',
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const ct = res.headers.get('content-type') || '';
+        const data = ct.includes('application/json') ? await res.json().catch(() => ({})) : {};
         throw new Error(data.error || 'Ошибка');
       }
       const label = PLATFORM_LABELS[type];
@@ -402,12 +402,15 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {modal && modal.mode !== 'manage' && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+          style={{ touchAction: 'none', maxHeight: '100dvh' }}
           role="dialog"
           aria-modal="true"
+          onClick={closeModal}
         >
           <div
             className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-sm sm:mx-4 shadow-2xl relative"
             style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* X close button */}
             <button
@@ -438,7 +441,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
               onChange={(e) => setModal(m => m ? { ...m, url: e.target.value, error: null } : m)}
               onKeyDown={handleKeyDown}
               placeholder={PLATFORM_INPUT_HINTS[modal.type].placeholder}
-              className="w-full bg-th-ring/5 rounded-lg px-3 py-2.5 text-sm text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+              className="w-full bg-th-ring/5 rounded-lg px-3 py-2.5 text-base text-th-text outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
               disabled={modal.loading}
             />
 
@@ -475,12 +478,15 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {modal && modal.mode === 'manage' && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+          style={{ touchAction: 'none', maxHeight: '100dvh' }}
           role="dialog"
           aria-modal="true"
+          onClick={closeModal}
         >
           <div
             className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-xs sm:mx-4 shadow-2xl relative"
             style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* X close button */}
             <button
@@ -521,6 +527,7 @@ export const ProfileSocialsEditor: React.FC<ProfileSocialsEditorProps> = ({
       {confirmDelete && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+          style={{ touchAction: 'none', maxHeight: '100dvh' }}
           onClick={() => !deleteLoading && setConfirmDelete(null)}
           role="dialog"
           aria-modal="true"
