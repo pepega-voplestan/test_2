@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useScrollLock } from "../hooks/useScrollLock";
 
 type Mode = "login" | "register" | "register-verify" | "forgot" | "forgot-verify" | "forgot-newpass";
 
@@ -54,17 +55,7 @@ export default function AuthModal() {
     }
   }, [mode]);
 
-  // Lock background scroll while the modal is open
-  useEffect(() => {
-    if (!isAuthModalOpen) return;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = 'hidden';
-    document.body.style.paddingRight = `${scrollbarWidth}px`;
-    return () => {
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-    };
-  }, [isAuthModalOpen]);
+  useScrollLock(isAuthModalOpen);
 
   if (!isAuthModalOpen) return null;
 
@@ -255,7 +246,7 @@ export default function AuthModal() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-base outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="username или email"
                   disabled={submitting}
                 />
@@ -271,7 +262,7 @@ export default function AuthModal() {
                     onChange={(e) => setPassword(e.target.value)}
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
-                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-base outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                     placeholder="••••••••"
                     disabled={submitting}
                   />
@@ -308,7 +299,7 @@ export default function AuthModal() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-base outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="например: maksim"
                   disabled={submitting}
                 />
@@ -323,7 +314,7 @@ export default function AuthModal() {
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
                   autoComplete="email"
-                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-base outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="user@example.com"
                   disabled={submitting}
                 />
@@ -339,7 +330,7 @@ export default function AuthModal() {
                     onChange={(e) => setPassword(e.target.value)}
                     type={showPassword ? "text" : "password"}
                     autoComplete="new-password"
-                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-base outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                     placeholder="••••••••"
                     disabled={submitting}
                   />
@@ -395,7 +386,7 @@ export default function AuthModal() {
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
                   autoComplete="email"
-                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                  className="w-full rounded-xl bg-th-ring/5 px-3 py-2 text-base outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                   placeholder="user@example.com"
                   disabled={submitting}
                   autoFocus
@@ -445,7 +436,7 @@ export default function AuthModal() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     type={showPassword ? "text" : "password"}
                     autoComplete="new-password"
-                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-sm outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
+                    className="w-full rounded-xl bg-th-ring/5 px-3 py-2 pr-10 text-base outline-none ring-1 ring-th-ring/10 placeholder:text-th-text-4 focus:ring-2 focus:ring-th-ring/20"
                     placeholder="••••••••"
                     disabled={submitting}
                     autoFocus
