@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../context/NotificationsContext';
 import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 function formatRelativeTime(isoTimestamp: string): string {
   const now = Date.now();
@@ -110,21 +111,16 @@ const NotificationDropdown: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Snapshot the list on open; flush buffered reads on close; lock body scroll
+  useScrollLock(isOpen);
+
+  // Snapshot the list on open; flush buffered reads on close
   useEffect(() => {
     if (isOpen) {
       setFrozenList(sortedNotifications);
       frozenIds.current = new Set(sortedNotifications.map((n) => n.id));
-      // Lock scroll but keep scrollbar visible to prevent layout jump
-      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-      document.body.style.overflow = 'hidden';
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
     } else {
       flushReads();
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
     }
-    return () => { document.body.style.overflow = ''; document.body.style.paddingRight = ''; };
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // While open: update isRead in-place (visual feedback) + append pages from loadMore

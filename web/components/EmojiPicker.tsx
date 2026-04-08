@@ -789,7 +789,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
               readOnly={mobileReadOnly}
               onTouchEnd={() => { if (mobileReadOnly) { setMobileReadOnly(false); setTimeout(() => searchRef.current?.focus(), 0); } }}
               placeholder="Поиск эмодзи..."
-              className="w-full bg-th-input text-th-text text-xs rounded-md px-2.5 py-1.5 outline-none border border-th-border/50 focus:border-th-text-4 placeholder-th-text-4 transition-colors"
+              className="w-full bg-th-input text-th-text text-base rounded-md px-2.5 py-1.5 outline-none border border-th-border/50 focus:border-th-text-4 placeholder-th-text-4 transition-colors"
             />
           </div>
 
