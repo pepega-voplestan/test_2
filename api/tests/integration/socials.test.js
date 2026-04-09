@@ -189,14 +189,15 @@ describe("Socials", () => {
       });
     });
 
-    it("rejects discord username without discriminator", async () => {
+    it("accepts discord username without discriminator (new format)", async () => {
       const user = await createUser();
       const agent = await authenticatedAgent(user);
 
       const res = await agent
         .post(`/api/v1/users/${user.id}/socials`)
         .send({ type: "discord", url: "cooluser" });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(201);
+      expect(res.body.social.display_name).toBe("cooluser");
     });
 
     it("rejects duplicate social type", async () => {
