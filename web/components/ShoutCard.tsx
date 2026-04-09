@@ -680,7 +680,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
                 {ytLoaded ? (
                   <iframe className="w-full h-full" src={`${comment.media.embedUrl}?autoplay=1`} title={comment.media.title || "YouTube"}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
-                    sandbox="allow-scripts allow-same-origin allow-presentation" />
+                    sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" />
                 ) : (
                   <>
                     <img src={`https://img.youtube.com/vi/${comment.media.videoId}/hqdefault.jpg`} alt={comment.media.title || "YouTube video"} loading="lazy" className="w-full h-full object-cover" />
@@ -1045,7 +1045,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 {ytLoaded ? (
                   <iframe className="w-full h-full" src={`${shout.media.embedUrl}?autoplay=1`} title={shout.media.title || "YouTube"}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
-                    sandbox="allow-scripts allow-same-origin allow-presentation" />
+                    sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" />
                 ) : (
                   <>
                     <img src={`https://img.youtube.com/vi/${shout.media.videoId}/hqdefault.jpg`} alt={shout.media.title || "YouTube video"} loading="lazy" className="w-full h-full object-cover" />
