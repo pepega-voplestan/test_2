@@ -85,6 +85,19 @@ export async function setupAdmin() {
                 };
               },
             },
+            viewSocials: {
+              actionType: "record",
+              label: "Соц. сети →",
+              icon: "Link",
+              component: false,
+              handler: async (request, response, context) => {
+                const userId = context.record.params.id;
+                return {
+                  record: context.record.toJSON(context.currentAdmin),
+                  redirectUrl: `/admin/resources/Social?filters.user_id=${userId}`,
+                };
+              },
+            },
             edit: {
               before: async (request, context) => {
                 // On save, snapshot the current is_banned before the update
@@ -357,6 +370,23 @@ export async function setupAdmin() {
           actions: {
             new: { isAccessible: false },
             delete: { isAccessible: false },
+            bulkDelete: { isAccessible: false },
+          },
+        },
+      },
+
+      // ── Socials: view/edit user social links ──
+      {
+        resource: { model: getModelByName("Social"), client: prisma },
+        options: {
+          navigation: { name: "Пользователи", icon: "User" },
+          sort: { sortBy: "created_at", direction: "desc" },
+          properties: {
+            id: { isDisabled: true },
+            created_at: { isDisabled: true },
+            updated_at: { isDisabled: true },
+          },
+          actions: {
             bulkDelete: { isAccessible: false },
           },
         },

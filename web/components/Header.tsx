@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { navigateTo } from '../hooks/useRoute';
+import { useScrollLock } from '../hooks/useScrollLock';
 import NotificationDropdown from './NotificationDropdown';
 
 const Header: React.FC = () => {
   const { user, openModal, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const [confirmLogout, setConfirmLogout] = useState(false);
+
+  useScrollLock(confirmLogout);
 
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -19,6 +23,7 @@ const Header: React.FC = () => {
   };
 
   return (
+    <>
     <header className="bg-th-page h-[52px] border-b border-th-border-2 sticky top-0 z-50 flex items-center justify-center transition-colors">
       <div className="w-full max-w-[1100px] px-4 flex items-center justify-between">
         {/* Logo */}
@@ -55,7 +60,7 @@ const Header: React.FC = () => {
                       <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full bg-th-input" />
                     </a>
                     <button
-                        onClick={logout}
+                        onClick={() => setConfirmLogout(true)}
                         className="text-xs font-bold text-th-text-3 hover:text-th-text transition-colors"
                     >
                         ВЫЙТИ
@@ -76,6 +81,40 @@ const Header: React.FC = () => {
         </div>
       </div>
     </header>
+
+    {confirmLogout && (
+      <div
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+        style={{ touchAction: 'none', maxHeight: '100dvh' }}
+        onClick={() => setConfirmLogout(false)}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          className="bg-th-card border border-th-border rounded-t-xl sm:rounded-xl p-5 w-full sm:max-w-sm sm:mx-4 shadow-2xl"
+          style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="text-th-text font-medium mb-2">Выйти из аккаунта?</div>
+          <div className="text-th-text-3 text-sm mb-4">Вы уверены, что хотите выйти?</div>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setConfirmLogout(false)}
+              className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800 rounded-lg transition-colors"
+            >
+              Отмена
+            </button>
+            <button
+              onClick={() => { setConfirmLogout(false); logout(); }}
+              className="px-4 py-2 text-sm font-medium bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900 hover:bg-neutral-700 dark:hover:bg-neutral-300 border border-neutral-800 dark:border-neutral-200 rounded-lg transition-colors"
+            >
+              Выйти
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

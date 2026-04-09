@@ -45,7 +45,7 @@ export const SOCIAL_PLATFORMS = {
     },
     extractDisplay(url) {
       const match = url.pathname.match(/^\/(id|profiles)\/([^/]+)\/?$/);
-      return match[2];
+      try { return decodeURIComponent(match[2]); } catch { return match[2]; }
     },
   },
 
@@ -54,7 +54,7 @@ export const SOCIAL_PLATFORMS = {
     hostnames: ["psnprofiles.com", "www.psnprofiles.com", "library.playstation.com"],
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      const match = trimmed.match(/^([A-Za-z0-9_-]{3,16})$/);
+      const match = trimmed.match(/^([A-Za-z0-9_\u0400-\u04FF-]{3,16})$/u);
       if (match) {
         return { url: `https://psnprofiles.com/${match[1]}`, display: match[1] };
       }
@@ -63,7 +63,7 @@ export const SOCIAL_PLATFORMS = {
     validate(url) {
       if (url.hostname.includes("psnprofiles.com")) {
         // psnprofiles.com/<username>
-        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+        const match = url.pathname.match(/^\/([^/]+)\/?$/);
         return !!match && match[1].length > 0;
       }
       if (url.hostname === "library.playstation.com") {
@@ -74,15 +74,15 @@ export const SOCIAL_PLATFORMS = {
     },
     normalize(url) {
       if (url.hostname.includes("psnprofiles.com")) {
-        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+        const match = url.pathname.match(/^\/([^/]+)\/?$/);
         return `https://psnprofiles.com/${match[1]}`;
       }
       return `https://${url.hostname}${url.pathname.replace(/\/+$/, "") || "/"}`;
     },
     extractDisplay(url) {
       if (url.hostname.includes("psnprofiles.com")) {
-        const match = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
-        return match[1];
+        const match = url.pathname.match(/^\/([^/]+)\/?$/);
+        try { return decodeURIComponent(match[1]); } catch { return match[1]; }
       }
       const segments = url.pathname.split("/").filter(Boolean);
       return segments[segments.length - 1] || url.hostname;
@@ -121,8 +121,8 @@ export const SOCIAL_PLATFORMS = {
     /** Accept BattleTag#1234 plain text — Battle.net has no public profile URLs */
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      // BattleTag#1234 format
-      const match = trimmed.match(/^([A-Za-z0-9\u0430-\u044f\u0410-\u042f\u0451\u0401]{2,12})#(\d{4,6})$/u);
+      // BattleTag#1234 format (supports Cyrillic characters)
+      const match = trimmed.match(/^([A-Za-z0-9\u0400-\u04FF]{2,12})#(\d{4,6})$/u);
       if (match) {
         return { url: null, display: trimmed };
       }
@@ -139,8 +139,8 @@ export const SOCIAL_PLATFORMS = {
     /** Accept username plain text — Epic Games has no reliable public profile URLs */
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      // Username: 3-32 chars, alphanumeric + underscore, dot, hyphen
-      const match = trimmed.match(/^([A-Za-z0-9_.-]{3,32})$/);
+      // Username: 3-32 chars, alphanumeric + underscore, dot, hyphen, Cyrillic
+      const match = trimmed.match(/^([A-Za-z0-9_.\u0400-\u04FF-]{3,32})$/u);
       if (match) {
         return { url: null, display: trimmed };
       }
@@ -156,7 +156,7 @@ export const SOCIAL_PLATFORMS = {
     hostnames: ["retroachievements.org", "www.retroachievements.org"],
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      const match = trimmed.match(/^([A-Za-z0-9_.-]{2,20})$/);
+      const match = trimmed.match(/^([A-Za-z0-9_.\u0400-\u04FF-]{2,20})$/u);
       if (match) {
         return { url: `https://retroachievements.org/user/${match[1]}`, display: match[1] };
       }
@@ -164,16 +164,16 @@ export const SOCIAL_PLATFORMS = {
     },
     validate(url) {
       // /user/<username>
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_.-]+)\/?$/);
+      const match = url.pathname.match(/^\/user\/([^/]+)\/?$/);
       return !!match && match[1].length > 0;
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_.-]+)\/?$/);
+      const match = url.pathname.match(/^\/user\/([^/]+)\/?$/);
       return `https://retroachievements.org/user/${match[1]}`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/user\/([A-Za-z0-9_.-]+)\/?$/);
-      return match[1];
+      const match = url.pathname.match(/^\/user\/([^/]+)\/?$/);
+      try { return decodeURIComponent(match[1]); } catch { return match[1]; }
     },
   },
 
@@ -182,11 +182,11 @@ export const SOCIAL_PLATFORMS = {
     hostnames: ["www.exophase.com", "exophase.com"],
     validate(url) {
       // Accept /user/<name> or /<platform>/user/<name> (e.g. /psn/user/Name/, /xbox/user/Name/)
-      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
+      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([^/]+)(\/|$)/);
       return !!match && match[1].length > 0;
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/(?:([a-z]+)\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
+      const match = url.pathname.match(/^\/(?:([a-z]+)\/)?user\/([^/]+)(\/|$)/);
       const platform = match[1];
       const username = match[2];
       return platform
@@ -194,8 +194,8 @@ export const SOCIAL_PLATFORMS = {
         : `https://www.exophase.com/user/${username}/`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([A-Za-z0-9_-]+)(\/|$)/);
-      return match[1];
+      const match = url.pathname.match(/^\/(?:[a-z]+\/)?user\/([^/]+)(\/|$)/);
+      try { return decodeURIComponent(match[1]); } catch { return match[1]; }
     },
   },
 
@@ -204,23 +204,23 @@ export const SOCIAL_PLATFORMS = {
     hostnames: ["www.backloggd.com", "backloggd.com"],
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      const match = trimmed.match(/^([A-Za-z0-9_]{2,32})$/);
+      const match = trimmed.match(/^([A-Za-z0-9_\u0400-\u04FF]{2,32})$/u);
       if (match) {
         return { url: `https://www.backloggd.com/u/${match[1]}/`, display: match[1] };
       }
       return null;
     },
     validate(url) {
-      const match = url.pathname.match(/^\/u\/([A-Za-z0-9_]+)\/?$/);
+      const match = url.pathname.match(/^\/u\/([^/]+)\/?$/);
       return !!match && match[1].length > 0;
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/u\/([A-Za-z0-9_]+)\/?$/);
+      const match = url.pathname.match(/^\/u\/([^/]+)\/?$/);
       return `https://www.backloggd.com/u/${match[1]}/`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/u\/([A-Za-z0-9_]+)\/?$/);
-      return match[1];
+      const match = url.pathname.match(/^\/u\/([^/]+)\/?$/);
+      try { return decodeURIComponent(match[1]); } catch { return match[1]; }
     },
   },
 
@@ -229,8 +229,8 @@ export const SOCIAL_PLATFORMS = {
     hostnames: ["www.youtube.com", "youtube.com"],
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      // Accept @handle or bare handle
-      const match = trimmed.match(/^@?([A-Za-z0-9_.-]{3,30})$/);
+      // Accept @handle or bare handle (ASCII + Cyrillic)
+      const match = trimmed.match(/^@?([A-Za-z0-9_.\u0400-\u04FF-]{3,30})$/u);
       if (match) {
         return { url: `https://www.youtube.com/@${match[1]}`, display: match[1] };
       }
@@ -238,22 +238,26 @@ export const SOCIAL_PLATFORMS = {
     },
     validate(url) {
       // /@handle, /channel/<id>, /c/<name>, /user/<name>
-      if (url.pathname.match(/^\/@([A-Za-z0-9_.-]+)\/?$/)) return true;
+      if (url.pathname.match(/^\/@([^/]+)\/?$/)) return true;
       if (url.pathname.match(/^\/(channel|c|user)\/([^/]+)\/?$/)) return true;
       return false;
     },
     normalize(url) {
-      const handleMatch = url.pathname.match(/^\/@([A-Za-z0-9_.-]+)\/?$/);
+      const handleMatch = url.pathname.match(/^\/@([^/]+)\/?$/);
       if (handleMatch) return `https://www.youtube.com/@${handleMatch[1]}`;
       const pathMatch = url.pathname.match(/^\/(channel|c|user)\/([^/]+)\/?$/);
       if (pathMatch) return `https://www.youtube.com/${pathMatch[1]}/${pathMatch[2]}`;
       return `https://www.youtube.com${url.pathname.replace(/\/+$/, "")}`;
     },
     extractDisplay(url) {
-      const handleMatch = url.pathname.match(/^\/@([A-Za-z0-9_.-]+)\/?$/);
-      if (handleMatch) return handleMatch[1];
+      const handleMatch = url.pathname.match(/^\/@([^/]+)\/?$/);
+      if (handleMatch) {
+        try { return decodeURIComponent(handleMatch[1]); } catch { return handleMatch[1]; }
+      }
       const pathMatch = url.pathname.match(/^\/(channel|c|user)\/([^/]+)\/?$/);
-      if (pathMatch) return pathMatch[2];
+      if (pathMatch) {
+        try { return decodeURIComponent(pathMatch[2]); } catch { return pathMatch[2]; }
+      }
       return url.pathname.replace(/^\//, "").replace(/\/$/, "");
     },
   },
@@ -263,7 +267,7 @@ export const SOCIAL_PLATFORMS = {
     hostnames: ["myshows.me", "en.myshows.me"],
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      const match = trimmed.match(/^([A-Za-z0-9_-]{2,32})$/);
+      const match = trimmed.match(/^([A-Za-z0-9_\u0400-\u04FF-]{2,32})$/u);
       if (match) {
         return { url: `https://myshows.me/m/${match[1]}`, display: match[1] };
       }
@@ -271,25 +275,31 @@ export const SOCIAL_PLATFORMS = {
     },
     validate(url) {
       // Accept /m/<username> or /<username> (direct profile URL)
-      const mMatch = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
+      const mMatch = url.pathname.match(/^\/m\/([^/]+)\/?$/);
       if (mMatch && mMatch[1].length > 0) return true;
-      const directMatch = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+      const directMatch = url.pathname.match(/^\/([^/]+)\/?$/);
       if (!directMatch) return false;
       const reserved = ["m", "search", "login", "signup", "api", "about", "news", "profile"];
-      return !reserved.includes(directMatch[1].toLowerCase());
+      try {
+        return !reserved.includes(decodeURIComponent(directMatch[1]).toLowerCase());
+      } catch {
+        return !reserved.includes(directMatch[1].toLowerCase());
+      }
     },
     normalize(url) {
-      const mMatch = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
+      const mMatch = url.pathname.match(/^\/m\/([^/]+)\/?$/);
       if (mMatch) return `https://myshows.me/m/${mMatch[1]}`;
       // Direct /<username> → normalize to /m/<username>
-      const directMatch = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
+      const directMatch = url.pathname.match(/^\/([^/]+)\/?$/);
       return `https://myshows.me/m/${directMatch[1]}`;
     },
     extractDisplay(url) {
-      const mMatch = url.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
-      if (mMatch) return mMatch[1];
-      const directMatch = url.pathname.match(/^\/([A-Za-z0-9_-]+)\/?$/);
-      return directMatch[1];
+      const mMatch = url.pathname.match(/^\/m\/([^/]+)\/?$/);
+      if (mMatch) {
+        try { return decodeURIComponent(mMatch[1]); } catch { return mMatch[1]; }
+      }
+      const directMatch = url.pathname.match(/^\/([^/]+)\/?$/);
+      try { return decodeURIComponent(directMatch[1]); } catch { return directMatch[1]; }
     },
   },
 
@@ -299,26 +309,29 @@ export const SOCIAL_PLATFORMS = {
     /** Accept @username plain text — auto-converts to t.me URL */
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      const match = trimmed.match(/^@?([A-Za-z0-9_]{5,32})$/);
+      const match = trimmed.match(/^@?([A-Za-z0-9_\u0400-\u04FF]{5,32})$/u);
       if (match) {
         return { url: `https://t.me/${match[1]}`, display: match[1] };
       }
       return null;
     },
     validate(url) {
-      // /username only — reject /joinchat, /+, /s/, /share, /addstickers, etc.
-      const match = url.pathname.match(/^\/([A-Za-z0-9_]{5,32})\/?$/);
+      // Decode pathname to validate against allowed characters (including Cyrillic)
+      let decoded;
+      try { decoded = decodeURIComponent(url.pathname); } catch { decoded = url.pathname; }
+      const match = decoded.match(/^\/([A-Za-z0-9_\u0400-\u04FF]{5,32})\/?$/u);
       if (!match) return false;
+      // Reject /joinchat, /+, /s/, /share, /addstickers, etc.
       const reserved = ["joinchat", "share", "addstickers", "addtheme", "proxy", "socks", "setlanguage", "iv"];
       return !reserved.includes(match[1].toLowerCase());
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/([A-Za-z0-9_]{5,32})\/?$/);
+      const match = url.pathname.match(/^\/([^/]+)\/?$/);
       return `https://t.me/${match[1]}`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/([A-Za-z0-9_]{5,32})\/?$/);
-      return match[1];
+      const match = url.pathname.match(/^\/([^/]+)\/?$/);
+      try { return decodeURIComponent(match[1]); } catch { return match[1]; }
     },
   },
 
@@ -355,11 +368,11 @@ export const SOCIAL_PLATFORMS = {
   discord: {
     label: "Discord",
     hostnames: [],
-    /** Accept username#1234 plain text — Discord has no public profile URLs */
+    /** Accept username or username#1234 — Discord supports both formats */
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      // username#1234 format required (discriminator mandatory)
-      const match = trimmed.match(/^([A-Za-z0-9_.]{2,32})#(\d{1,4})$/);
+      // username (new format) or username#1234 (old format with discriminator)
+      const match = trimmed.match(/^([A-Za-z0-9_.\u0400-\u04FF]{2,32})(?:#\d{1,4})?$/u);
       if (match) {
         return { url: null, display: trimmed };
       }
@@ -375,7 +388,7 @@ export const SOCIAL_PLATFORMS = {
     hostnames: ["boosty.to"],
     preprocessInput(raw) {
       const trimmed = raw.trim();
-      const match = trimmed.match(/^([A-Za-z0-9_.-]{2,32})$/);
+      const match = trimmed.match(/^([A-Za-z0-9_.\u0400-\u04FF-]{2,32})$/u);
       if (match) {
         const reserved = ["app", "about", "legal", "login", "signup", "search", "explore"];
         if (reserved.includes(match[1].toLowerCase())) return null;
@@ -385,18 +398,22 @@ export const SOCIAL_PLATFORMS = {
     },
     validate(url) {
       // boosty.to/<username>
-      const match = url.pathname.match(/^\/([A-Za-z0-9_.-]+)\/?$/);
+      const match = url.pathname.match(/^\/([^/]+)\/?$/);
       if (!match) return false;
       const reserved = ["app", "about", "legal", "login", "signup", "search", "explore"];
-      return !reserved.includes(match[1].toLowerCase());
+      try {
+        return !reserved.includes(decodeURIComponent(match[1]).toLowerCase());
+      } catch {
+        return !reserved.includes(match[1].toLowerCase());
+      }
     },
     normalize(url) {
-      const match = url.pathname.match(/^\/([A-Za-z0-9_.-]+)\/?$/);
+      const match = url.pathname.match(/^\/([^/]+)\/?$/);
       return `https://boosty.to/${match[1]}`;
     },
     extractDisplay(url) {
-      const match = url.pathname.match(/^\/([A-Za-z0-9_.-]+)\/?$/);
-      return match[1];
+      const match = url.pathname.match(/^\/([^/]+)\/?$/);
+      try { return decodeURIComponent(match[1]); } catch { return match[1]; }
     },
   },
 };
@@ -524,15 +541,19 @@ async function resolveSteamDisplay(urlStr) {
 async function resolveYouTubeDisplay(urlStr) {
   const url = new URL(urlStr);
 
-  // /@handle — already readable (return without @)
-  const handleMatch = url.pathname.match(/^\/@([A-Za-z0-9_.-]+)\/?$/);
-  if (handleMatch) return handleMatch[1];
+  // /@handle — already readable (return without @, decode Cyrillic)
+  const handleMatch = url.pathname.match(/^\/@([^/]+)\/?$/);
+  if (handleMatch) {
+    try { return decodeURIComponent(handleMatch[1]); } catch { return handleMatch[1]; }
+  }
 
   const pathMatch = url.pathname.match(/^\/(channel|c|user)\/([^/]+)\/?$/);
   if (!pathMatch) return null;
 
   // /c/<name> and /user/<name> are already readable
-  if (pathMatch[1] !== "channel") return pathMatch[2];
+  if (pathMatch[1] !== "channel") {
+    try { return decodeURIComponent(pathMatch[2]); } catch { return pathMatch[2]; }
+  }
 
   // /channel/<id> — try RSS feed (public, no API key needed)
   const channelId = pathMatch[2];

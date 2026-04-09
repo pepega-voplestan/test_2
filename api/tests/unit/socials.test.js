@@ -328,8 +328,9 @@ describe("socials helper", () => {
       expect(result).toEqual({ url: null, display: "cooluser#1234" });
     });
 
-    it("rejects Discord username without discriminator", () => {
-      expect(preprocessSocialInput("discord", "cooluser")).toBeNull();
+    it("accepts Discord username without discriminator (new format)", () => {
+      const result = preprocessSocialInput("discord", "cooluser");
+      expect(result).toEqual({ url: null, display: "cooluser" });
     });
 
     it("handles Battle.net tag", () => {

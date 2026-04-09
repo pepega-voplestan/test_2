@@ -43,7 +43,7 @@ const PLATFORM_INPUT_HINTS: Record<SocialType, { label: string; placeholder: str
   myshows: { label: 'Имя или ссылка', placeholder: 'username или myshows.me/...' },
   telegram: { label: 'Имя пользователя или ссылка', placeholder: 'username или t.me/...', isPlainText: true },
   x: { label: 'Имя или ссылка', placeholder: 'username или x.com/...' },
-  discord: { label: 'Имя пользователя Discord', placeholder: 'username#1234', isPlainText: true },
+  discord: { label: 'Имя пользователя Discord', placeholder: 'username или username#1234', isPlainText: true },
   boosty: { label: 'Имя или ссылка', placeholder: 'username или boosty.to/...' },
 };
 
