@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-This is Vopley.net — a Twitter/X-style social media web application where users post short messages ("shouts"), comment on them, like content, attach images or YouTube videos, and manage user profiles. The UI is entirely in Russian.
+Vopley.net — Twitter/X-style social media app. Users post short messages ("shouts"), comment, like, attach images/YouTube videos, manage profiles. UI in Russian.
 
-**Stack**: React 18 + TypeScript + Vite (frontend) / Node.js + Express + Prisma + SQLite (backend) / BullMQ + Redis (background jobs) / Docker + Nginx (deployment)
+**Stack**: React 18 + TypeScript + Vite / Node.js + Express + Prisma + SQLite / BullMQ + Redis / Docker + Nginx
 
 ## Repository Structure
 
@@ -12,314 +12,201 @@ This is Vopley.net — a Twitter/X-style social media web application where user
 .
 ├── api/                    # Backend (Express.js)
 │   ├── src/
-│   │   ├── server.js       # Entry point: dotenv, imports app.js, seeds settings
-│   │   ├── app.js          # Express app factory: middleware, session, admin, swagger, routes (imported by server.js and tests)
+│   │   ├── server.js       # Entrypoint: dotenv, imports app.js, seeds settings
+│   │   ├── app.js          # Express app factory: middleware, session, admin, swagger, routes
 │   │   ├── admin.js        # AdminJS panel setup (users, shouts, comments, media, announcements, settings) + custom dashboard
-│   │   ├── admin-dashboard.jsx # Custom AdminJS dashboard with analytics (users, shouts, comments, likes, media stats + timelines)
-│   │   ├── swagger.js      # OpenAPI 3.0.3 spec for Swagger UI (dev only, blocked in prod)
-│   │   ├── routes/         # Domain-split route handlers
-│   │   │   ├── index.js        # Mounts all domain routers via mountRoutes(app)
-│   │   │   ├── auth.js         # Auth routes (register, login, logout, password reset)
-│   │   │   ├── shouts.js       # Shout CRUD + replies + single shout fetch + poll creation
+│   │   ├── admin-dashboard.jsx # Custom AdminJS dashboard: analytics, timelines, top creators
+│   │   ├── swagger.js      # OpenAPI 3.0.3 spec (dev only, blocked in prod)
+│   │   ├── routes/
+│   │   │   ├── index.js        # Mounts all routers via mountRoutes(app)
+│   │   │   ├── auth.js         # Register, login, logout, password reset
+│   │   │   ├── shouts.js       # Shout CRUD + replies + single fetch + poll creation
 │   │   │   ├── comments.js     # Comment CRUD + reply/mention notifications
 │   │   │   ├── likes.js        # Shout and comment like toggles
 │   │   │   ├── users.js        # User profile + mentions autocomplete + email change
 │   │   │   ├── upload.js       # Media and avatar upload
 │   │   │   ├── announcements.js # Announcement read/write
-│   │   │   ├── notifications.js # Notification fetch + mark-read endpoints
+│   │   │   ├── notifications.js # Notification fetch + mark-read
 │   │   │   ├── ignored-users.js # Ignored users list, add, remove
-│   │   │   ├── polls.js        # Poll voting endpoint
-│   │   │   └── socials.js      # User social links CRUD (12 platforms)
-│   │   ├── helpers/        # Shared utilities
-│   │   │   ├── common.js       # asyncHandler, requireAuth, and other shared middleware
-│   │   │   ├── feed.js         # enrichFeed: joins users/media/likes/polls onto shout/comment rows
-│   │   │   ├── media.js        # Sharp image processing, GIF handling, avatar generation
-│   │   │   ├── mentions.js     # extractMentionedUserIds, buildSnippet for notification system
-│   │   │   ├── socials.js      # Social platform validation, URL normalization, display extraction (12 platforms)
+│   │   │   ├── polls.js        # Poll voting
+│   │   │   └── socials.js      # Social links CRUD (12 platforms)
+│   │   ├── helpers/
+│   │   │   ├── common.js       # asyncHandler, requireAuth, shared middleware
+│   │   │   ├── feed.js         # enrichFeed: joins users/media/likes/polls onto rows
+│   │   │   ├── media.js        # Sharp processing, GIF handling, avatar generation
+│   │   │   ├── mentions.js     # extractMentionedUserIds, buildSnippet
+│   │   │   ├── socials.js      # Platform validation, URL normalization, display extraction
 │   │   │   └── validation.js   # Zod schemas shared across routes
-│   │   ├── db.js           # Prisma client init (WAL mode, foreign keys)
+│   │   ├── db.js           # Prisma client (WAL mode, foreign keys)
 │   │   ├── auth.js         # Password hashing, session auth utilities
-│   │   ├── email.js        # Email sending via nodemailer + Resend SMTP
-│   │   └── sse.js          # Server-Sent Events: client registry, broadcast, heartbeat
-│   ├── prisma/
-│   │   ├── schema.prisma   # Prisma schema (all models)
-│   │   └── migrations/     # Prisma migration files
-│   ├── scripts/
-│   │   └── start.sh        # Docker entrypoint: runs prisma migrate deploy, then starts server
+│   │   ├── email.js        # Email via nodemailer + Resend SMTP
+│   │   └── sse.js          # SSE: client registry, broadcast, broadcastToUser, heartbeat
+│   ├── prisma/schema.prisma, migrations/
+│   ├── scripts/start.sh    # Docker entrypoint: prisma migrate deploy → start server
 │   ├── tests/
-│   │   ├── setup.js        # Vitest globalSetup: creates test DB, runs migrations, cleanup
-│   │   ├── env.js          # Vitest setupFiles: loads env vars written by globalSetup
-│   │   ├── helpers.js      # Shared test utilities (request, authenticatedAgent, cleanDb, disconnectDb)
-│   │   ├── fixtures/
-│   │   │   └── index.js    # Test data factories (createUser, createShout, createComment, createPoll, createPollVote, createIgnoredUser, createSocial, etc.)
-│   │   ├── unit/           # Unit tests (auth, admin, common, email, media, mentions, socials, sse, validation, app.setup)
-│   │   └── integration/    # Integration tests (health, auth, shouts, comments, likes, announcements,
-│   │                       #   notifications, feed, upload, users, polls, socials, index)
-│   ├── vitest.config.js    # Vitest config: node env, globalSetup, sequential files, coverage
-│   ├── eslint.config.js    # ESLint flat config: @eslint/js recommended, Node globals, allows console, _-prefix unused vars
+│   │   ├── setup.js        # globalSetup: fresh SQLite DB, migrations, temp .env.test
+│   │   ├── env.js          # setupFiles: loads .env.test into process.env
+│   │   ├── helpers.js      # getApp(), request(), authenticatedAgent(), cleanDb(), disconnectDb()
+│   │   ├── fixtures/index.js # createUser(), createShout(), createComment(), createPoll(), etc.
+│   │   ├── unit/           # auth, admin, common, email, media, mentions, socials, sse, validation, app.setup
+│   │   └── integration/    # health, auth, shouts, comments, likes, announcements, notifications,
+│   │                       # feed, upload, users, polls, socials, index
+│   ├── vitest.config.js    # node env, globalSetup, sequential files, coverage
+│   ├── eslint.config.js    # @eslint/js recommended, Node globals, allows console, _-prefix unused vars
 │   ├── package.json
-│   ├── Dockerfile          # Alpine Node 20, installs vips-dev + openssl; includes test build target
-│   └── .dockerignore
+│   └── Dockerfile          # Alpine Node 20, vips-dev + openssl; includes test build target
 ├── web/                    # Frontend (React + TypeScript)
 │   ├── components/
-│   │   ├── Header.tsx        # App header with auth, navigation, theme toggle, notification dropdown
-│   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step with email verification)
-│   │   ├── ShoutFeed.tsx     # Main feed with tabs (new/popular/announcements), SSE updates; popular tab has dual sort buttons (likes/comments)
-│   │   ├── ShoutInput.tsx    # Shout composer with media, emoji, polls, drag-drop, clipboard paste; Ctrl+Enter/Cmd+Enter to submit; spoiler/nsfw tags require media
-│   │   ├── ShoutCard.tsx     # Individual shout with comments, likes, delete; inline embed rendering for Twitter/X, Steam, Imgur, Coub, Tenor, Giphy, YouTube
-│   │   ├── ShoutPage.tsx     # Single shout detail view (route: #/shout/:id)
-│   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete (replaces textarea in ShoutInput/ShoutCard)
-│   │   ├── NotificationDropdown.tsx # Bell icon + unread badge + hover-to-read notification list
-│   │   ├── ProfilePage.tsx   # User profile view and edit form (includes social links display/editor)
-│   │   ├── ProfileSocials.tsx # Social links display (icons grid with copy-to-clipboard) and editor (modal-based add/edit/delete)
+│   │   ├── Header.tsx        # Auth, navigation, theme toggle, notification dropdown
+│   │   ├── AuthModal.tsx     # Login/register/password-reset modal (multi-step, email verification)
+│   │   ├── ShoutFeed.tsx     # Feed: new/popular/announcements tabs, SSE updates; popular has dual sort
+│   │   ├── ShoutInput.tsx    # Composer: media, emoji, polls, drag-drop, Ctrl+Enter; spoiler/nsfw require media
+│   │   ├── ShoutCard.tsx     # Shout display: comments, likes, delete; inline embeds (Twitter/X, Steam, Imgur, Coub, Tenor, Giphy, YouTube)
+│   │   ├── ShoutPage.tsx     # Single shout detail view (#/shout/:id)
+│   │   ├── MentionInput.tsx  # contenteditable composer with @mention autocomplete
+│   │   ├── NotificationDropdown.tsx # Bell + unread badge + hover-to-read list + infinite scroll
+│   │   ├── ProfilePage.tsx   # Profile view/edit + social links
+│   │   ├── ProfileSocials.tsx # Social icons grid (copy-to-clipboard) + modal editor
 │   │   ├── AvatarUpload.tsx  # Drag-drop avatar upload with preview
-│   │   ├── EmojiPicker.tsx   # Emoji picker: 500+ emojis, 13 categories (faces, gestures, people, hearts, nature, food, activities, travel, objects, symbols, flags + frequent), search (Russian + English keywords), sticky headers, quick-nav bar
-│   │   ├── PollEditor.tsx    # Poll creation UI: 2-7 options, multi-select toggle, validation
-│   │   ├── PollBlock.tsx     # Poll display and voting: progress bars, vote counts, optimistic updates
-│   │   └── Lightbox.tsx      # Fullscreen image viewer with drag-to-dismiss, pinch/scroll-to-zoom, pan when zoomed, scroll lock
+│   │   ├── EmojiPicker.tsx   # 500+ emojis, 13 categories, Russian+English search, sticky headers
+│   │   ├── PollEditor.tsx    # Poll creation: 2-7 options, multi-select toggle, validation
+│   │   ├── PollBlock.tsx     # Poll display/voting: progress bars, vote counts, optimistic updates
+│   │   └── Lightbox.tsx      # Fullscreen image: drag-dismiss, pinch/scroll zoom, pan, scroll lock
 │   ├── context/
-│   │   ├── AuthContext.tsx               # Auth state via React Context + API helper
-│   │   ├── AuthContext.test.tsx          # Tests: login/logout, registration, password reset, modal state
-│   │   ├── ThemeContext.tsx              # Dark/light theme toggle with localStorage persistence
-│   │   ├── ThemeContext.test.tsx         # Tests: theme toggling and localStorage persistence
-│   │   ├── SSEContext.tsx                # Centralized SSE connection; subscribe(event, handler) pattern; all consumers share one EventSource
-│   │   ├── NotificationsContext.tsx      # Notification state, batched read marking; subscribes via SSEContext; sets browser tab title/favicon badge
-│   │   ├── NotificationsContext.test.tsx # Tests: SSE events, batching, mark-as-read, cleanup
-│   │   ├── ContentPreferencesContext.tsx # Content visibility prefs (showMedia, showNsfw, showPolitics)
-│   │   ├── ContentPreferencesContext.test.tsx # Tests: preference toggles
-│   │   ├── IgnoredUsersContext.tsx       # Ignored users state management + API calls
-│   │   └── IgnoredUsersContext.test.tsx  # Tests: ignore/unignore, list management
+│   │   ├── AuthContext.tsx, AuthContext.test.tsx
+│   │   ├── ThemeContext.tsx, ThemeContext.test.tsx
+│   │   ├── SSEContext.tsx                # Single shared EventSource; subscribe(event, handler) pattern
+│   │   ├── NotificationsContext.tsx, NotificationsContext.test.tsx
+│   │   ├── ContentPreferencesContext.tsx, ContentPreferencesContext.test.tsx
+│   │   ├── IgnoredUsersContext.tsx, IgnoredUsersContext.test.tsx
 │   ├── hooks/
-│   │   ├── useRoute.ts           # Hash-based client-side routing
-│   │   ├── useRoute.test.ts      # Unit tests for hash-based routing hook
-│   │   ├── useSSE.ts             # Thin wrapper around SSEContext.subscribe; pass a listeners map to subscribe to named SSE events
-│   │   ├── useSSE.test.ts        # Tests: reconnect logic, backoff (1s → 30s cap)
-│   │   ├── useMentionUsers.ts    # Module-level singleton cache for mention user list (lazy-loaded on first @)
-│   │   └── useMentionUsers.test.ts # Tests: lazy loading and module-level caching
+│   │   ├── useRoute.ts, useRoute.test.ts           # Hash-based routing
+│   │   ├── useSSE.ts, useSSE.test.ts               # Thin wrapper around SSEContext.subscribe
+│   │   └── useMentionUsers.ts, useMentionUsers.test.ts # Module-level singleton cache for mention list
 │   ├── tests/
-│   │   ├── setup.ts          # Vitest/DOM setup (mocks: matchMedia, scrollTo)
-│   │   ├── helpers.tsx       # renderWithProviders helper for tests needing context providers
-│   │   └── unit/
-│   │       └── effectiveLength.test.ts # Tests: char counting, mention normalization, spoiler stripping, newline cost
-│   ├── public/
-│   │   ├── favicon.svg       # SVG favicon (Cyrillic "В" on dark rounded square)
-│   │   ├── steam.svg, xbox.svg, playstation.svg  # Social platform SVG icons
-│   │   ├── epicgames.png, boosty.png, retroachievements.png  # Social platform raster icons
-│   │   └── battlenet.webp    # Battle.net social platform icon
-│   ├── App.tsx               # Root component with routing, ThemeProvider + AuthProvider + IgnoredUsersProvider + NotificationsProvider
-│   ├── index.tsx             # React entry point (StrictMode)
-│   ├── types.ts              # TypeScript type definitions (includes Notification, SocialType, SocialDto)
-│   ├── index.html            # HTML template (Tailwind CDN, CSS custom properties for theming)
-│   ├── tsconfig.json
+│   │   ├── setup.ts          # DOM mocks (matchMedia, scrollTo)
+│   │   ├── helpers.tsx       # renderWithProviders()
+│   │   └── unit/effectiveLength.test.ts
+│   ├── public/               # favicon.svg, steam.svg, xbox.svg, playstation.svg, epicgames.png, boosty.png, retroachievements.png, battlenet.webp
+│   ├── App.tsx, index.tsx, types.ts, index.html
 │   ├── vite.config.ts        # Dev proxy: /api and /media → localhost:3000
-│   ├── vitest.config.ts      # Vitest config: merges vite config, jsdom env, @testing-library setup; 10s test/15s hook timeout
-│   ├── eslint.config.js      # ESLint flat config: TS ESLint recommended, react-hooks rules, _-prefix unused vars
-│   ├── package.json
-│   ├── Dockerfile
-│   └── .dockerignore
-├── workers/                # Background job service (BullMQ + Redis)
-│   ├── src/
-│   │   ├── index.ts        # Entry point: starts workers, scheduler, Bull Board dashboard
-│   │   ├── db.ts           # Prisma client init (WAL mode, foreign keys)
-│   │   ├── redis.ts        # Redis connection config
-│   │   ├── queues.ts       # BullMQ queue definitions (notification-cleanup, db-backup)
-│   │   ├── scheduler.ts    # Cron job registration (daily cleanup + backup)
-│   │   └── jobs/
-│   │       ├── notification-cleanup.ts # Deletes notifications older than 14 days
-│   │       └── db-backup.ts            # SQLite VACUUM INTO backup with rotation
-│   ├── prisma/
-│   │   └── schema.prisma   # Symlink/copy of api schema
-│   ├── package.json
-│   ├── tsconfig.json
+│   ├── vitest.config.ts      # jsdom env, @testing-library, 10s test / 15s hook timeout
 │   ├── eslint.config.js
-│   ├── Dockerfile          # Multi-stage: base → builder → app (prod) / dev (tsx watch)
-│   └── .dockerignore
-├── infra/                    # Terraform infrastructure as code (DigitalOcean)
-│   ├── main.tf, variables.tf, outputs.tf, locals.tf  # Core Terraform config
-│   ├── droplet.tf, volume.tf, firewall.tf, dns.tf, ssh_key.tf  # Resource definitions
-│   ├── cloud-init.yml        # Cloud initialization script
-│   └── envs/dev.tfvars       # Development environment variables
-├── scripts/
-│   ├── backup.sh             # Backup Docker volumes (DB + media) with rotation, optional rclone upload
-│   └── restore.sh            # Restore Docker volumes from a timestamped backup
-├── .github/
-│   └── workflows/
-│       ├── ci.yml            # CI: lints then tests API + web on pull requests to main
-│       └── docker.yml        # Deploy: builds and pushes Docker images to GHCR, deploys to dev/prod
-├── .husky/
-│   ├── pre-commit            # Git hook: runs npm run lint for api and web before every commit
-│   └── pre-push              # Git hook: runs npm test for api and web before every push
-├── docker-compose.yml        # Production: 6 services on port 3005
-├── docker-compose.dev.yml    # Dev droplet deployment: pre-built images from GHCR (managed by CI)
-├── docker-compose.local.yml  # Local development: hot-reload, bind mounts, port 3006 (isolated volumes)
-├── docker-compose.test.yml   # Test: single api-test service with tmpfs DB, runs vitest --coverage
-├── nginx.conf                # Production reverse proxy (blocks /api/docs, proxies /admin with HTTP basic auth)
-├── nginx-dev.conf            # Development reverse proxy (allows /api/docs for Swagger UI, proxies /admin)
-├── media-nginx.conf          # Security-hardened media file server (webp/jpg/jpeg/png/gif/mp4)
-├── Makefile                  # Shortcuts for docker-compose + backup/restore + test commands
-├── package.json              # Workspace root: husky setup only
-├── .env                      # Production environment variables (gitignored)
-├── .env.dev                  # Development environment variables (gitignored)
-├── .env.example              # Template with placeholder values
-├── RELEASE_NOTES_2026-02-18.md # Release notes for the Prisma migration release
-└── README.md
+│   └── package.json, Dockerfile, .dockerignore
+├── workers/                # BullMQ background jobs (TypeScript)
+│   └── src/
+│       ├── index.ts        # Starts workers, scheduler, Bull Board on port 3001
+│       ├── db.ts, redis.ts, queues.ts, scheduler.ts
+│       └── jobs/notification-cleanup.ts, jobs/db-backup.ts
+├── infra/                  # Terraform (DigitalOcean): droplet, volume, firewall, DNS, cloud-init
+├── scripts/backup.sh, restore.sh
+├── .github/workflows/ci.yml, docker.yml
+├── docker-compose.yml, docker-compose.dev.yml, docker-compose.local.yml, docker-compose.test.yml
+├── nginx.conf, nginx-dev.conf, media-nginx.conf
+└── Makefile, .env.example, README.md
 ```
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js (v18+)
-- npm
-
-### Install Dependencies
-
 ```sh
-# Install all dependencies and set up git hooks (recommended)
-make install
-
-# Or manually:
-npm install          # root (husky hooks)
-cd api && npm install
-cd ../web && npm install
+make install          # install all deps (root + api + web + workers) + husky hooks
+cd web && npm run dev # starts API (port 3000) + Vite (port 5173) concurrently via concurrently
+make prod             # Docker production (port 3005)
+make local            # Docker local dev (port 3006, hot-reload, isolated volumes)
 ```
 
-### Run in Development
-
-```sh
-cd web && npm run dev
-```
-
-This uses `concurrently` to start both the backend API (`node src/server.js` on port 3000) and the Vite dev server (port 5173). In dev mode the API also serves `/media` as static files. The API auto-loads `.env` via `dotenv/config`.
-
-### Run with Docker
-
-```sh
-# Production (port 3005)
-make prod
-
-# Local development (port 3006, isolated volumes, hot-reload)
-make local
-```
-
-### Makefile Targets
+## Makefile Targets
 
 | Target | Description |
 |--------|-------------|
-| `make prod` | Start production containers |
-| `make local` | Start local development containers (uses `.env.dev`, bind mounts) |
-| `make down` | Stop production containers |
-| `make down-local` | Stop local development containers |
-| `make logs` | Follow production logs |
-| `make logs-local` | Follow local development logs |
-| `make rebuild` | Force rebuild production (no cache) |
-| `make rebuild-local` | Force rebuild local development (no cache) |
-| `make backup` | Backup production volumes (DB + media) |
-| `make backup-upload` | Backup production + upload to Google Drive via rclone |
-| `make backup-dev` | Backup development volumes |
-| `make restore` | Restore production volumes (latest or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
-| `make restore-dev` | Restore development volumes |
-| `make deploy` | Backup, rebuild, and start production (safe redeploy) |
-| `make deploy-local` | Backup, rebuild, and start local development |
-| `make db-pull` | Pull a hot-copy of the production SQLite DB to `./app.db` |
-| `make db-pull-local` | Pull a hot-copy of the local dev SQLite DB to `./app.db` |
-| `make test` | Run API tests locally (`cd api && npm test`) |
-| `make test-web` | Run web tests locally (`cd web && npm test`) |
-| `make test-all` | Run both API and web tests sequentially |
-| `make test-docker` | Run API tests in Docker using `docker-compose.test.yml` |
-| `make test-coverage` | Run API tests with v8 coverage report |
-| `make test-web-coverage` | Run web tests with v8 coverage report |
-| `make install` | Install all dependencies (root + api + web + workers) and set up git hooks |
-| `make ensure-htpasswd` | Validate that `.htpasswd` exists (required for admin panel nginx auth) |
+| `make prod` / `make local` | Start production / local containers |
+| `make down` / `make down-local` | Stop containers |
+| `make rebuild` / `make rebuild-local` | Force rebuild (no cache) |
+| `make logs` / `make logs-local` | Follow logs |
+| `make deploy` / `make deploy-local` | Backup + rebuild + start |
+| `make backup` / `make backup-dev` | Backup volumes (DB + media) |
+| `make backup-upload` | Backup + rclone upload to Google Drive |
+| `make restore` / `make restore-dev` | Restore volumes (latest or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
+| `make db-pull` / `make db-pull-local` | Hot-copy SQLite DB to `./app.db` |
+| `make test` / `make test-web` / `make test-all` | Run API / web / both tests |
+| `make test-docker` | API tests in Docker |
+| `make test-coverage` / `make test-web-coverage` | v8 coverage reports |
+| `make ensure-htpasswd` | Validate `.htpasswd` exists |
 
 ## API Endpoints
 
-All endpoints are prefixed with `/api/v1/`.
+All prefixed `/api/v1/`. Auth = session cookie required.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/health` | No | Health check — `{ ok: true }` |
-| GET | `/me` | No | Get current user session |
-| GET | `/events` | No | SSE stream — real-time feed events |
-| GET | `/steam/app/:appId` | No | Steam store API proxy (cached 1h, avoids CORS) |
-| POST | `/auth/register/send-code` | No | Step 1: validate inputs, send email verification code (rate limited 20/min). Blocked if `registration_open` setting is `"false"`. |
-| POST | `/auth/register/verify` | No | Step 2: verify code, create account, auto-login (rate limited 20/min). Blocked if `registration_open` setting is `"false"`. |
-| POST | `/auth/login` | No | Login with username or email (rate limited 20/min) |
-| POST | `/auth/logout` | Yes | Logout, destroy session |
-| POST | `/auth/forgot-password/send-code` | No | Send password reset code (rate limited 5/min) |
-| POST | `/auth/forgot-password/reset` | No | Verify code + set new password, auto-login (rate limited 20/min) |
-| GET | `/shouts?limit=&offset=&sortBy=` | No | List shouts with pagination (max 50). `sortBy=new\|popular` |
-| GET | `/shouts/:id` | No | Get a single shout by ID (used by ShoutPage) |
-| POST | `/shouts` | Yes | Create a shout (text, mediaId, youtubeUrl, and/or poll) |
+| GET | `/health` | — | `{ ok: true }` |
+| GET | `/me` | — | Current user session |
+| GET | `/events` | — | SSE stream |
+| GET | `/steam/app/:appId` | — | Steam store proxy (1h cache, avoids CORS) |
+| POST | `/auth/register/send-code` | — | Send email verification code (rate: 20/min; blocked if `registration_open=false`) |
+| POST | `/auth/register/verify` | — | Verify code, create account, auto-login |
+| POST | `/auth/login` | — | Login (username or email, rate: 20/min) |
+| POST | `/auth/logout` | Yes | Destroy session |
+| POST | `/auth/forgot-password/send-code` | — | Send reset code (rate: 5/min) |
+| POST | `/auth/forgot-password/reset` | — | Verify code + set new password, auto-login |
+| GET | `/shouts` | — | List shouts (`limit`, `offset`, `sortBy=new\|popular`, max 50) |
+| GET | `/shouts/:id` | — | Single shout |
+| POST | `/shouts` | Yes | Create shout (text, mediaId, youtubeUrl, poll) |
 | DELETE | `/shouts/:id` | Yes | Soft-delete own shout |
-| POST | `/shouts/:id/replies` | Yes | Add a comment to a shout |
+| POST | `/shouts/:id/replies` | Yes | Add comment |
 | POST | `/shouts/:id/like` | Yes | Toggle like, returns new count |
 | DELETE | `/comments/:id` | Yes | Soft-delete own comment |
-| POST | `/comments/:id/like` | Yes | Toggle like on a comment |
-| GET | `/announcements` | No | Get the current active announcement (or `null`) |
-| POST | `/announcements` | Secret key | Replace current announcement; requires `secret_key` matching `ANNOUNCEMENTS_SECRET` |
-| GET | `/users/mentions` | No | List all non-banned users for mention autocomplete (`{ users: [{ id, name, avatar }] }`) |
-| GET | `/users/:id` | No | Get user profile (email visible to owner only) |
-| GET | `/users/:id/shouts` | No | Paginated list of a user's shouts |
+| POST | `/comments/:id/like` | Yes | Toggle comment like |
+| GET | `/announcements` | — | Active announcement or `null` |
+| POST | `/announcements` | Secret | Replace announcement (requires `ANNOUNCEMENTS_SECRET`) |
+| GET | `/users/mentions` | — | All non-banned users for @mention autocomplete |
+| GET | `/users/:id` | — | User profile (email visible to owner only) |
+| GET | `/users/:id/shouts` | — | Paginated user shouts |
 | PUT | `/users/:id` | Yes | Update profile (username, email, avatar, password) |
-| POST | `/users/:id/email/send-code` | Yes | Send email change verification code (rate limited 5/min) |
-| POST | `/users/:id/email/verify` | Yes | Verify code and update email |
-| POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP variants; GIFs also store original) |
-| POST | `/upload/avatar` | Yes | Upload avatar (≤2MB JPG/PNG/WebP; generates 64/128/256px square WebP) |
-| GET | `/avatars/:userId/:size.webp` | No | Serve avatar with immutable cache headers |
-| GET | `/notifications?cursor=&limit=` | Yes | Fetch notifications (read + unread) from the past 14 days, cursor-paginated. `cursor` = ISO timestamp of last item (fetch older items); `limit` default 20, max 50. Response: `{ notifications, nextCursor }` |
-| PATCH | `/notifications/read-batch` | Yes | Mark a batch of notifications as read (max 50 at once) |
-| PATCH | `/notifications/read-all` | Yes | Mark all unread notifications as read |
+| POST | `/users/:id/email/send-code` | Yes | Email change code (rate: 5/min) |
+| POST | `/users/:id/email/verify` | Yes | Verify and update email |
+| POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP) |
+| POST | `/upload/avatar` | Yes | Upload avatar (≤2MB; generates 64/128/256px square WebP) |
+| GET | `/avatars/:userId/:size.webp` | — | Serve avatar (immutable cache) |
+| GET | `/notifications` | Yes | Cursor-paginated (14-day window, default 20, max 50); `cursor` = ISO timestamp |
+| PATCH | `/notifications/read-batch` | Yes | Mark batch as read (max 50) |
+| PATCH | `/notifications/read-all` | Yes | Mark all read |
 | GET | `/me/ignored-users` | Yes | List ignored user IDs |
-| POST | `/users/:id/ignore` | Yes | Add user to ignore list (max 3) |
-| DELETE | `/users/:id/ignore` | Yes | Remove user from ignore list |
-| POST | `/polls/:pollId/vote` | Yes | Vote on a poll (single or multi-select); body: `{ optionIds: string[] }` |
-| GET | `/users/:id/socials` | No | List a user's social links |
-| POST | `/users/:id/socials` | Yes | Add a social link (type + url); validates and normalizes URL per platform |
-| PUT | `/users/:id/socials/:type` | Yes | Update a social link URL |
-| DELETE | `/users/:id/socials/:type` | Yes | Delete a social link |
+| POST | `/users/:id/ignore` | Yes | Ignore user (max 3) |
+| DELETE | `/users/:id/ignore` | Yes | Unignore user |
+| POST | `/polls/:pollId/vote` | Yes | Vote (`{ optionIds: string[] }`) |
+| GET | `/users/:id/socials` | — | List social links |
+| POST | `/users/:id/socials` | Yes | Add social link (type + url) |
+| PUT | `/users/:id/socials/:type` | Yes | Update social link URL |
+| DELETE | `/users/:id/socials/:type` | Yes | Delete social link |
 
 ## Admin Panel
 
-The app ships an **AdminJS**-powered admin panel at `/admin`, protected by two layers of authentication:
+`/admin` — double-protected: Nginx HTTP Basic Auth (`.htpasswd`) + AdminJS login (`ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`).
 
-1. **HTTP Basic Auth** (Nginx layer) — requires a `.htpasswd` file mounted into the nginx container. Generate with:
-   ```sh
-   docker run --rm httpd:alpine htpasswd -nbB admin_username YOUR_PASSWORD > .htpasswd
-   ```
-2. **AdminJS login form** — email + bcrypt password hash from env vars (`ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`)
+Generate htpasswd: `docker run --rm httpd:alpine htpasswd -nbB admin_username YOUR_PASSWORD > .htpasswd`
 
-**Admin panel sections:**
-
+**Sections:**
 | Section | Capabilities |
 |---------|-------------|
-| Пользователи (Users) | View, edit, ban/unban (ban sets `is_deleted=2` on their content); links to user's shouts/comments/media |
-| Вопли (Shouts) | View, soft-delete, restore soft-deleted shouts; toggle `is_pinned` (only one shout can be pinned at a time) |
-| Комменты (Comments) | View, soft-delete, restore soft-deleted comments |
-| Медиа (Media) | Read-only view of uploaded media |
-| Объявления (Announcements) | Create announcements (auto-soft-deletes previous), soft-delete existing |
+| Пользователи (Users) | View, edit, ban/unban (ban sets `is_deleted=2` on their content) |
+| Вопли (Shouts) | View, soft-delete, restore; toggle `is_pinned` (one at a time) |
+| Комменты (Comments) | View, soft-delete, restore |
+| Медиа (Media) | Read-only |
+| Объявления (Announcements) | Create (auto-soft-deletes previous), soft-delete |
 | Настройки (Settings) | Edit key-value settings (e.g. `registration_open`) |
 
-**Custom Dashboard** (`api/src/admin-dashboard.jsx`): The admin panel home page shows analytics with configurable time period filters (1, 7, 30, 90 days, or all-time). Displays key metrics (users, shouts, comments, likes, media), top creators bar chart, and timeline charts for shouts/comments/likes/registrations per day.
+**Custom dashboard**: analytics with 1/7/30/90/all-time filters — key metrics, top creators bar chart, timeline charts for shouts/comments/likes/registrations.
 
-**Setup** (`api/src/app.js`): AdminJS is initialized on startup (skipped in test mode). If setup fails in dev mode, the server continues without the admin panel. In production, failure is fatal (exits with code 1).
+**Setup**: skipped in test mode; non-fatal in dev (server continues without admin); fatal in production (exits code 1).
 
-**Registration gating**: The `registration_open` setting (default `"true"`) is checked on both registration endpoints. Set to `"false"` via the admin panel to disable new account creation.
-
-## API Documentation (Swagger UI)
-
-The API has an interactive OpenAPI 3.0.3 documentation UI powered by `swagger-ui-express`. The spec is defined in `api/src/swagger.js` and includes schemas for all DTOs (`ShoutDto`, `CommentDto`, `MediaDto`, `Profile`, `Announcement`, etc.).
-
-- **Development**: accessible at `/api/docs` (served by Express when `NODE_ENV !== "production"`)
-- **Production**: blocked by nginx (`location /api/docs { return 404; }`)
-
-The Swagger spec covers all endpoints and their request/response schemas, making it useful as a quick reference during development.
+**Swagger UI** at `/api/docs` — dev only, blocked by nginx in production.
 
 ## SSE Real-Time Events
 
-The `/api/v1/events` endpoint streams Server-Sent Events to all connected clients. The backend broadcasts on all write operations. The frontend manages a **single shared EventSource** via `SSEContext.tsx` — all consumers (feed, ShoutPage, NotificationsContext) subscribe to named events through the `subscribe(event, handler)` API rather than creating separate connections. The `useSSE` hook is a thin convenience wrapper around `useSSEContext().subscribe`.
+Single shared `EventSource` in `SSEContext.tsx`. All consumers subscribe via `subscribe(event, handler)`. `useSSE(listeners)` is a thin convenience wrapper. Heartbeat every 30s. Exponential backoff reconnect (1s→30s max).
 
-**Events emitted (broadcast to all clients):**
+**Broadcast (all clients):**
 
 | Event | Payload | Trigger |
 |-------|---------|---------|
@@ -331,460 +218,261 @@ The `/api/v1/events` endpoint streams Server-Sent Events to all connected client
 | `comment_like` | `{ id, likes }` | Comment like toggled |
 | `poll_update` | `{ pollId, options: [{ id, votes }], totalVoters }` | Poll vote cast |
 
-**Events emitted (targeted delivery via `broadcastToUser`):**
+**Targeted (`broadcastToUser`):**
 
 | Event | Payload | Trigger |
 |-------|---------|---------|
-| `notification` | `{ id, type, actor, shoutId, commentId, isRead, timestamp, snippet }` | @mention or reply to a shout the user authored |
+| `notification` | `{ id, type, actor, shoutId, commentId, isRead, timestamp, snippet }` | @mention or reply |
 
-The SSE module (`api/src/sse.js`) exports both `broadcast(event, data)` (all clients) and `broadcastToUser(userId, event, data)` (targeted). A heartbeat ping is sent every 30 seconds to keep connections alive through proxies. `SSEContext.tsx` manages the single `EventSource` with exponential backoff reconnect (1s → 30s max) on error.
-
-`NotificationsContext.tsx` subscribes to `notification` events via `SSEContext` (no separate connection) and prepends incoming notifications to the client-side list, deduplicating by ID to handle reconnect replays.
-
-**Important**: SSE real-time updates only apply to the `new` (newest) tab. The `popular` and `announcements` tabs load on demand and do not react to live events.
+SSE real-time updates only apply to the `new` tab. Popular and announcements tabs load on demand.
 
 ## Notification System
 
-Notifications are triggered server-side and delivered in real-time via targeted SSE, with persistence in the database.
-
-**Notification types:**
-
-| Type | Trigger |
-|------|---------|
-| `mention` | A user is @mentioned in a shout or comment |
-| `reply` | A comment is posted on a user's shout (if the commenter is not the shout author, and not already covered by a mention notification) |
+**Types:** `mention` (user @mentioned in shout/comment), `reply` (comment on your shout, not already a mention).
 
 **Lifecycle:**
-- Created in `routes/shouts.js` (for mention notifications in new shouts) and `routes/comments.js` (for mention and reply notifications).
-- `helpers/mentions.js` provides `extractMentionedUserIds(content, actorId)` to parse `@[username:userId]` tokens and `buildSnippet(content, maxLen=60)` to generate truncated previews for notification text. Snippets apply spoiler-awareness: inline spoiler markers (`||…||`) are replaced with asterisks masking only the hidden part; shouts tagged `politics` replace the entire snippet with "ПОЛИТИКА"; `spoiler`/`nsfw` tags replace it with "СПОЙЛЕР".
-- Self-mentions are excluded — the actor never receives their own notification.
-- Server-side cleanup: the workers service runs a daily BullMQ job (at 00:00 UTC) that hard-deletes notifications older than 14 days.
-- Frontend: `NotificationsContext.tsx` fetches all notifications (read + unread) on login with cursor-based pagination (14-day window, page size 20). New notifications arrive via SSE and are prepended. Read and unread notifications are both shown, sorted purely chronologically (newest first). Deduplication by `id` prevents duplicates from SSE replays or page overlaps.
-- Read marking: hovering a notification item for 800ms queues it for batch-read. When the dropdown closes (or after a 5-second safety flush), the batch is sent via `PATCH /notifications/read-batch`. The dropdown list is frozen while open — read-status changes (optimistic updates) do not affect item order until the dropdown is reopened.
-- **Browser tab indicator**: `NotificationsContext.tsx` sets `document.title` to `(N) Вопли` when there are unread notifications (capped at `9+`), and dynamically draws a red dot badge onto the favicon using the Canvas API. Both are cleared when `unreadCount` returns to 0.
+- Created in `routes/shouts.js` (mention in new shouts) and `routes/comments.js` (mention + reply).
+- `helpers/mentions.js`: `extractMentionedUserIds(content, actorId)` parses `@[username:userId]` tokens; `buildSnippet(content, maxLen=60)` generates previews. Snippets are spoiler-aware: `||…||` → asterisks; `politics` tag → "ПОЛИТИКА"; `spoiler`/`nsfw` → "СПОЙЛЕР".
+- Self-mentions excluded. Hard-deleted after 14 days by workers cleanup job.
+- Frontend fetches on login (cursor-paginated, 14-day window, page 20). New arrive via SSE, prepended, deduplicated by `id`.
+- Read marking: 800ms hover queues item; batch sent on dropdown close or 5s safety flush via `PATCH /notifications/read-batch`. Dropdown list frozen while open (read-status changes don't reorder until reopened).
+- **Browser tab indicator**: `(N) Вопли` title + Canvas API favicon red dot badge. Cleared when `unreadCount=0`.
 
-**Frontend components:**
-- `NotificationsContext.tsx` — state management, SSE subscription via `SSEContext`, cursor-paginated fetching (`loadMore`), dedup, sort (`sortedNotifications`), batched read marking, browser tab title + favicon badge. Exposes: `sortedNotifications`, `unreadCount`, `hasMore`, `isLoadingMore`, `loadMore`, `markAsRead`, `markAllAsRead`, `flushReads`.
-- `NotificationDropdown.tsx` — bell icon with unread badge in `Header.tsx`; dropdown lists notifications as `<a>` elements (enabling right-click "open in new tab") with actor avatar, text, snippet, and relative timestamp; "mark all read" button; clicking a notification navigates to the associated shout; infinite scroll via `IntersectionObserver` on a sentinel element at the bottom of the scroll container
+**`NotificationsContext.tsx`** exposes: `sortedNotifications`, `unreadCount`, `hasMore`, `isLoadingMore`, `loadMore`, `markAsRead`, `markAllAsRead`, `flushReads`.
+
+**`NotificationDropdown.tsx`**: bell icon + unread badge in Header; notifications as `<a>` elements (right-click open in new tab); actor avatar, text, snippet, relative timestamp; "mark all read" button; infinite scroll via `IntersectionObserver`.
 
 ## Database
 
-SQLite with WAL mode and foreign keys enabled. Managed via **Prisma ORM** — schema defined in `api/prisma/schema.prisma`, migrations in `api/prisma/migrations/`.
-
-On Docker startup, `scripts/start.sh` runs `prisma migrate deploy`. For existing pre-Prisma databases, it detects the P3005 error and resolves the baseline migration automatically.
+SQLite + WAL mode + foreign keys. Managed via Prisma. `prisma migrate deploy` on Docker startup. For pre-Prisma DBs, P3005 error is detected and baseline resolved automatically. Sessions at `/data/sessions.sqlite`.
 
 ### Models
 
 **User** (`users`)
-- `id` (String, UUID, PK)
-- `username` (String, UNIQUE)
-- `password_hash` (String)
-- `avatar` (String)
-- `email` (String?, UNIQUE)
-- `is_banned` (Int, default 0)
-- `show_nsfw` (Int, default 0) — user preference to show NSFW-tagged shouts
-- `show_politics` (Int, default 0) — user preference to show politics-tagged shouts
-- `created_at` (String, ISO datetime)
+- `id` (UUID, PK), `username` (UNIQUE), `password_hash`, `avatar`, `email` (UNIQUE?), `is_banned` (0/1), `show_nsfw` (0/1), `show_politics` (0/1), `created_at`
 - Relations: `receivedNotifications`, `sentNotifications`, `ignoredByMe`, `ignoredByOthers`, `socials`
 
 **Shout** (`shouts`)
-- `id` (String, UUID, PK)
-- `user_id` (String, FK → users)
-- `parent_id` (String?, FK → shouts, legacy)
-- `content` (String)
-- `media_id` (String?, FK → media)
-- `visibility_tag` (String, default `""`) — content flag: `""`, `"spoiler"`, `"nsfw"`, or `"politics"` (mutually exclusive)
-- `is_pinned` (Int, default 0) — pinned shout flag
-- `is_deleted` (Int, default 0, soft-delete; `2` = banned-user content)
-- `created_at` (String, ISO datetime)
-- Relations: `poll` (optional one-to-one with Poll)
-- Legacy inline columns: `media_type`, `media_url`, `media_meta` (retained for baseline, to be removed)
+- `id` (UUID), `user_id`→users, `parent_id` (legacy, unused), `content`, `media_id`→media?, `visibility_tag` (""|spoiler|nsfw|politics), `is_pinned` (0/1), `is_deleted` (0/1/2), `created_at`
+- Optional one-to-one `poll` relation
+- Legacy columns (to remove): `media_type`, `media_url`, `media_meta`
 - Indices: `(parent_id, created_at)`, `(created_at)`
 
 **Comment** (`comments`)
-- `id` (String, UUID, PK)
-- `shout_id` (String, FK → shouts)
-- `user_id` (String, FK → users)
-- `content` (String)
-- `media_id` (String?, FK → media)
-- `is_deleted` (Int, default 0, soft-delete)
-- `created_at` (String, ISO datetime)
+- `id`, `shout_id`→shouts, `user_id`→users, `content`, `media_id`→media?, `is_deleted`, `created_at`
 - Indices: `(shout_id, created_at)`, `(user_id)`
 
 **Media** (`media`)
-- `id` (String, UUID, PK)
-- `user_id` (String, FK → users)
-- `media_type` (String): `"image"` or `"youtube"`
-- `media_url` (String): relative path for images, video ID for YouTube
-- `media_meta` (String?): JSON blob with `w`, `h`, `size`, `mime`, `animated` (bool)
-- `created_at` (String, ISO datetime)
+- `id`, `user_id`→users, `media_type` (image|youtube), `media_url` (relative path or video ID), `media_meta` (JSON: `{w, h, size, mime, animated}`), `created_at`
 
-**ShoutLike** (`shout_likes`)
-- Composite PK: `(shout_id, user_id)`
-- Cascading deletes
+**ShoutLike** (`shout_likes`) — composite PK `(shout_id, user_id)`, cascade deletes
 
-**CommentLike** (`comment_likes`)
-- Composite PK: `(comment_id, user_id)`
-- Cascading deletes
+**CommentLike** (`comment_likes`) — composite PK `(comment_id, user_id)`, cascade deletes
 
 **Announcement** (`announcements`)
-- `id` (String, UUID, PK)
-- `content` (String)
-- `is_deleted` (Int, default 0, soft-delete)
-- `created_at` (String, ISO datetime)
-- Index: `(is_deleted, created_at)`
-- Only the latest non-deleted announcement is displayed. Posting a new one soft-deletes all previous ones.
+- `id`, `content`, `is_deleted`, `created_at`
+- Index: `(is_deleted, created_at)`. Single-active-record: new POST soft-deletes all previous.
 
 **VerificationCode** (`verification_codes`)
-- `id` (String, UUID, PK)
-- `email`, `code`, `purpose` (`"register"` or `"reset"`), `payload` (JSON?), `expires_at`, `used`, `attempts`, `created_at`
+- `id`, `email`, `code`, `purpose` (register|reset), `payload` (JSON?), `expires_at`, `used`, `attempts`, `created_at`
 - Index: `(email, purpose, used)`
 
 **Notification** (`notifications`)
-- `id` (String, UUID, PK)
-- `user_id` (String, FK → users, CASCADE) — recipient
-- `actor_id` (String, FK → users, CASCADE) — who triggered it
-- `type` (String): `"mention"` or `"reply"`
-- `shout_id` (String?, FK → shouts, SET NULL on delete)
-- `comment_id` (String?, FK → comments, SET NULL on delete)
-- `is_read` (Int, default 0)
-- `created_at` (String, ISO datetime)
-- Index: `(user_id, is_read, created_at)` for efficient unread fetching
-- Hard-deleted after 14 days by workers cleanup job
+- `id`, `user_id`→users (CASCADE, recipient), `actor_id`→users (CASCADE), `type` (mention|reply), `shout_id`→shouts (SET NULL on delete)?, `comment_id`→comments (SET NULL on delete)?, `is_read`, `created_at`
+- Index: `(user_id, is_read, created_at)` — efficient unread fetch
+- Hard-deleted after 14 days
 
 **Poll** (`polls`)
-- `id` (String, UUID, PK)
-- `shout_id` (String, FK → shouts, UNIQUE, CASCADE)
-- `multi` (Int, default 0) — 0 = single-select, 1 = multi-select
-- Relations: one-to-one with Shout, one-to-many with PollOption
+- `id`, `shout_id`→shouts (UNIQUE, CASCADE), `multi` (0=single-select, 1=multi-select)
 
 **PollOption** (`poll_options`)
-- `id` (String, UUID, PK)
-- `poll_id` (String, FK → polls, CASCADE)
-- `text` (String) — option text (max 144 chars)
-- `votes` (Int, default 0) — vote count
-- Index: `(poll_id)`
+- `id`, `poll_id`→polls (CASCADE), `text` (max 144 chars), `votes`; index `(poll_id)`
 
 **PollVote** (`poll_votes`)
-- `id` (String, UUID, PK)
-- `option_id` (String, FK → poll_options, CASCADE)
-- `user_id` (String) — voter (no FK constraint)
-- `created_at` (String, ISO datetime)
-- Unique constraint: `(option_id, user_id)` — prevents duplicate votes
-- Index: `(user_id)`
+- `id`, `option_id`→poll_options (CASCADE), `user_id` (no FK), `created_at`
+- UNIQUE `(option_id, user_id)` — prevents duplicate votes; index `(user_id)`
 
-**Setting** (`settings`)
-- `key` (String, PK) — e.g. `"registration_open"`
-- `value` (String) — e.g. `"true"` or `"false"`
-- Seeded on startup via `server.js`. Editable via admin panel.
+**Setting** (`settings`) — `key` (PK), `value`; seeded on startup, editable via admin panel
 
 **IgnoredUser** (`ignored_users`)
-- `id` (String, UUID, PK)
-- `owner_user_id` (String, FK → users, CASCADE) — user who ignores
-- `target_user_id` (String, FK → users, CASCADE) — user being ignored
-- `created_at` (String, ISO datetime)
-- `updated_at` (String, ISO datetime)
-- Unique constraint: `(owner_user_id, target_user_id)`
-- Max 3 ignored users per owner (enforced in route handler)
+- `id`, `owner_user_id`→users (CASCADE), `target_user_id`→users (CASCADE), `created_at`, `updated_at`
+- UNIQUE `(owner_user_id, target_user_id)`; max 3 per owner (enforced in route)
 
 **Social** (`socials`)
-- `id` (String, UUID, PK)
-- `user_id` (String, FK → users, CASCADE)
-- `type` (String) — platform type: `steam`, `telegram`, `x`, `discord`, `battlenet`, `playstation`, `xbox`, `epicgames`, `youtube`, `spotify`, `boosty`, `retroachievements`
-- `url` (String) — normalized platform URL
-- `display_name` (String, default `""`) — human-readable identifier extracted from URL (e.g. Steam vanity name, YouTube channel name)
-- `created_at` (String, ISO datetime)
-- `updated_at` (String, ISO datetime)
-- Unique constraint: `(user_id, type)` — one link per platform per user
-- Index: `(user_id)`
-
-Database file location: `DATABASE_URL` env var (Prisma format, e.g. `file:/data/app.db`). Sessions stored separately at `/data/sessions.sqlite`.
+- `id`, `user_id`→users (CASCADE), `type` (steam|telegram|x|discord|battlenet|playstation|xbox|epicgames|youtube|spotify|boosty|retroachievements), `url`, `display_name` (default ""), `created_at`, `updated_at`
+- UNIQUE `(user_id, type)` — one per platform per user; index `(user_id)`
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `file:/data/app.db` | Prisma SQLite connection string |
-| `SESSION_SECRET` | `"dev-secret"` | Secret for signing session cookies |
-| `NODE_ENV` | `development` | Environment mode (enables secure cookie in production) |
-| `MEDIA_PATH` | `/media` | Directory for uploaded media files |
-| `RESEND_API_KEY` | — | Resend SMTP API key for sending emails (falls back to console logging if unset) |
-| `EMAIL_FROM` | — | Sender address for emails (e.g. `"Вопли <noreply@vopley.net>"`) |
-| `ANNOUNCEMENTS_SECRET` | — | Secret key required to post/replace announcements via the API |
-| `ADMIN_EMAIL` | — | Admin panel login email |
-| `ADMIN_PASSWORD_HASH` | — | BCrypt hash of admin password. Generate: `node -e "import('bcryptjs').then(b=>b.default.hash('YOUR_PASSWORD',12).then(console.log))"` |
-| `ADMIN_COOKIE_SECRET` | — | Secret for AdminJS session cookie (min 32 chars). Required in production. |
-| `REDIS_HOST` | `redis` | Redis hostname for BullMQ (workers service) |
-| `REDIS_PORT` | `6379` | Redis port for BullMQ (workers service) |
-| `WORKERS_PORT` | `3001` | Port for the workers service (Bull Board dashboard) |
-| `BULL_BOARD_BASE_PATH` | `/workers` | Base path for Bull Board web UI |
-
-Environment files: `.env` (production), `.env.dev` (development), `.env.example` (template).
+| `DATABASE_URL` | `file:/data/app.db` | Prisma SQLite path |
+| `SESSION_SECRET` | `"dev-secret"` | Session cookie signing |
+| `NODE_ENV` | `development` | Enables secure cookie in production |
+| `MEDIA_PATH` | `/media` | Uploaded media directory |
+| `RESEND_API_KEY` | — | Resend SMTP key (falls back to console log if unset) |
+| `EMAIL_FROM` | — | Sender address (e.g. `"Вопли <noreply@vopley.net>"`) |
+| `ANNOUNCEMENTS_SECRET` | — | Required to post announcements |
+| `ADMIN_EMAIL` | — | Admin panel login |
+| `ADMIN_PASSWORD_HASH` | — | BCrypt hash. Generate: `node -e "import('bcryptjs').then(b=>b.default.hash('YOUR_PASSWORD',12).then(console.log))"` |
+| `ADMIN_COOKIE_SECRET` | — | AdminJS session cookie (min 32 chars, required in production) |
+| `REDIS_HOST` | `redis` | BullMQ Redis host |
+| `REDIS_PORT` | `6379` | BullMQ Redis port |
+| `WORKERS_PORT` | `3001` | Workers service port |
+| `BULL_BOARD_BASE_PATH` | `/workers` | Bull Board UI path |
 
 ## Testing
 
-The project has a full test suite using **Vitest** for both the backend and frontend.
-
-### Running Tests
-
 ```sh
-# API tests (unit + integration)
-make test            # or: cd api && npm test
-
-# Web tests
-make test-web        # or: cd web && npm test
-
-# Both together
-make test-all
-
-# With coverage reports (output to api/coverage/ or web/coverage/)
-make test-coverage
-make test-web-coverage
-
-# In Docker (API only)
-make test-docker
+make test              # API unit + integration (cd api && npm test)
+make test-web          # Web tests (cd web && npm test)
+make test-all          # Both sequentially
+make test-coverage     # API v8 coverage → api/coverage/
+make test-web-coverage # Web v8 coverage → web/coverage/
+make test-docker       # API in Docker (docker-compose.test.yml)
 ```
 
 ### API Tests (`api/tests/`)
 
-Tests are run sequentially (not in parallel) to avoid SQLite write conflicts.
+Run sequentially (SQLite write conflict avoidance).
 
-**Test infrastructure:**
-- `tests/setup.js` — Vitest `globalSetup`: creates a fresh SQLite DB at `tests/test.db`, runs Prisma migrations, writes a temp `.env.test` file, and cleans everything up in teardown.
-- `tests/env.js` — Vitest `setupFiles`: loads `.env.test` into `process.env` for each test worker.
-- `tests/helpers.js` — Shared utilities: `getApp()` (lazy app import), `request()` (supertest), `authenticatedAgent(user)` (supertest agent with session cookie), `cleanDb()` (truncate all tables), `disconnectDb()`.
-- `tests/fixtures/index.js` — Factory functions: `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, `createIgnoredUser()`, `createSocial()`, etc. Users are created with a known `_rawPassword` for authentication in tests.
+- `setup.js` — globalSetup: fresh SQLite DB at `tests/test.db`, migrations, temp `.env.test`
+- `env.js` — setupFiles: loads `.env.test` into `process.env`
+- `helpers.js` — `getApp()` (lazy import), `request()` (supertest), `authenticatedAgent(user)` (session cookie), `cleanDb()`, `disconnectDb()`
+- `fixtures/index.js` — `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, `createIgnoredUser()`, `createSocial()`. Users have `_rawPassword` for auth in tests.
 
-**Mocked modules in tests:**
-- `../src/email.js` — `sendVerificationEmail` is a no-op
-- `../src/sse.js` — `broadcast`, `broadcastToUser`, `addClient` are no-ops (prevents heartbeat intervals leaking)
-- `../src/admin.js` — `setupAdmin` is a no-op (prevents AdminJS initialization overhead)
+**Mocked in tests:** `email.js` (no-op), `sse.js` (no-op, prevents heartbeat leak), `admin.js` (no-op, skips AdminJS init)
 
-**Coverage config** (`vitest.config.js`):
-- Provider: v8
-- Includes: `src/**/*.js`
-- Excludes: `src/server.js`, `src/swagger.js`
-- Reports: text, HTML, JSON summary → `api/coverage/`
+**Coverage:** v8, `src/**/*.js`, excludes `server.js`/`swagger.js`, reports to `api/coverage/`
 
 ### Web Tests (`web/`)
 
-Uses `jsdom` environment with `@testing-library/react`.
+jsdom + @testing-library/react.
 
-**Test infrastructure:**
-- `web/tests/setup.ts` — Global DOM mocks (`window.matchMedia`, `window.scrollTo`)
-- `web/tests/helpers.tsx` — `renderWithProviders()` helper wraps components with all required context providers
-- `web/vitest.config.ts` — Merges Vite config; sets environment to `jsdom`, loads `tests/setup.ts`; 10s test timeout, 15s hook timeout
-
-**Context tests (co-located with source files):**
-- `web/context/AuthContext.test.tsx` — Login/logout, registration flow, password reset, modal state, error handling
-- `web/context/ThemeContext.test.tsx` — Theme toggling and `localStorage` persistence
-- `web/context/NotificationsContext.test.tsx` — SSE subscription, real-time updates, cursor pagination (`hasMore`/`loadMore`/`isLoadingMore`), sort order (chronological desc, read/unread agnostic), dedup, batched mark-as-read, safety timer, cleanup on unmount
-- `web/context/ContentPreferencesContext.test.tsx` — Content visibility preference toggles
-- `web/context/IgnoredUsersContext.test.tsx` — Ignore/unignore users, list management
-
-**Hook tests (co-located with source files):**
-- `web/hooks/useRoute.test.ts` — Hash-based routing (feed, profile, shout pages), navigation, `hashchange` events
-- `web/hooks/useSSE.test.ts` — SSE client auto-reconnect, exponential backoff (1s → 30s cap)
-- `web/hooks/useMentionUsers.test.ts` — @mention user list lazy loading and module-level singleton cache
-
-**Unit tests:**
-- `web/tests/unit/effectiveLength.test.ts` — Character counting: mention token normalization (`@[name:id]` → `@name`), spoiler marker stripping (`||content||`), newline cost (40 chars per newline), and combinations
-
-**Coverage config** (`web/vitest.config.ts`):
-- Provider: v8
-- Includes: `components/**`, `context/**`, `hooks/**`
-- Reports: text, HTML, JSON summary → `web/coverage/`
+- `tests/helpers.tsx` — `renderWithProviders()` wraps all context providers
+- Context tests (co-located): AuthContext, ThemeContext, NotificationsContext, ContentPreferencesContext, IgnoredUsersContext
+- Hook tests (co-located): useRoute (hash routing), useSSE (reconnect, backoff 1s→30s), useMentionUsers (lazy load, module-level cache)
+- Unit: `effectiveLength.test.ts` — char counting, mention normalization (`@[name:id]`→`@name`), spoiler stripping (`||…||`), newline cost (40 chars each)
+- Coverage: `components/**`, `context/**`, `hooks/**`
 
 ### Git Hooks (Husky)
 
-Two hooks gate commits and pushes:
+- **Pre-commit**: `npm run lint` for api and web
+- **Pre-push**: `npm test` for api and web
 
-**Pre-commit** (`.husky/pre-commit`) — runs linting before every `git commit`:
-```sh
-npm run lint --prefix api || exit 1
-npm run lint --prefix web || exit 1
-```
+### CI/CD
 
-**Pre-push** (`.husky/pre-push`) — runs the full test suite before every `git push`:
-```sh
-npm test --prefix api || exit 1
-npm test --prefix web || exit 1
-```
-
-Hooks are installed via `make install` (or `npm install` in the repo root, which triggers `husky`).
+**CI** (`.github/workflows/ci.yml`): on PRs to main — install deps, generate Prisma client, lint both, test both.
+**Deploy** (`.github/workflows/docker.yml`): manual `workflow_dispatch` — build + push images to GHCR, deploy via SSH.
 
 ### Linting
 
-Both packages use **ESLint** with flat config (`eslint.config.js`):
-
-| Package | Config highlights |
-|---------|------------------|
-| `api/` | `@eslint/js` recommended; Node globals; allows `console.*`; unused vars with `^_` prefix are allowed |
-| `web/` | `typescript-eslint` recommended; `eslint-plugin-react-hooks` (rules of hooks); `no-explicit-any` is warn not error; `^_` prefix convention for intentionally unused identifiers |
-
-Run linting manually:
-```sh
-cd api && npm run lint
-cd web && npm run lint
-```
-
-### CI (GitHub Actions)
-
-`.github/workflows/ci.yml` runs on all pull requests targeting `main`:
-1. Installs API and web dependencies
-2. Generates the Prisma client
-3. Lints API (`npm run lint --prefix api`)
-4. Lints web (`npm run lint --prefix web`)
-5. Runs `npm test` for both API and web
-
-`.github/workflows/docker.yml` — manual deploy workflow (`workflow_dispatch`):
-- Builds Docker images for api, web, workers and pushes to GHCR
-- Deploys to dev or prod target via SSH
+| Package | Config |
+|---------|--------|
+| `api/` | `@eslint/js` recommended; Node globals; `console.*` allowed; `_`-prefix unused vars |
+| `web/` | `typescript-eslint` recommended; `react-hooks` rules; `no-explicit-any` = warn; `_`-prefix unused vars |
 
 ## Code Conventions
 
 ### Backend (api/)
 
-- ES Modules (`import`/`export`) — `"type": "module"` in package.json
-- `dotenv/config` imported at the top of `server.js` — `.env` file is auto-loaded in dev
-- Express app is defined in `app.js` (exported as default); `server.js` only calls `.listen()` and seeds settings
-- Database access via **Prisma Client** (`prisma.user.findUnique(...)`, `prisma.shout.findMany(...)`, etc.)
-- Input validation with **Zod** schemas (defined in `helpers/validation.js`, used across domain route files)
-- Session-based auth (not JWT) — sessions stored in SQLite via `connect-sqlite3`; in test mode, in-memory sessions are used
-- Sessions have a 30-day max age with `rolling: true` (extended on every authenticated request)
-- Password hashing with **bcryptjs** (10 rounds; 4 rounds in tests for speed)
-- Email sending via **nodemailer** through Resend SMTP (`smtp.resend.com:465`)
-- Rate limiting: auth endpoints at 20 req/min (forgot-password/send-code and email change at 5/min); upload and shout creation at 100 req/10min per user (falls back to IP)
-- All IDs are UUIDs generated with `crypto.randomUUID()`
-- JSON error responses: `{ error: "message" }`
-- Image processing via **Sharp**: auto-rotate, strip EXIF, generate WebP variants, atomic move from tmp to permanent storage
-- Animated GIFs: original `.gif` is preserved alongside static WebP thumbnails generated from the first frame
-- Shout/comment character limit: 400 effective chars, where each newline costs 40 chars (`effectiveCharCount` helper)
-- API documentation via **swagger-ui-express** + OpenAPI 3.0.3 spec (`swagger.js`) — dev only, blocked by nginx in production
-- Graceful shutdown: `SIGTERM`/`SIGINT` handlers disconnect Prisma before exiting
-- Request logging: every request is logged as `[API] METHOD /path` to stdout (skipped in test mode)
-- Linting: ESLint via `npm run lint` (`eslint src`); intentionally unused variables prefixed with `_`
+- ES Modules (`"type": "module"`); `dotenv/config` only in `server.js`
+- App defined in `app.js` (exported), imported by `server.js` (prod) and test suite — no HTTP server or dotenv in tests
+- Prisma for all DB access (`prisma.user.findUnique(...)`, etc.); Zod for input validation in `helpers/validation.js`
+- Session auth (not JWT); sessions in SQLite via `connect-sqlite3`; test mode uses in-memory sessions; 30-day rolling sessions
+- bcryptjs: 10 rounds (4 in tests for speed); all IDs via `crypto.randomUUID()`
+- Rate limits: 20/min auth endpoints; 5/min forgot-password/send-code and email-change; 100/10min upload + shout-create (user falls back to IP)
+- Sharp: auto-rotate, strip EXIF, generate WebP variants, atomic tmp→permanent move
+- Animated GIFs: preserve `original.gif` + WebP thumbnail from first frame; `animated: true` in media DTO
+- Char limit: 400 effective chars; each newline costs 40 (`effectiveCharCount` helper)
+- Error responses: `{ error: "message" }`; graceful SIGTERM/SIGINT → Prisma disconnect
+- Request logging: `[API] METHOD /path` to stdout (skipped in test mode)
+- Unused vars prefixed `_`
 
 ### Frontend (web/)
 
-- Functional components with TypeScript strict mode
-- Source files live directly under `web/` (no `src/` subdirectory)
-- React Context for auth state — use `useAuth()` hook from `AuthContext.tsx`
-- React Context for theme — use `useTheme()` hook from `ThemeContext.tsx`; theme stored in `localStorage`
-- React Context for SSE — `SSEContext.tsx` manages the single shared `EventSource`; use `useSSEContext()` directly or the `useSSE(listeners)` convenience hook to subscribe to events
-- React Context for notifications — use `useNotifications()` hook from `NotificationsContext.tsx`
-- React Context for content preferences — use `useContentPreferences()` hook from `ContentPreferencesContext.tsx`
-- React Context for ignored users — use `useIgnoredUsers()` hook from `IgnoredUsersContext.tsx`; provides `ignoredUserIds`, `isIgnored()`, `addIgnoredUser()`, `removeIgnoredUser()`
-- Auth flow: 2-step registration (send code → verify), password reset (send code → verify → new password)
-- Hash-based routing via `useRoute.ts` — routes: `#/` (feed), `#/profile/{userId}`, `#/shout/{shoutId}`
-- Styling with **Tailwind CSS** utility classes (loaded via CDN in `index.html`) and CSS custom properties
-- Theme tokens: all colors use `th-*` Tailwind classes (e.g. `bg-th-card`, `text-th-text-3`) backed by CSS variables `--th-*`. Dark mode is toggled via the `.dark` class on `<html>`.
-- Fetch API with `credentials: "include"` for all requests
-- Optimistic UI updates with rollback on error (likes, delete)
-- PascalCase for components, camelCase for functions/variables
-- All user-facing text is in Russian, including Russian time formatting with proper declensions
-- Linting: ESLint via `npm run lint` (`eslint .`); TypeScript strict; react-hooks rules enforced; `no-explicit-any` is a warning; intentionally unused variables prefixed with `_`
+- Functional components, TypeScript strict; source directly under `web/` (no `src/` subdirectory)
+- Context hooks: `useAuth()`, `useTheme()`, `useSSEContext()` / `useSSE(listeners)`, `useNotifications()`, `useContentPreferences()`, `useIgnoredUsers()`
+- `useIgnoredUsers()` provides: `ignoredUserIds`, `isIgnored()`, `addIgnoredUser()`, `removeIgnoredUser()`
+- Auth flow: 2-step registration (send code → verify); password reset (send code → verify → new password)
+- Hash routing via `useRoute.ts`: `#/` (feed), `#/profile/:id`, `#/shout/:id`
+- Tailwind via CDN; theme tokens `th-*` classes backed by CSS vars `--th-*`; dark mode via `.dark` on `<html>`
+- Fetch with `credentials: "include"`; optimistic UI (likes, delete) with rollback on error
+- PascalCase components, camelCase functions/variables; all UI text in Russian with proper declensions
+- Context provider order (outermost first): `ThemeProvider → AuthProvider → SSEProvider → ContentPreferencesProvider → IgnoredUsersProvider → NotificationsProvider`
+- `SSEProvider` must wrap `NotificationsProvider` and any component using `useSSE`/`useSSEContext`
+- Unused vars prefixed `_`
 
 ## Architecture Notes
 
-- The backend is a stateless Express server (sessions persisted in SQLite, so restarts don't log users out).
-- The Express app is defined in `app.js` and imported by both `server.js` (production) and the test suite. This separation allows integration tests to import the app without starting an HTTP server or loading dotenv.
-- The frontend is a single-page application using hash-based routing — no server-side route handling needed.
-- Comments are stored in a separate `comments` table (not as shouts) — single level of threading, no deep nesting.
-- Shout and comment deletion is a soft-delete: the `is_deleted` flag is set but the row is retained. `is_deleted=2` marks content from banned users.
-- Shouts carry a `visibility_tag` field (`""`, `"spoiler"`, `"nsfw"`, `"politics"`) that the frontend can use to filter or blur content based on user preferences (`show_nsfw`, `show_politics` on the User model; `showMedia` is client-side only in `ContentPreferencesContext`). **Spoiler and NSFW tags require media to be attached** — the backend strips those tags if no media is present; the frontend also prevents selecting them without media in `ShoutInput.tsx`.
-- @mentions are supported in shouts and comments. The composer (`MentionInput.tsx`) is a `contenteditable` div. Typing `@` opens a dropdown of up to 5 matching users (filtered client-side from a module-level cached list). Selected mentions are serialized as `@[username:userId]` tokens in the stored content string. `renderContent` in `ShoutCard.tsx` parses these tokens and renders them as `#/profile/:id` links. Character counting normalizes `@[name:id]` back to `@name` before applying the 400-char limit. The user list is fetched lazily (only on first `@` trigger) via `GET /users/mentions` and cached for the browser session.
-- Mentions automatically trigger `mention` notifications to the mentioned users. Comments also trigger a `reply` notification to the shout author (unless they are the commenter, or already received a mention notification for that comment). Both are handled in `routes/shouts.js` and `routes/comments.js` using `helpers/mentions.js`.
-- Media is stored in a separate `media` table, referenced by `shouts.media_id` or `comments.media_id`. A shout/comment can have either an image or a YouTube video, not both.
-- **Embed system**: `ShoutCard.tsx` auto-detects URLs in shout/comment text via `extractEmbeds(text)` and renders rich embed cards inline. Supported platforms: **YouTube** (iframe via oEmbed API, 5s timeout), **Twitter/X** (fetches from `api.fxtwitter.com`, module-level `tweetCache`, shows author, text, photos, video thumbnails, likes/retweets; uses `pbs.fxtwitter.com` proxy for images), **Steam** (fetches via server-side proxy at `/api/v1/steam/app/:appId` to avoid CORS, module-level `steamCache`, shows game name, description, header image, price, recommendation count in Russian), **Imgur** (direct images, image pages, and albums), **Coub** (iframe embed), **Tenor** (iframe embed), **Giphy** (iframe embed, multiple URL patterns). Embeds are rendered in the order they are found in the text.
-- Image uploads are processed by Sharp into multiple WebP sizes (320/960/1600px for posts, 64/128/256px for avatars). EXIF data is stripped.
-- Animated GIFs skip re-encoding; the original GIF is stored as `original.gif` alongside WebP thumbnail variants. The `animated: true` flag and `gif` URL are included in the media DTO.
-- Images in the feed can be viewed fullscreen via the `Lightbox` component (`web/components/Lightbox.tsx`). It supports drag-to-dismiss (vertical swipe with velocity detection), Escape key, click-outside close, and locks background scroll while open. Uses pointer events for unified mouse/touch handling. Supports pinch-to-zoom (mobile) and scroll-to-zoom (desktop), pan when zoomed, and double-tap/click to toggle zoom.
-- **Polls**: Shouts can optionally include a poll with 2–7 options (max 144 chars each). Polls can be single-select or multi-select (`multi` flag). Voting is one-time — re-voting returns a 400 error. Vote submission is optimistic on the frontend (reverts on error). SSE broadcasts `poll_update` events to all clients for real-time vote count updates. The `PollEditor.tsx` component handles creation (in `ShoutInput.tsx`), and `PollBlock.tsx` handles display and voting (in `ShoutCard.tsx`). Poll validation constants: `POLL_MAX_OPTIONS = 7`, `POLL_OPTION_MAX_LENGTH = 144`.
-- The media nginx container serves files from the `/media` volume with a strict allowlist: `.webp`, `.jpg`, `.jpeg`, `.png`, `.gif`, `.mp4` extensions only; no dotfiles or directory listing; immutable 1-year cache headers.
-- Popular sort: shouts from the last 7 days. The popular tab has dual sort buttons — heart icon (sort by like count) and comment icon (sort by comment count). Uses `popularSort` state toggled by `handlePopularSortChange` in `ShoutFeed.tsx`.
-- Registration requires email verification: a 6-digit code is sent via Resend SMTP, validated before account creation. Codes expire in 10 minutes, max 5 attempts. Registration can be disabled by setting `registration_open=false` in the Settings table via the admin panel.
-- Password reset follows the same email verification pattern.
-- Announcements are a single-active-record pattern: only the latest non-deleted row is returned by `GET /announcements`. Posting a new one soft-deletes all existing active ones.
-- The `web/package.json` dev script runs both the API and Vite concurrently for local development.
-- `App.tsx` wraps the app in `<ThemeProvider>` (outer) → `<AuthProvider>` → `<SSEProvider>` → `<ContentPreferencesProvider>` → `<IgnoredUsersProvider>` → `<NotificationsProvider>` (inner). `SSEProvider` must wrap both `NotificationsProvider` and any component that calls `useSSE` or `useSSEContext`.
-- When content preferences hide media (nsfw/politics/showMedia off), `ShoutFeed.tsx` renders a same-size placeholder div (crossed-camera icon) instead of removing the element from the DOM — this prevents layout jumps when toggling content preferences.
-- **Pinned shouts**: One shout can be pinned at a time (`is_pinned=1`). Pinned shouts are fetched separately and prepended to the first page of the "new" tab feed only (not shown in "popular" tab). Pinning is managed via the admin panel.
-- **Ignored users**: Users can ignore up to 3 other users. Ignored users' content is filtered client-side via `IgnoredUsersContext`. The ignore list is fetched on login and managed via `GET /me/ignored-users`, `POST /users/:id/ignore`, `DELETE /users/:id/ignore`.
-- **Social links**: Users can add social media profile links to their profile (one per platform, 12 platforms supported: Steam, Telegram, X/Twitter, Discord, Battle.net, PlayStation, Xbox, Epic Games, YouTube, Spotify, Boosty, RetroAchievements). URLs are validated per platform (hostname + path pattern), normalized to canonical form, and display names are extracted (e.g. Steam vanity URL → username). Some platforms (Steam, YouTube, Spotify) resolve display names asynchronously via external APIs. The frontend (`ProfileSocials.tsx`) shows a grid of platform icons with active/inactive states; editing uses modal dialogs. Non-URL socials (Discord, Battle.net, PlayStation, Xbox, Epic Games) support copy-to-clipboard.
-- Nginx CSP headers allow embeds from YouTube (nocookie), Coub, Tenor, Steam (`store.steampowered.com`); images from YouTube thumbnails, DiceBear avatars, Imgur, Tenor, fxTwitter (`pbs.fxtwitter.com`), Steam CDN (`cdn.akamai.steamstatic.com`); and connect-src to fxTwitter API (`api.fxtwitter.com`) and Steam store API.
+- `app.js` imported by both `server.js` (prod) and test suite — separation allows integration tests without starting HTTP server or loading dotenv.
+- SPA with hash routing — no server-side route handling needed.
+- Comments in separate `comments` table (not as shouts) — single level of threading, no deep nesting.
+- Soft-delete: `is_deleted=1` (user-deleted), `is_deleted=2` (banned-user content).
+- `visibility_tag` (`""`, `"spoiler"`, `"nsfw"`, `"politics"`) — mutually exclusive. Spoiler/NSFW require media attached: backend strips tag if no media; frontend blocks selection without media in ShoutInput.
+- **@mentions**: serialized as `@[username:userId]` tokens. `MentionInput.tsx` = contenteditable div, `@` opens dropdown of up to 5 matching users (client-side filtered from module-level cached list). `renderContent` in ShoutCard parses tokens → `#/profile/:id` links. Character counting normalizes `@[name:id]` → `@name` before limit check. User list lazy-fetched on first `@` via `GET /users/mentions`, cached for browser session.
+- Mention notifications to mentioned users; reply notifications to shout author (unless commenter = author, or already received mention for that comment). Both handled in routes using `helpers/mentions.js`.
+- Media in `media` table, referenced by `shouts.media_id` or `comments.media_id`. One attachment per shout/comment (image OR YouTube, not both).
+- **Embeds** (`extractEmbeds()` in ShoutCard): auto-detects URLs and renders inline. Platforms: **YouTube** (iframe, oEmbed, 5s timeout), **Twitter/X** (fxtwitter API, module-level `tweetCache`, shows author/text/photos/stats; image proxy via `pbs.fxtwitter.com`), **Steam** (server-side proxy `/steam/app/:appId`, module-level `steamCache`, shows name/description/price/recommendations in Russian), **Imgur** (direct images + pages + albums), **Coub** (iframe), **Tenor** (iframe), **Giphy** (iframe, multiple URL patterns). Rendered in URL order found in text.
+- **Polls**: 2–7 options (max 144 chars each), single or multi-select (`multi` flag). One-time voting (400 on re-vote). Optimistic frontend updates. SSE `poll_update` for real-time counts. Constants: `POLL_MAX_OPTIONS = 7`, `POLL_OPTION_MAX_LENGTH = 144`.
+- **Pinned shouts**: one at a time (`is_pinned=1`), fetched separately and prepended to first page of "new" tab only (not popular tab). Admin-managed.
+- **Ignored users**: max 3; filtered client-side via `IgnoredUsersContext`; fetched on login.
+- **Social links**: 12 platforms, one per platform per user. URLs validated + normalized per platform, display names extracted (some async via external APIs: Steam, YouTube, Spotify). Non-URL socials (Discord, Battle.net, PSN, Xbox, Epic Games) support copy-to-clipboard.
+- Content hidden by preferences: placeholder div (crossed-camera icon) rendered instead of removing from DOM — prevents layout jumps.
+- Popular tab: shouts from last 7 days; dual sort buttons (heart = likes, comment icon = comments) via `popularSort` state in ShoutFeed.
+- Registration: 6-digit email code, 10min expiry, max 5 attempts. `registration_open=false` in Settings blocks both register endpoints.
+- Announcements: single-active-record — new POST soft-deletes all existing active ones.
+- Image uploads: Sharp → multiple WebP sizes. EXIF stripped. GIFs: `original.gif` preserved, WebP thumbnail from first frame, `animated: true` flag + `gif` URL in media DTO.
+- Lightbox: drag-to-dismiss (vertical swipe + velocity), Escape, click-outside, scroll lock. Pointer events (unified mouse/touch). Pinch-to-zoom, scroll-to-zoom, pan when zoomed, double-tap/click to toggle zoom.
+- Nginx CSP: embeds from YouTube (nocookie), Coub, Tenor, Steam; images from YouTube thumbnails, DiceBear, Imgur, Tenor, `pbs.fxtwitter.com`, `cdn.akamai.steamstatic.com`; connect-src: `api.fxtwitter.com`, Steam store.
 
 ## Background Jobs (Workers)
 
-The `workers/` directory contains a dedicated BullMQ-based background job service, running as a separate Docker container with its own Redis instance.
+TypeScript + BullMQ + Redis. Separate Docker container, shares SQLite volume with API. Bull Board dashboard at `/workers` (nginx-proxied, HTTP basic auth).
 
-**Architecture**: TypeScript + BullMQ + Redis. Workers share the SQLite database volume with the API service. Bull Board web dashboard is exposed at `/workers` (proxied through nginx with HTTP basic auth).
+| Job | Schedule | Action |
+|-----|----------|--------|
+| `notification-cleanup` | 00:00 UTC daily | Hard-delete notifications older than 14 days |
+| `db-backup` | 02:00 UTC daily | `VACUUM INTO` atomic backup, keep last 7 |
 
-**Scheduled jobs:**
-
-| Job | Schedule | Description |
-|-----|----------|-------------|
-| `notification-cleanup` | Daily at 00:00 UTC | Hard-deletes notifications older than 14 days |
-| `db-backup` | Daily at 02:00 UTC | Creates atomic SQLite backup via `VACUUM INTO`, keeps last 7 backups |
-
-**Key files:**
-- `src/index.ts` — Entry point: initializes workers, registers scheduled jobs, starts Bull Board Express server on port 3001
-- `src/scheduler.ts` — Registers repeatable jobs via `upsertJobScheduler` (idempotent on restart)
-- `src/queues.ts` — BullMQ queue definitions with retention config
-- `src/jobs/notification-cleanup.ts` — Deletes old notifications using Prisma
-- `src/jobs/db-backup.ts` — Atomic backup with pruning of old backups
-
-**Development**: Dev container uses `tsx watch` with source mount (`./workers/src:/app/src:ro`) for hot-reload.
+Jobs registered idempotently via `upsertJobScheduler` (safe on restart). Dev container uses `tsx watch` with source mount for hot-reload.
 
 ## Backup & Restore
 
-The `scripts/` directory at the repo root contains backup/restore tooling for Docker volumes.
-
 ```sh
-# Backup production (creates timestamped tarballs in ./backups/)
-./scripts/backup.sh prod
-
-# Backup and sync to Google Drive via rclone
-./scripts/backup.sh prod --upload
-
-# Restore from latest backup (prompts for confirmation, stops containers first)
-./scripts/restore.sh prod
-
-# Restore from a specific timestamp
-./scripts/restore.sh prod 20260218_120000
+./scripts/backup.sh prod           # timestamped tarballs in ./backups/
+./scripts/backup.sh prod --upload  # + rclone to Google Drive
+./scripts/restore.sh prod          # latest (prompts for confirmation, stops containers)
+./scripts/restore.sh prod TIMESTAMP
 ```
 
-Backups keep the last 3 snapshots per type (configurable via `KEEP` variable in the script). The database is backed up using `sqlite3 .backup` for atomic hot snapshots without stopping the server.
+Keeps last 3 snapshots (configurable via `KEEP` in script). DB backed up via `sqlite3 .backup` (hot, atomic, no downtime).
 
 ## Docker Services
 
-Four docker-compose files:
-- `docker-compose.yml` — production (port 3005)
-- `docker-compose.dev.yml` — dev droplet deployment (pre-built images from GHCR, managed by CI)
-- `docker-compose.local.yml` — local development (hot-reload, bind mounts, port 3006, isolated volumes)
-- `docker-compose.test.yml` — test runner (single service, tmpfs DB)
-
-Production and development each define six services:
+6 services per environment. Prod port 3005, local port 3006. Dev volumes isolated (`-dev` suffix on all volume names).
 
 | Service | Description |
 |---------|-------------|
-| `api` / `api-dev` | Express backend (internal port 3000). Runs `prisma migrate deploy` on startup via `scripts/start.sh`. Dev container mounts `./api/src` as read-only for hot-reload without rebuild. |
-| `media` / `media-dev` | Security-hardened Nginx serving `/media` volume (images, GIFs, and mp4 only) |
-| `nginx` / `nginx-dev` | Reverse proxy; routes `/api/*` to api, `/media/*` to media, `/admin` to api with HTTP basic auth, `/workers` to workers with HTTP basic auth, SPA fallback. Production blocks `/api/docs` (Swagger UI). SSE endpoint has buffering disabled and 24h timeout. |
-| `web-build` / `web-build-dev` | One-shot container that builds the React app and populates the `webdist` shared volume |
-| `redis` / `redis-dev` | Redis 7 Alpine for BullMQ job queue. Saves snapshot every 60s if 1+ key changed. Volume: `redis-data`. |
-| `worker` / `worker-dev` | BullMQ workers (port 3001). Runs scheduled jobs (notification cleanup, DB backup). Bull Board dashboard at `/workers`. Dev container uses `tsx watch` with source mount for hot-reload. |
+| `api` | Express backend (internal port 3000); runs `prisma migrate deploy` on startup |
+| `media` | Hardened Nginx: WebP/JPG/JPEG/PNG/GIF/MP4 only, no dotfiles, immutable 1yr cache |
+| `nginx` | Reverse proxy: `/api/*`→api, `/media/*`→media, `/admin`+`/workers` with HTTP basic auth, SPA fallback. SSE: buffering off, 24h timeout. Prod blocks `/api/docs`. |
+| `web-build` | One-shot React build → `webdist` shared volume |
+| `redis` | Redis 7 Alpine; snapshot every 60s if ≥1 key changed |
+| `worker` | BullMQ jobs + Bull Board on port 3001; dev uses `tsx watch` |
 
-Production volumes: `appdata`, `webdist`, `media`, `redis-data`. Development volumes: `appdata-dev`, `webdist-dev`, `media-dev`, `redis-data-dev` (fully isolated).
-
-The test service (`api-test`) uses the `test` Dockerfile target, runs with `tmpfs` for `/tmp` and `/data`, and exits with the vitest coverage exit code.
+**Four compose files:**
+- `docker-compose.yml` — production (port 3005)
+- `docker-compose.dev.yml` — dev droplet (pre-built GHCR images, managed by CI)
+- `docker-compose.local.yml` — local dev (hot-reload, bind mounts, port 3006, isolated volumes)
+- `docker-compose.test.yml` — single `api-test` service with tmpfs DB, exits with vitest coverage code
 
 ## Current Gaps
 
-- No Prettier or other auto-formatter (ESLint is active but doesn't enforce style)
-- No error boundary components in the React frontend
-- Tailwind is loaded via CDN rather than built into the bundle
-- Legacy inline media columns on `shouts` table to be removed in a follow-up migration
-- Notification `type` field in schema has a comment noting planned future types (`shout_like`, `comment_like`) not yet implemented
-- Web component tests are not yet written (contexts and hooks are covered; `components/` directory has no test files)
-- Workers service (`workers/`) does not yet have a test suite
+- No Prettier / auto-formatter (ESLint active, no style enforcement)
+- No React error boundaries
+- Tailwind loaded via CDN (not bundled)
+- Legacy inline media columns on `shouts` table (`media_type`, `media_url`, `media_meta`) — to be removed
+- Planned notification types `shout_like`/`comment_like` not yet implemented
+- `components/` directory has no test files (contexts + hooks are covered)
+- `workers/` has no test suite
