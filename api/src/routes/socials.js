@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { asyncHandler, toSqliteDatetime } from "../helpers/common.js";
+import { asyncHandler } from "../helpers/common.js";
 import { createSocialSchema, updateSocialSchema, socialTypeSchema } from "../helpers/validation.js";
 import { validateSocialUrl, normalizeSocialUrl, resolveSocialDisplay, preprocessSocialInput, ensureProtocol } from "../helpers/socials.js";
 
@@ -66,7 +66,7 @@ router.post("/users/:id/socials", requireAuth, asyncHandler(async (req, res) => 
     display = await resolveSocialDisplay(type, finalUrl);
   }
 
-  const now = toSqliteDatetime();
+  const now = new Date();
   await prisma.social.create({
     data: {
       id: crypto.randomUUID(),
@@ -130,7 +130,7 @@ router.put("/users/:id/socials/:type", requireAuth, asyncHandler(async (req, res
 
   await prisma.social.update({
     where: { id: existing.id },
-    data: { url: finalUrl, display_name: display, updated_at: toSqliteDatetime() },
+    data: { url: finalUrl, display_name: display, updated_at: new Date() },
   });
 
   console.log(`[Socials] Updated ${type} for user ${userId} (display_name: ${display})`);

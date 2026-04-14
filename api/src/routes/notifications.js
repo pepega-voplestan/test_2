@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
+import { asyncHandler, utcTimestamp } from "../helpers/common.js";
 import { buildSnippet } from "../helpers/mentions.js";
 
 const router = Router();
@@ -14,11 +14,10 @@ const router = Router();
  */
 router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
   const userId = req.session.user.id;
-  const fourteenDaysAgo = toSqliteDatetime(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 50);
 
-  // Convert ISO cursor to SQLite datetime format for comparison
-  const cursor = req.query.cursor ? toSqliteDatetime(new Date(req.query.cursor)) : null;
+  const cursor = req.query.cursor ? new Date(req.query.cursor) : null;
 
   const where = {
     user_id: userId,
