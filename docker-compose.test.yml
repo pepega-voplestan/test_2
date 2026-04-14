@@ -1,12 +1,26 @@
 services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vopley_test
+      POSTGRES_PASSWORD: test-secret
+      POSTGRES_DB: vopley_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vopley_test -d vopley_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
   api-test:
     build:
       context: ./api
       target: test
     environment:
       NODE_ENV: test
-      DATABASE_URL: file:/tmp/test.db
+      DATABASE_URL: postgresql://vopley_test:test-secret@postgres-test:5432/vopley_test
       SESSION_SECRET: test-secret
-    tmpfs:
-      - /tmp:size=100M
-      - /data:size=10M
+    depends_on:
+      postgres-test:
+        condition: service_healthy
