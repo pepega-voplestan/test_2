@@ -4,7 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { broadcast, broadcastToUser } from "../sse.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
-import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
+import { asyncHandler, utcTimestamp } from "../helpers/common.js";
 import { shoutSchema, SHOUT_MAX_LENGTH } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
 import { enrichFeed } from "../helpers/feed.js";
@@ -22,7 +22,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
     const offset = parseInt(req.query.offset, 10) || 0;
     const popularSort = req.query.popularSort || "likes"; // "likes" | "comments"
     console.log(`[Shouts] Fetching popular shouts: limit=${limit}, offset=${offset}, sort=${popularSort}, user=${currentUserId || "anon"}`);
-    const sevenDaysAgo = toSqliteDatetime(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const orderBy = popularSort === "comments"
       ? [{ comments: { _count: "desc" } }, { created_at: "desc" }]
       : [{ likes: { _count: "desc" } }, { created_at: "desc" }];
@@ -283,7 +283,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     const filteredIds = mentionedIds.filter(uid => !ignoringSet.has(uid));
 
     if (filteredIds.length > 0) {
-    const now = toSqliteDatetime();
+    const now = new Date();
     const notificationRows = filteredIds.map(uid => ({
       id: crypto.randomUUID(),
       user_id: uid,

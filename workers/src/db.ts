@@ -6,7 +6,4 @@ export const prisma = new PrismaClient({
     : ["warn", "error"],
 });
 
-await prisma.$queryRawUnsafe("PRAGMA journal_mode = WAL");
-await prisma.$queryRawUnsafe("PRAGMA foreign_keys = ON");
-
 console.log("[Workers] Prisma client initialized");
