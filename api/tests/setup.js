@@ -1,6 +1,9 @@
 /**
  * Vitest globalSetup — runs once before all test suites (in a separate process).
- * Creates a fresh SQLite test database and runs Prisma migrations.
+ * Resets the PostgreSQL test database and runs Prisma migrations.
+ *
+ * Requires TEST_DATABASE_URL to be set (e.g. in .env or environment):
+ *   TEST_DATABASE_URL=postgresql://vopley_test:test-secret@localhost:6432/vopley_test
  */
 import { execSync } from "child_process";
 import path from "path";
@@ -9,23 +12,19 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const apiDir = path.resolve(__dirname, "..");
-const testDbPath = path.join(apiDir, "tests", "test.db");
 const mediaTmpPath = path.join(apiDir, "tests", ".media-tmp");
 
 export async function setup() {
-  // Remove stale test DB if it exists
-  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
-    const f = testDbPath + suffix;
-    if (fs.existsSync(f)) fs.unlinkSync(f);
+  const dbUrl = process.env.TEST_DATABASE_URL;
+  if (!dbUrl) {
+    throw new Error("TEST_DATABASE_URL is not set. Set it to a PostgreSQL test database URL.");
   }
 
   // Ensure temp media dir exists
   fs.mkdirSync(mediaTmpPath, { recursive: true });
 
-  const dbUrl = `file:${testDbPath}`;
-
-  // Run Prisma migrations to create schema
-  execSync("npx prisma migrate deploy", {
+  // Drop and recreate schema, then apply all migrations
+  execSync("npx prisma migrate reset --force --skip-seed", {
     cwd: apiDir,
     env: {
       ...process.env,
@@ -44,22 +43,15 @@ export async function setup() {
   ].join("\n");
   fs.writeFileSync(path.join(apiDir, "tests", ".env.test"), envContent);
 
-  console.log(`[Test Setup] Database ready at ${testDbPath}`);
+  console.log("[Test Setup] Database ready");
 }
 
 export async function teardown() {
-  // Clean up test DB files
-  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
-    const f = testDbPath + suffix;
-    if (fs.existsSync(f)) fs.unlinkSync(f);
-  }
-
   // Clean up env file
   const envFile = path.join(apiDir, "tests", ".env.test");
   if (fs.existsSync(envFile)) fs.unlinkSync(envFile);
 
   // Clean up temp media dir
-  const mediaTmpPath = path.join(apiDir, "tests", ".media-tmp");
   if (fs.existsSync(mediaTmpPath)) fs.rmSync(mediaTmpPath, { recursive: true });
 
   // Clean up avatar dir written by upload tests

@@ -33,7 +33,7 @@ services:
       - vopli-dev
 
   api-dev:
-    image: ${IMAGE_PREFIX}/api:latest
+    image: ${IMAGE_PREFIX}/api:dev
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -68,7 +68,7 @@ services:
       start_period: 15s
 
   worker-dev:
-    image: ${IMAGE_PREFIX}/workers:latest
+    image: ${IMAGE_PREFIX}/workers:dev
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -114,7 +114,7 @@ services:
       - vopli-dev
 
   web-build-dev:
-    image: ${IMAGE_PREFIX}/web:latest
+    image: ${IMAGE_PREFIX}/web:dev
     volumes:
       - webdist-dev:/out
     command: sh -c "rm -rf /out/* && cp -r /app/dist/* /out/"
