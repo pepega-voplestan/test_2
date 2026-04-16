@@ -36,6 +36,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
       MEDIA_PATH: /media
+      AVATAR_PATH: /data/avatars
       NODE_ENV: ${NODE_ENV}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
