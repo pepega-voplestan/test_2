@@ -19,7 +19,7 @@ services:
       target: test
     environment:
       NODE_ENV: test
-      DATABASE_URL: postgresql://vopley_test:test-secret@postgres-test:5432/vopley_test
+      TEST_DATABASE_URL: postgresql://vopley_test:test-secret@postgres-test:5432/vopley_test
       SESSION_SECRET: test-secret
     depends_on:
       postgres-test:
