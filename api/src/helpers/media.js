@@ -5,8 +5,7 @@ import multer from "multer";
 /* ---------- Avatar constants ---------- */
 
 export const AVATAR_DIR = path.join(
-  path.dirname(process.env.DATABASE_URL.replace(/^file:/, "")),
-  "avatars"
+  process.env.AVATAR_PATH || "/data/avatars"
 );
 export const AVATAR_SIZES = [64, 128, 256];
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
