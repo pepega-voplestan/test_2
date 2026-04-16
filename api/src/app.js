@@ -51,12 +51,15 @@ if (isTest) {
   );
 } else {
   const { RedisStore } = await import("connect-redis");
-  const { default: Redis } = await import("ioredis");
+  const { createClient } = await import("redis");
 
-  const redisClient = new Redis({
-    host: process.env.REDIS_HOST || "localhost",
-    port: Number(process.env.REDIS_PORT) || 6379,
+  const redisClient = createClient({
+    socket: {
+      host: process.env.REDIS_HOST || "localhost",
+      port: Number(process.env.REDIS_PORT) || 6379,
+    },
   });
+  await redisClient.connect();
 
   const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 
