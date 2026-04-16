@@ -106,6 +106,75 @@ Vopley.net — Twitter/X-style social media app. Users post short messages ("sho
 └── Makefile, .env.example, README.md
 ```
 
+## Core Principles (Non-Negotiables)
+
+- **Session auth only** — never suggest JWT or localStorage for auth state
+- **Russian UI** — all user-visible strings in Russian with correct declensions; never introduce English-language UI copy
+- **Soft-delete everywhere** — `is_deleted=1` (user), `is_deleted=2` (banned); never hard-delete user content except notifications (14-day TTL)
+- **Single media per post/comment** — image OR YouTube, not both; backend enforces, frontend must gate
+- **Single-level comments** — no nested replies; `parent_id` on shouts is legacy/unused
+- **Optimistic UI + rollback** — likes, deletes, poll votes update immediately, revert on error
+- **One pinned shout max** — admin-managed; prepended only to "new" tab first page
+- **Prisma for all DB access** — raw SQL only for migrations or extreme edge cases
+- **Zod for all input validation** — schemas in `helpers/validation.js`, shared across routes
+
+## Mobile & iOS — Known Issues and Rules
+
+These apply to every new UI/UX element. iOS Safari has repeatedly caused regressions.
+
+### Mandatory checks before shipping UI changes
+- Test on real iOS Safari (not just Chrome DevTools mobile emulation — they differ significantly)
+- Check with virtual keyboard open: `position: fixed` elements shift or get obscured; prefer `position: sticky` or restructure layout
+- Check bottom safe area: use `padding-bottom: env(safe-area-inset-bottom)` on any bottom-anchored UI (modals, sticky bars)
+
+### Known iOS Safari gotchas
+- **`100vh` is broken** — use `100dvh` (dynamic viewport height) or `window.innerHeight` JS fallback for fullscreen modals/overlays
+- **Input zoom** — `font-size < 16px` on `<input>`/`<textarea>` triggers auto-zoom on focus; minimum `16px` on all form inputs
+- **`position: fixed` + virtual keyboard** — fixed elements don't stay fixed when keyboard opens; modals and the composer are affected
+- **Scroll lock** — `overflow: hidden` on `<body>` doesn't prevent scroll on iOS; use `touch-action: none` or the existing Lightbox scroll-lock pattern
+- **`:hover` states** — persist after tap on iOS (no hover-out event); gate hover-only styles with `@media (hover: hover)`
+- **Pointer events** — always use pointer events (not separate mouse/touch handlers) for drag/swipe; Lightbox is the reference implementation
+- **`-webkit-tap-highlight-color: transparent`** — set on interactive elements to remove the blue flash on tap
+- **Backdrop blur** — `-webkit-backdrop-filter` needed alongside `backdrop-filter`
+
+### Touch targets
+- Minimum 44×44px tap target for all interactive elements (Apple HIG)
+- Icon buttons without labels need explicit padding — don't rely on icon size alone
+
+### Composer / ShoutInput on mobile
+- Emoji picker positioning must account for virtual keyboard height
+- Drag-drop for media doesn't exist on iOS; ensure tap-to-upload path is always present and obvious
+
+## Key Reference Files
+
+| Task | File(s) |
+|------|---------|
+| Add a new API route | `api/src/routes/index.js` (mount) + existing route as template |
+| Add DB model / column | `api/prisma/schema.prisma` → `prisma migrate dev` |
+| Add input validation schema | `api/src/helpers/validation.js` |
+| Enrich feed with new joined data | `api/src/helpers/feed.js` — `enrichFeed()` |
+| Add SSE broadcast event | `api/src/sse.js` (emit) + `web/context/SSEContext.tsx` (consume) |
+| Add targeted SSE notification | `api/src/sse.js` — `broadcastToUser()` |
+| Add a new social platform | `api/src/helpers/socials.js` + `web/components/ProfileSocials.tsx` |
+| Add a new notification type | `api/src/routes/comments.js` or `shouts.js` + `web/context/NotificationsContext.tsx` |
+| Add a new embed type | `web/components/ShoutCard.tsx` — `extractEmbeds()` |
+| Add a new admin resource | `api/src/admin.js` |
+| Add a new background job | `workers/src/jobs/` + register in `workers/src/index.ts` |
+| Change char counting logic | `api/src/helpers/common.js` + `web/tests/unit/effectiveLength.test.ts` |
+| Add a new context provider | Follow order in `web/App.tsx` (see provider order in Code Conventions) |
+
+## Common Mistakes to Avoid
+
+- **`visibility_tag` strip** — backend strips spoiler/nsfw if no `media_id`; frontend blocks selection too but is not the only guard; both must be in sync
+- **SSEProvider order** — `SSEProvider` must be ancestor of `NotificationsProvider` and any `useSSE` consumer; wrong order = silent runtime errors
+- **Admin panel fatality in prod** — any uncaught error in `admin.js` exits with code 1 in production; always test admin changes before deploying
+- **`@mention` token format** — serialized as `@[username:userId]`, not plain `@username`; rendering, char counting, and notification extraction all depend on this exact format
+- **Notification dedup** — reply notification suppressed if commenter already mentioned in the same comment; both cases in `routes/comments.js`; don't split this logic
+- **Pinned shout** — setting a new pin via admin does NOT auto-unpin the previous; verify behavior when touching pin-related features
+- **Test isolation** — tests run sequentially (SQLite write conflicts); never introduce `describe`-level parallelism or shared mutable state between test files
+- **`bcrypt` rounds** — 10 in prod, 4 in tests; set via env in `tests/setup.js`; don't hardcode rounds in business logic
+- **Rate limit fallback** — upload + shout-create rate limit falls back to IP if unauthenticated; test both auth states when touching these endpoints
+
 ## Quick Start
 
 ```sh
@@ -117,68 +186,38 @@ make local            # Docker local dev (port 3006, hot-reload, isolated volume
 
 ## Makefile Targets
 
+Key targets (run `make` or `cat Makefile` for full list):
+
 | Target | Description |
 |--------|-------------|
 | `make prod` / `make local` | Start production / local containers |
-| `make down` / `make down-local` | Stop containers |
-| `make rebuild` / `make rebuild-local` | Force rebuild (no cache) |
-| `make logs` / `make logs-local` | Follow logs |
 | `make deploy` / `make deploy-local` | Backup + rebuild + start |
-| `make backup` / `make backup-dev` | Backup volumes (DB + media) |
-| `make backup-upload` | Backup + rclone upload to Google Drive |
-| `make restore` / `make restore-dev` | Restore volumes (latest or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
-| `make db-pull` / `make db-pull-local` | Hot-copy SQLite DB to `./app.db` |
+| `make logs` / `make logs-local` | Follow logs |
+| `make backup` / `make backup-upload` | Backup volumes / + rclone to Google Drive |
+| `make restore` | Restore latest backup (or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
 | `make test` / `make test-web` / `make test-all` | Run API / web / both tests |
-| `make test-docker` | API tests in Docker |
-| `make test-coverage` / `make test-web-coverage` | v8 coverage reports |
-| `make ensure-htpasswd` | Validate `.htpasswd` exists |
+| `make db-pull` / `make db-pull-local` | Hot-copy SQLite DB to `./app.db` |
 
 ## API Endpoints
 
-All prefixed `/api/v1/`. Auth = session cookie required.
+All prefixed `/api/v1/`. Auth = session cookie required. Full spec at `/api/docs` (dev only). Route files are the authoritative source.
+
+Non-obvious / frequently referenced:
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/health` | — | `{ ok: true }` |
-| GET | `/me` | — | Current user session |
 | GET | `/events` | — | SSE stream |
 | GET | `/steam/app/:appId` | — | Steam store proxy (1h cache, avoids CORS) |
-| POST | `/auth/register/send-code` | — | Send email verification code (rate: 20/min; blocked if `registration_open=false`) |
-| POST | `/auth/register/verify` | — | Verify code, create account, auto-login |
-| POST | `/auth/login` | — | Login (username or email, rate: 20/min) |
-| POST | `/auth/logout` | Yes | Destroy session |
-| POST | `/auth/forgot-password/send-code` | — | Send reset code (rate: 5/min) |
-| POST | `/auth/forgot-password/reset` | — | Verify code + set new password, auto-login |
-| GET | `/shouts` | — | List shouts (`limit`, `offset`, `sortBy=new\|popular`, max 50) |
-| GET | `/shouts/:id` | — | Single shout |
-| POST | `/shouts` | Yes | Create shout (text, mediaId, youtubeUrl, poll) |
-| DELETE | `/shouts/:id` | Yes | Soft-delete own shout |
-| POST | `/shouts/:id/replies` | Yes | Add comment |
-| POST | `/shouts/:id/like` | Yes | Toggle like, returns new count |
-| DELETE | `/comments/:id` | Yes | Soft-delete own comment |
-| POST | `/comments/:id/like` | Yes | Toggle comment like |
-| GET | `/announcements` | — | Active announcement or `null` |
-| POST | `/announcements` | Secret | Replace announcement (requires `ANNOUNCEMENTS_SECRET`) |
+| POST | `/auth/register/send-code` | — | Send email code (rate: 20/min; blocked if `registration_open=false`) |
+| POST | `/announcements` | Secret | Replace announcement (requires `ANNOUNCEMENTS_SECRET`; soft-deletes all previous) |
 | GET | `/users/mentions` | — | All non-banned users for @mention autocomplete |
-| GET | `/users/:id` | — | User profile (email visible to owner only) |
-| GET | `/users/:id/shouts` | — | Paginated user shouts |
-| PUT | `/users/:id` | Yes | Update profile (username, email, avatar, password) |
-| POST | `/users/:id/email/send-code` | Yes | Email change code (rate: 5/min) |
-| POST | `/users/:id/email/verify` | Yes | Verify and update email |
-| POST | `/upload/media` | Yes | Upload image/GIF (≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP) |
-| POST | `/upload/avatar` | Yes | Upload avatar (≤2MB; generates 64/128/256px square WebP) |
-| GET | `/avatars/:userId/:size.webp` | — | Serve avatar (immutable cache) |
+| GET | `/shouts` | — | `limit`, `offset`, `sortBy=new\|popular`, max 50 |
+| POST | `/upload/media` | Yes | ≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP |
+| POST | `/upload/avatar` | Yes | ≤2MB; generates 64/128/256px square WebP |
 | GET | `/notifications` | Yes | Cursor-paginated (14-day window, default 20, max 50); `cursor` = ISO timestamp |
-| PATCH | `/notifications/read-batch` | Yes | Mark batch as read (max 50) |
-| PATCH | `/notifications/read-all` | Yes | Mark all read |
-| GET | `/me/ignored-users` | Yes | List ignored user IDs |
-| POST | `/users/:id/ignore` | Yes | Ignore user (max 3) |
-| DELETE | `/users/:id/ignore` | Yes | Unignore user |
-| POST | `/polls/:pollId/vote` | Yes | Vote (`{ optionIds: string[] }`) |
-| GET | `/users/:id/socials` | — | List social links |
-| POST | `/users/:id/socials` | Yes | Add social link (type + url) |
-| PUT | `/users/:id/socials/:type` | Yes | Update social link URL |
-| DELETE | `/users/:id/socials/:type` | Yes | Delete social link |
+| PATCH | `/notifications/read-batch` | Yes | Mark batch as read (max 50 ids) |
+| POST | `/users/:id/ignore` | Yes | Ignore user (max 3 total) |
+| POST | `/polls/:pollId/vote` | Yes | `{ optionIds: string[] }` — one-time, 400 on re-vote |
 
 ## Admin Panel
 
@@ -467,8 +506,9 @@ Keeps last 3 snapshots (configurable via `KEEP` in script). DB backed up via `sq
 - `docker-compose.local.yml` — local dev (hot-reload, bind mounts, port 3006, isolated volumes)
 - `docker-compose.test.yml` — single `api-test` service with tmpfs DB, exits with vitest coverage code
 
-## Current Gaps
+## Known Tech Debt
 
+- **Mobile/iOS** — no systematic mobile QA; iOS Safari regressions are common (see Mobile section above); no dedicated mobile testing in CI
 - No Prettier / auto-formatter (ESLint active, no style enforcement)
 - No React error boundaries
 - Tailwind loaded via CDN (not bundled)
