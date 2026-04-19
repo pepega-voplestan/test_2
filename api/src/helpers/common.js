@@ -1,7 +1,8 @@
-/** Convert SQLite datetime string (UTC, no suffix) to ISO 8601 with Z marker */
-export function utcTimestamp(sqliteDatetime) {
-  if (!sqliteDatetime) return sqliteDatetime;
-  const s = sqliteDatetime.replace(" ", "T");
+/** Convert a datetime value (Date object or legacy SQLite string) to ISO 8601 */
+export function utcTimestamp(value) {
+  if (!value) return value;
+  if (value instanceof Date) return value.toISOString();
+  const s = value.replace(" ", "T");
   return s.endsWith("Z") ? s : s + "Z";
 }
 

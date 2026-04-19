@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { broadcast, broadcastToUser } from "../sse.js";
-import { asyncHandler, utcTimestamp, toSqliteDatetime } from "../helpers/common.js";
+import { asyncHandler, utcTimestamp } from "../helpers/common.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { commentSchema, SHOUT_MAX_LENGTH } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
@@ -129,7 +129,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   const mentionedIds = shoutDeleted
     ? rawMentionedIds.filter(uid => uid !== parent.user_id)
     : rawMentionedIds;
-  const now = toSqliteDatetime();
+  const now = new Date();
   const actor = { id: req.session.user.id, name: req.session.user.name, avatar: req.session.user.avatar };
   // Only spoiler the snippet if the comment's own content has inline spoilers;
   // the parent shout's visibility_tag does NOT spoiler comment notifications
