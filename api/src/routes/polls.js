@@ -59,9 +59,10 @@ router.post("/polls/:pollId/vote", requireAuth, asyncHandler(async (req, res) =>
     });
   }
 
-  // Fetch updated options
+  // Fetch updated options in original display order
   const updatedOptions = await prisma.pollOption.findMany({
     where: { poll_id: pollId },
+    orderBy: { position: "asc" },
   });
 
   // Fetch current user's votes

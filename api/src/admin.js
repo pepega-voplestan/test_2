@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import AdminJS, { ComponentLoader } from "adminjs";
 import AdminJSExpress from "@adminjs/express";
 import { Database, Resource, getModelByName } from "@adminjs/prisma";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
 import { verifyPassword } from "./auth.js";
 
@@ -409,7 +410,7 @@ export async function setupAdmin() {
           since = null;
         }
 
-        const dateFilter = since ? { created_at: { gte: since } } : {};
+        const dateFilter = since ? { created_at: { gte: new Date(since) } } : {};
 
         const [users, shouts, comments, shoutLikes, commentLikes, media] = await Promise.all([
           prisma.user.count({ where: dateFilter }),
@@ -426,31 +427,16 @@ export async function setupAdmin() {
           ? since
           : new Date(Date.now() - timelineDays * 24 * 60 * 60 * 1000).toISOString();
 
+        const tsSince = new Date(timelineSince);
+        const topCreatorsSinceFilter = since ? Prisma.sql`AND s.created_at >= ${new Date(since)}` : Prisma.empty;
+
         const [shoutsTimeline, commentsTimeline, shoutLikesTimeline, commentLikesTimeline, usersTimeline, topCreators] = await Promise.all([
-          prisma.$queryRawUnsafe(
-            `SELECT date(created_at) as date, COUNT(*) as count FROM shouts WHERE is_deleted = 0 AND created_at >= ? GROUP BY date(created_at) ORDER BY date`,
-            timelineSince,
-          ),
-          prisma.$queryRawUnsafe(
-            `SELECT date(created_at) as date, COUNT(*) as count FROM comments WHERE is_deleted = 0 AND created_at >= ? GROUP BY date(created_at) ORDER BY date`,
-            timelineSince,
-          ),
-          prisma.$queryRawUnsafe(
-            `SELECT date(created_at) as date, COUNT(*) as count FROM shout_likes WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
-            timelineSince,
-          ),
-          prisma.$queryRawUnsafe(
-            `SELECT date(created_at) as date, COUNT(*) as count FROM comment_likes WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
-            timelineSince,
-          ),
-          prisma.$queryRawUnsafe(
-            `SELECT date(created_at) as date, COUNT(*) as count FROM users WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date`,
-            timelineSince,
-          ),
-          prisma.$queryRawUnsafe(
-            `SELECT u.username as name, COUNT(*) as count FROM shouts s JOIN users u ON s.user_id = u.id WHERE s.is_deleted = 0${since ? " AND s.created_at >= ?" : ""} GROUP BY s.user_id ORDER BY count DESC LIMIT 10`,
-            ...(since ? [since] : []),
-          ),
+          prisma.$queryRaw`SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') as date, COUNT(*) as count FROM shouts WHERE is_deleted = 0 AND created_at >= ${tsSince} GROUP BY created_at::date ORDER BY date`,
+          prisma.$queryRaw`SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') as date, COUNT(*) as count FROM comments WHERE is_deleted = 0 AND created_at >= ${tsSince} GROUP BY created_at::date ORDER BY date`,
+          prisma.$queryRaw`SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') as date, COUNT(*) as count FROM shout_likes WHERE created_at >= ${tsSince} GROUP BY created_at::date ORDER BY date`,
+          prisma.$queryRaw`SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') as date, COUNT(*) as count FROM comment_likes WHERE created_at >= ${tsSince} GROUP BY created_at::date ORDER BY date`,
+          prisma.$queryRaw`SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') as date, COUNT(*) as count FROM users WHERE created_at >= ${tsSince} GROUP BY created_at::date ORDER BY date`,
+          prisma.$queryRaw`SELECT u.username as name, COUNT(*) as count FROM shouts s JOIN users u ON s.user_id = u.id WHERE s.is_deleted = 0 ${topCreatorsSinceFilter} GROUP BY s.user_id, u.username ORDER BY COUNT(*) DESC LIMIT 10`,
         ]);
 
         const toTimeline = (rows) => rows.map((r) => ({ date: r.date, count: Number(r.count) }));
