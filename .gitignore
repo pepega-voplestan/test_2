@@ -13,3 +13,4 @@ api/tests/.media-tmp/
 api/tests/avatars/
 .htpasswd
 .idea
+migrate.load

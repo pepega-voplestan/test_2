@@ -1,6 +1,23 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - vopli
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -19,6 +36,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
       MEDIA_PATH: /media
+      AVATAR_PATH: /data/avatars
       NODE_ENV: ${NODE_ENV}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
@@ -26,6 +44,8 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
       ADMIN_COOKIE_SECRET: ${ADMIN_COOKIE_SECRET}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     networks:
       - vopli
     volumes:
@@ -33,6 +53,11 @@ services:
       - media:/media
     expose:
       - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/v1/health"]
       interval: 5s
@@ -52,13 +77,13 @@ services:
       NODE_ENV: ${NODE_ENV}
       REDIS_HOST: redis
       BULL_BOARD_BASE_PATH: /workers
-    volumes:
-      - appdata:/data
     expose:
       - "3001"
     depends_on:
       redis:
         condition: service_started
+      postgres:
+        condition: service_healthy
       api:
         condition: service_healthy
     networks:
@@ -105,6 +130,7 @@ networks:
     driver: bridge
 
 volumes:
+  postgres-data:
   appdata:
   webdist:
   media:

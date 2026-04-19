@@ -6,8 +6,4 @@ export const prisma = new PrismaClient({
     : ["warn", "error"],
 });
 
-// SQLite pragmas — Prisma doesn't set these automatically
-await prisma.$queryRawUnsafe("PRAGMA journal_mode = WAL");
-await prisma.$queryRawUnsafe("PRAGMA foreign_keys = ON");
-
 console.log("[DB] Prisma Client initialized");
