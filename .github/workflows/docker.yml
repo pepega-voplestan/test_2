@@ -54,7 +54,8 @@ jobs:
           images: ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}
           tags: |
             type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && inputs.target == 'prod' }}
+            type=raw,value=dev,enable=${{ inputs.target == 'dev' }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -76,6 +77,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Block prod deploy from non-main branch
+        if: inputs.target == 'prod' && github.ref != 'refs/heads/main'
+        run: |
+          echo "ERROR: prod can only be deployed from main (current branch: ${GITHUB_REF})"
+          exit 1
+
       - uses: actions/checkout@v4
 
       - name: Connect to Tailscale

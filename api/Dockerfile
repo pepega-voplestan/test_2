@@ -1,5 +1,5 @@
 FROM node:20-alpine AS base
-RUN apk add --no-cache python3 make g++ vips-dev openssl sqlite
+RUN apk add --no-cache python3 make g++ vips-dev openssl
 WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/

@@ -50,14 +50,22 @@ if (isTest) {
     })
   );
 } else {
-  const SQLiteStoreFactory = (await import("connect-sqlite3")).default;
-  const SQLiteStore = SQLiteStoreFactory(session);
+  const { RedisStore } = await import("connect-redis");
+  const { createClient } = await import("redis");
+
+  const redisClient = createClient({
+    socket: {
+      host: process.env.REDIS_HOST || "localhost",
+      port: Number(process.env.REDIS_PORT) || 6379,
+    },
+  });
+  await redisClient.connect();
 
   const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 
   app.use(
     session({
-      store: new SQLiteStore({ db: "sessions.sqlite", dir: "/data" }),
+      store: new RedisStore({ client: redisClient, ttl: SESSION_MAX_AGE / 1000 }),
       secret: process.env.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
