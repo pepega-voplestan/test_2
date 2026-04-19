@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { asyncHandler, toSqliteDatetime } from "../helpers/common.js";
+import { asyncHandler } from "../helpers/common.js";
 
 const router = Router();
 
@@ -49,7 +49,7 @@ router.post("/users/:id/ignore", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Список игнора заполнен" });
   }
 
-  const now = toSqliteDatetime();
+  const now = new Date();
   await prisma.ignoredUser.create({
     data: {
       id: crypto.randomUUID(),

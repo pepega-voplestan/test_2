@@ -4,6 +4,25 @@ version: "3.8"
 # Use: make local
 
 services:
+  postgres-dev:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data-dev:/var/lib/postgresql/data
+    ports:
+      - "6432:5432"
+    networks:
+      - vopli-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   redis-dev:
     image: redis:7-alpine
     restart: unless-stopped
@@ -21,6 +40,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
       MEDIA_PATH: /media
+      AVATAR_PATH: /data/avatars
       NODE_ENV: ${NODE_ENV}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
@@ -28,6 +48,8 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
       ADMIN_COOKIE_SECRET: ${ADMIN_COOKIE_SECRET}
+      REDIS_HOST: redis-dev
+      REDIS_PORT: 6379
     volumes:
       - appdata-dev:/data
       - media-dev:/media
@@ -37,6 +59,11 @@ services:
       - "3000"
     networks:
       - vopli-dev
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/v1/health"]
       interval: 5s
@@ -55,13 +82,14 @@ services:
       REDIS_HOST: redis-dev
       BULL_BOARD_BASE_PATH: /workers
     volumes:
-      - appdata-dev:/data
       - ./workers/src:/app/src:ro
     expose:
       - "3001"
     depends_on:
       redis-dev:
         condition: service_started
+      postgres-dev:
+        condition: service_healthy
       api-dev:
         condition: service_healthy
     networks:
@@ -106,6 +134,7 @@ networks:
     driver: bridge
 
 volumes:
+  postgres-data-dev:
   appdata-dev:
   webdist-dev:
   media-dev:
