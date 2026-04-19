@@ -4,7 +4,7 @@
 
 Vopley.net — Twitter/X-style social media app. Users post short messages ("shouts"), comment, like, attach images/YouTube videos, manage profiles. UI in Russian.
 
-**Stack**: React 18 + TypeScript + Vite / Node.js + Express + Prisma + SQLite / BullMQ + Redis / Docker + Nginx
+**Stack**: React 18 + TypeScript + Vite / Node.js + Express + Prisma + PostgreSQL / BullMQ + Redis / Docker + Nginx
 
 ## Repository Structure
 
@@ -37,14 +37,14 @@ Vopley.net — Twitter/X-style social media app. Users post short messages ("sho
 │   │   │   ├── mentions.js     # extractMentionedUserIds, buildSnippet
 │   │   │   ├── socials.js      # Platform validation, URL normalization, display extraction
 │   │   │   └── validation.js   # Zod schemas shared across routes
-│   │   ├── db.js           # Prisma client (WAL mode, foreign keys)
+│   │   ├── db.js           # Prisma client
 │   │   ├── auth.js         # Password hashing, session auth utilities
 │   │   ├── email.js        # Email via nodemailer + Resend SMTP
 │   │   └── sse.js          # SSE: client registry, broadcast, broadcastToUser, heartbeat
 │   ├── prisma/schema.prisma, migrations/
 │   ├── scripts/start.sh    # Docker entrypoint: prisma migrate deploy → start server
 │   ├── tests/
-│   │   ├── setup.js        # globalSetup: fresh SQLite DB, migrations, temp .env.test
+│   │   ├── setup.js        # globalSetup: reset PostgreSQL test DB via prisma migrate reset, temp .env.test
 │   │   ├── env.js          # setupFiles: loads .env.test into process.env
 │   │   ├── helpers.js      # getApp(), request(), authenticatedAgent(), cleanDb(), disconnectDb()
 │   │   ├── fixtures/index.js # createUser(), createShout(), createComment(), createPoll(), etc.
@@ -171,7 +171,7 @@ These apply to every new UI/UX element. iOS Safari has repeatedly caused regress
 - **`@mention` token format** — serialized as `@[username:userId]`, not plain `@username`; rendering, char counting, and notification extraction all depend on this exact format
 - **Notification dedup** — reply notification suppressed if commenter already mentioned in the same comment; both cases in `routes/comments.js`; don't split this logic
 - **Pinned shout** — setting a new pin via admin does NOT auto-unpin the previous; verify behavior when touching pin-related features
-- **Test isolation** — tests run sequentially (SQLite write conflicts); never introduce `describe`-level parallelism or shared mutable state between test files
+- **Test isolation** — tests run sequentially; never introduce `describe`-level parallelism or shared mutable state between test files
 - **`bcrypt` rounds** — 10 in prod, 4 in tests; set via env in `tests/setup.js`; don't hardcode rounds in business logic
 - **Rate limit fallback** — upload + shout-create rate limit falls back to IP if unauthenticated; test both auth states when touching these endpoints
 
@@ -196,7 +196,7 @@ Key targets (run `make` or `cat Makefile` for full list):
 | `make backup` / `make backup-upload` | Backup volumes / + rclone to Google Drive |
 | `make restore` | Restore latest backup (or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
 | `make test` / `make test-web` / `make test-all` | Run API / web / both tests |
-| `make db-pull` / `make db-pull-local` | Hot-copy SQLite DB to `./app.db` |
+| `make db-pull` / `make db-pull-local` | Dump PostgreSQL DB locally |
 
 ## API Endpoints
 
@@ -283,7 +283,7 @@ SSE real-time updates only apply to the `new` tab. Popular and announcements tab
 
 ## Database
 
-SQLite + WAL mode + foreign keys. Managed via Prisma. `prisma migrate deploy` on Docker startup. For pre-Prisma DBs, P3005 error is detected and baseline resolved automatically. Sessions at `/data/sessions.sqlite`.
+PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. All historical migrations squashed into a single `0001_init` baseline. Sessions stored in Redis.
 
 ### Models
 
@@ -345,18 +345,23 @@ SQLite + WAL mode + foreign keys. Managed via Prisma. `prisma migrate deploy` on
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `file:/data/app.db` | Prisma SQLite path |
+| `DATABASE_URL` | — | Prisma PostgreSQL URL (e.g. `postgresql://vopley:pass@postgres:5432/vopley`) |
+| `TEST_DATABASE_URL` | — | PostgreSQL URL for test DB; required to run API tests |
+| `POSTGRES_USER` | — | PostgreSQL username (used by postgres Docker service) |
+| `POSTGRES_PASSWORD` | — | PostgreSQL password |
+| `POSTGRES_DB` | — | PostgreSQL database name |
 | `SESSION_SECRET` | `"dev-secret"` | Session cookie signing |
 | `NODE_ENV` | `development` | Enables secure cookie in production |
 | `MEDIA_PATH` | `/media` | Uploaded media directory |
+| `AVATAR_PATH` | `/data/avatars` | Uploaded avatar directory (separate from media) |
 | `RESEND_API_KEY` | — | Resend SMTP key (falls back to console log if unset) |
 | `EMAIL_FROM` | — | Sender address (e.g. `"Вопли <noreply@vopley.net>"`) |
 | `ANNOUNCEMENTS_SECRET` | — | Required to post announcements |
 | `ADMIN_EMAIL` | — | Admin panel login |
 | `ADMIN_PASSWORD_HASH` | — | BCrypt hash. Generate: `node -e "import('bcryptjs').then(b=>b.default.hash('YOUR_PASSWORD',12).then(console.log))"` |
 | `ADMIN_COOKIE_SECRET` | — | AdminJS session cookie (min 32 chars, required in production) |
-| `REDIS_HOST` | `redis` | BullMQ Redis host |
-| `REDIS_PORT` | `6379` | BullMQ Redis port |
+| `REDIS_HOST` | `redis` | Redis host (used for sessions + BullMQ) |
+| `REDIS_PORT` | `6379` | Redis port |
 | `WORKERS_PORT` | `3001` | Workers service port |
 | `BULL_BOARD_BASE_PATH` | `/workers` | Bull Board UI path |
 
@@ -373,9 +378,9 @@ make test-docker       # API in Docker (docker-compose.test.yml)
 
 ### API Tests (`api/tests/`)
 
-Run sequentially (SQLite write conflict avoidance).
+Run sequentially.
 
-- `setup.js` — globalSetup: fresh SQLite DB at `tests/test.db`, migrations, temp `.env.test`
+- `setup.js` — globalSetup: requires `TEST_DATABASE_URL`; runs `prisma migrate reset --force` against PostgreSQL test DB; writes temp `.env.test`
 - `env.js` — setupFiles: loads `.env.test` into `process.env`
 - `helpers.js` — `getApp()` (lazy import), `request()` (supertest), `authenticatedAgent(user)` (session cookie), `cleanDb()`, `disconnectDb()`
 - `fixtures/index.js` — `createUser()`, `createShout()`, `createComment()`, `createPoll()`, `createPollVote()`, `createIgnoredUser()`, `createSocial()`. Users have `_rawPassword` for auth in tests.
@@ -418,7 +423,7 @@ jsdom + @testing-library/react.
 - ES Modules (`"type": "module"`); `dotenv/config` only in `server.js`
 - App defined in `app.js` (exported), imported by `server.js` (prod) and test suite — no HTTP server or dotenv in tests
 - Prisma for all DB access (`prisma.user.findUnique(...)`, etc.); Zod for input validation in `helpers/validation.js`
-- Session auth (not JWT); sessions in SQLite via `connect-sqlite3`; test mode uses in-memory sessions; 30-day rolling sessions
+- Session auth (not JWT); sessions in Redis via `connect-redis`; test mode uses in-memory sessions; 30-day rolling sessions
 - bcryptjs: 10 rounds (4 in tests for speed); all IDs via `crypto.randomUUID()`
 - Rate limits: 20/min auth endpoints; 5/min forgot-password/send-code and email-change; 100/10min upload + shout-create (user falls back to IP)
 - Sharp: auto-rotate, strip EXIF, generate WebP variants, atomic tmp→permanent move
@@ -467,12 +472,12 @@ jsdom + @testing-library/react.
 
 ## Background Jobs (Workers)
 
-TypeScript + BullMQ + Redis. Separate Docker container, shares SQLite volume with API. Bull Board dashboard at `/workers` (nginx-proxied, HTTP basic auth).
+TypeScript + BullMQ + Redis. Separate Docker container, connects to same PostgreSQL + Redis as API. Bull Board dashboard at `/workers` (nginx-proxied, HTTP basic auth).
 
 | Job | Schedule | Action |
 |-----|----------|--------|
 | `notification-cleanup` | 00:00 UTC daily | Hard-delete notifications older than 14 days |
-| `db-backup` | 02:00 UTC daily | `VACUUM INTO` atomic backup, keep last 7 |
+| `db-backup` | 02:00 UTC daily | PostgreSQL dump backup, keep last 7 |
 
 Jobs registered idempotently via `upsertJobScheduler` (safe on restart). Dev container uses `tsx watch` with source mount for hot-reload.
 
@@ -485,26 +490,27 @@ Jobs registered idempotently via `upsertJobScheduler` (safe on restart). Dev con
 ./scripts/restore.sh prod TIMESTAMP
 ```
 
-Keeps last 3 snapshots (configurable via `KEEP` in script). DB backed up via `sqlite3 .backup` (hot, atomic, no downtime).
+Keeps last 3 snapshots (configurable via `KEEP` in script). DB backed up via the `db-backup` worker job (PostgreSQL dump, daily at 02:00 UTC).
 
 ## Docker Services
 
-6 services per environment. Prod port 3005, local port 3006. Dev volumes isolated (`-dev` suffix on all volume names).
+7 services per environment. Prod: nginx on 80/443, local port 3006. Dev volumes isolated (`-dev` suffix on all volume names).
 
 | Service | Description |
 |---------|-------------|
+| `postgres` | PostgreSQL 16 Alpine; data in named volume; healthcheck gates api + worker startup |
 | `api` | Express backend (internal port 3000); runs `prisma migrate deploy` on startup |
 | `media` | Hardened Nginx: WebP/JPG/JPEG/PNG/GIF/MP4 only, no dotfiles, immutable 1yr cache |
 | `nginx` | Reverse proxy: `/api/*`→api, `/media/*`→media, `/admin`+`/workers` with HTTP basic auth, SPA fallback. SSE: buffering off, 24h timeout. Prod blocks `/api/docs`. |
 | `web-build` | One-shot React build → `webdist` shared volume |
-| `redis` | Redis 7 Alpine; snapshot every 60s if ≥1 key changed |
+| `redis` | Redis 7 Alpine; snapshot every 60s if ≥1 key changed; also used for sessions |
 | `worker` | BullMQ jobs + Bull Board on port 3001; dev uses `tsx watch` |
 
 **Four compose files:**
-- `docker-compose.yml` — production (port 3005)
+- `docker-compose.yml` — production (nginx ports 80/443)
 - `docker-compose.dev.yml` — dev droplet (pre-built GHCR images, managed by CI)
 - `docker-compose.local.yml` — local dev (hot-reload, bind mounts, port 3006, isolated volumes)
-- `docker-compose.test.yml` — single `api-test` service with tmpfs DB, exits with vitest coverage code
+- `docker-compose.test.yml` — single `api-test` service, requires external PostgreSQL test DB, exits with vitest coverage code
 
 ## Known Tech Debt
 
