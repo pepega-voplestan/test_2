@@ -2,12 +2,8 @@ import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { request, authenticatedAgent, cleanDb, disconnectDb, getTestPrisma } from "../helpers.js";
 import { createUser, createShout, createComment, createNotification } from "../fixtures/index.js";
 
-/** Build a SQLite datetime string offset by `daysAgo` from now */
 function daysAgoStr(daysAgo) {
-  return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .replace("T", " ")
-    .replace(/\.\d{3}Z$/, "");
+  return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
 }
 
 describe("Notifications routes", () => {
@@ -191,10 +187,7 @@ describe("Notifications routes", () => {
       // Create 5 notifications with distinct timestamps (1 second apart)
       const notifs = [];
       for (let i = 0; i < 5; i++) {
-        const created_at = new Date(Date.now() - i * 1000)
-          .toISOString()
-          .replace("T", " ")
-          .replace(/\.\d{3}Z$/, "");
+        const created_at = new Date(Date.now() - i * 1000).toISOString();
         notifs.push(await createNotification({
           userId: user.id, actorId: actor.id, type: "reply",
           shoutId: shout.id, created_at,
