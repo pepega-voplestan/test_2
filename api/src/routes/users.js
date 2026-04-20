@@ -221,7 +221,7 @@ router.post("/users/:id/email/send-code", requireAuth, asyncHandler(async (req, 
 
   const code = generateCode();
   const id = crypto.randomUUID();
-  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
+  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000).toISOString();
   const payload = JSON.stringify({ userId: currentUserId, newEmail: email });
 
   await prisma.verificationCode.create({
