@@ -515,9 +515,9 @@ export async function setupAdmin() {
   });
 
   if (process.env.NODE_ENV === "production") {
-    await admin.initialize();
+    await admin.initialize?.();
   } else {
-    await admin.watch();
+    await admin.watch?.();
   }
 
   const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
