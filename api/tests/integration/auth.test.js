@@ -87,10 +87,7 @@ describe("Auth routes", () => {
     });
 
     it("returns 400 for an expired code", async () => {
-      const expiredAt = new Date(Date.now() - 1_000)
-        .toISOString()
-        .replace("T", " ")
-        .replace(/\.\d{3}Z$/, "");
+      const expiredAt = new Date(Date.now() - 1_000).toISOString();
       await createVerificationCode({
         email: "alice@test.local",
         code: "111111",
@@ -292,10 +289,7 @@ describe("Auth routes", () => {
     });
 
     it("returns 400 for an expired reset code", async () => {
-      const expiredAt = new Date(Date.now() - 1_000)
-        .toISOString()
-        .replace("T", " ")
-        .replace(/\.\d{3}Z$/, "");
+      const expiredAt = new Date(Date.now() - 1_000).toISOString();
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       await createVerificationCode({
         email: "alice@test.local",
