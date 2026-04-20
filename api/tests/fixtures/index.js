@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { getTestPrisma } from "../helpers.js";
 
 const uuid = () => crypto.randomUUID();
-const now = () => new Date().toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "");
+const now = () => new Date().toISOString();
 
 const DEFAULT_PASSWORD = "testpass123";
 
@@ -269,7 +269,7 @@ export async function createVerificationCode(overrides = {}) {
       code: overrides.code || "123456",
       purpose: overrides.purpose || "register",
       payload: overrides.payload || null,
-      expires_at: overrides.expires_at || new Date(Date.now() + 10 * 60 * 1000).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ""),
+      expires_at: overrides.expires_at || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       used: overrides.used ?? 0,
       attempts: overrides.attempts ?? 0,
       created_at: overrides.created_at || now(),
