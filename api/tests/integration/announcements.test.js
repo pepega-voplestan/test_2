@@ -44,10 +44,7 @@ describe("Announcements routes", () => {
     });
 
     it("returns the most recently created announcement when multiple exist", async () => {
-      const earlier = new Date(Date.now() - 60_000)
-        .toISOString()
-        .replace("T", " ")
-        .replace(/\.\d{3}Z$/, "");
+      const earlier = new Date(Date.now() - 60_000).toISOString();
       await createAnnouncement({ content: "Old announcement", created_at: earlier });
       await createAnnouncement({ content: "New announcement" });
 
