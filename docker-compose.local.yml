@@ -29,6 +29,8 @@ services:
     command: redis-server --save 60 1 --loglevel warning
     volumes:
       - redis-data-dev:/data
+    ports:
+      - "6379:6379"
     networks:
       - vopli-dev
 
