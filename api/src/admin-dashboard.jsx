@@ -54,6 +54,27 @@ const TimelineSection = ({ title, data }) => {
   );
 };
 
+const OnlineUsersSection = ({ data }) => {
+  if (!data || data.length === 0) return (
+    <Box variant="card" p="xl" mb="lg">
+      <H4 mb="sm">Сейчас онлайн</H4>
+      <Text color="grey60">Нет авторизованных пользователей</Text>
+    </Box>
+  );
+  return (
+    <Box variant="card" p="xl" mb="lg">
+      <H4 mb="lg">Сейчас онлайн ({data.length})</H4>
+      <Box flex flexWrap="wrap" style={{ gap: 8 }}>
+        {data.map((u) => (
+          <Box key={u.id} style={{ background: "var(--primary20, #e8eafc)", borderRadius: 4, padding: "4px 10px" }}>
+            <Text style={{ fontSize: 13 }} fontWeight="bold">@{u.username}</Text>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+};
+
 const TopCreatorsSection = ({ data }) => {
   if (!data || data.length === 0) return null;
   const maxCount = Math.max(...data.map((d) => d.count), 1);
@@ -131,7 +152,14 @@ const Dashboard = () => {
         <StatCard label="Комментарии" value={stats.totals.comments} icon="MessageCircle" />
         <StatCard label="Лайки" value={stats.totals.shoutLikes + stats.totals.commentLikes} icon="ThumbsUp" />
         <StatCard label="Медиа" value={stats.totals.media} icon="Image" />
+        <StatCard label="Онлайн сейчас" value={stats.totals.live?.total ?? "—"} icon="Group" />
+        <StatCard label="Онлайн (авт.)" value={stats.totals.live?.loggedIn ?? "—"} icon="LogIn" />
+        <StatCard label="Онлайн (анон.)" value={stats.totals.live?.anon ?? "—"} icon="Eye" />
+        <StatCard label="Сессий (Redis)" value={stats.totals.sessions?.total ?? "—"} icon="Archive" />
       </Box>
+
+      {/* Online users */}
+      <OnlineUsersSection data={stats.totals.live?.onlineUsers} />
 
       {/* Top creators */}
       <TopCreatorsSection data={stats.topCreators} />

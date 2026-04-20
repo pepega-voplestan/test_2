@@ -5,6 +5,7 @@ import AdminJSExpress from "@adminjs/express";
 import { Database, Resource, getModelByName } from "@adminjs/prisma";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
+import { getClientStats } from "./sse.js";
 import { verifyPassword } from "./auth.js";
 
 AdminJS.registerAdapter({ Database, Resource });
@@ -14,6 +15,47 @@ const componentLoader = new ComponentLoader();
 const Components = {
   Dashboard: componentLoader.add("Dashboard", join(__dirname, "admin-dashboard")),
 };
+
+let _dashRedis = null;
+async function getSessionStats() {
+  try {
+    if (!_dashRedis) {
+      const { createClient } = await import("redis");
+      _dashRedis = createClient({
+        socket: {
+          host: process.env.REDIS_HOST || "localhost",
+          port: Number(process.env.REDIS_PORT) || 6379,
+        },
+      });
+      await _dashRedis.connect();
+    }
+
+    const keys = [];
+    let cursor = '0';
+    do {
+      const result = await _dashRedis.scan(cursor, { MATCH: "sess:*", COUNT: 100 });
+      cursor = String(result.cursor);
+      keys.push(...result.keys);
+    } while (cursor !== '0');
+
+    const total = keys.length;
+    const userIds = new Set();
+    if (keys.length > 0) {
+      const values = await _dashRedis.mGet(keys);
+      for (const v of values) {
+        if (!v) continue;
+        try {
+          const parsed = JSON.parse(v);
+          if (parsed?.user?.id) userIds.add(parsed.user.id);
+        } catch { /* invalid session JSON */ }
+      }
+    }
+    return { total, unique: userIds.size };
+  } catch (err) {
+    console.error("[Admin] Session stats error:", err.message);
+    return null;
+  }
+}
 
 export async function setupAdmin() {
   // ── Validate required env vars ──
@@ -412,13 +454,14 @@ export async function setupAdmin() {
 
         const dateFilter = since ? { created_at: { gte: new Date(since) } } : {};
 
-        const [users, shouts, comments, shoutLikes, commentLikes, media] = await Promise.all([
+        const [users, shouts, comments, shoutLikes, commentLikes, media, sessions] = await Promise.all([
           prisma.user.count({ where: dateFilter }),
           prisma.shout.count({ where: { is_deleted: 0, ...dateFilter } }),
           prisma.comment.count({ where: { is_deleted: 0, ...dateFilter } }),
           prisma.shoutLike.count({ where: dateFilter }),
           prisma.commentLike.count({ where: dateFilter }),
           prisma.media.count({ where: dateFilter }),
+          getSessionStats(),
         ]);
 
         // Timeline: group by date (last N days, or last 30 if "all time")
@@ -448,7 +491,13 @@ export async function setupAdmin() {
         };
 
         return {
-          totals: { users, shouts, comments, shoutLikes, commentLikes, media },
+          totals: { users, shouts, comments, shoutLikes, commentLikes, media, sessions, live: await (async () => {
+            const stats = getClientStats();
+            const onlineUsers = stats.loggedInUserIds.length > 0
+              ? await prisma.user.findMany({ where: { id: { in: stats.loggedInUserIds } }, select: { id: true, username: true } })
+              : [];
+            return { ...stats, onlineUsers };
+          })() },
           timeline: {
             shouts: toTimeline(shoutsTimeline),
             comments: toTimeline(commentsTimeline),
@@ -464,6 +513,12 @@ export async function setupAdmin() {
       softwareBrothers: false,
     },
   });
+
+  if (process.env.NODE_ENV === "production") {
+    await admin.initialize();
+  } else {
+    await admin.watch();
+  }
 
   const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
     admin,
