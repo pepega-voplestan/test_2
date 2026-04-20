@@ -61,7 +61,7 @@ router.post("/auth/register/send-code", asyncHandler(async (req, res) => {
   const password_hash = await hashPassword(password);
   const avatar = avatarFor(username);
   const payload = JSON.stringify({ username, password_hash, avatar });
-  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
+  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
   await prisma.verificationCode.create({
     data: { id, email, code, purpose: "register", payload, expires_at },
@@ -246,7 +246,7 @@ router.post("/auth/forgot-password/send-code", asyncHandler(async (req, res) => 
 
   const code = generateCode();
   const id = crypto.randomUUID();
-  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
+  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
   await prisma.verificationCode.create({
     data: {
