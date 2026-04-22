@@ -23,6 +23,15 @@ export function addClient(req, res) {
   });
 }
 
+export function getClientStats() {
+  let anon = 0;
+  const loggedInUserIds = new Set();
+  for (const [, { userId }] of clients) {
+    userId ? loggedInUserIds.add(userId) : anon++;
+  }
+  return { total: clients.size, loggedIn: loggedInUserIds.size, anon, loggedInUserIds: [...loggedInUserIds] };
+}
+
 export function broadcast(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const [, client] of clients) {

@@ -65,7 +65,7 @@ export async function enrichFeed(topShouts, currentUserId) {
   const polls = topIds.length
     ? await prisma.poll.findMany({
         where: { shout_id: { in: topIds } },
-        include: { options: true },
+        include: { options: { orderBy: { position: "asc" } } },
       })
     : [];
 

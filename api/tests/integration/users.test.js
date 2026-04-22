@@ -317,7 +317,7 @@ describe("Users routes", () => {
       const alice = await createUser({ username: "alice", email: "alice@test.local" });
       const agent = await authenticatedAgent(alice);
 
-      const expired = new Date(Date.now() - 1000).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "");
+      const expired = new Date(Date.now() - 1000).toISOString();
       await createVerificationCode({
         email: "newalice@test.local",
         code: "111111",
