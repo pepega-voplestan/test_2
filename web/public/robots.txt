@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /workers
+
+Sitemap: https://vopley.net/sitemap.xml

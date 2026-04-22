@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth, hashPassword, verifyPassword } from "../auth.js";
 import { sendVerificationEmail } from "../email.js";
-import { asyncHandler, utcTimestamp, toSqliteDatetime, avatarFor } from "../helpers/common.js";
+import { asyncHandler, utcTimestamp, avatarFor } from "../helpers/common.js";
 import {
   profileUpdateSchema, emailChangeSchema, verifyCodeSchema,
   generateCode, CODE_EXPIRY_MINUTES, CODE_MAX_ATTEMPTS,
@@ -221,7 +221,7 @@ router.post("/users/:id/email/send-code", requireAuth, asyncHandler(async (req, 
 
   const code = generateCode();
   const id = crypto.randomUUID();
-  const expires_at = toSqliteDatetime(new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000));
+  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000).toISOString();
   const payload = JSON.stringify({ userId: currentUserId, newEmail: email });
 
   await prisma.verificationCode.create({
@@ -273,7 +273,7 @@ router.post("/users/:id/email/verify", requireAuth, asyncHandler(async (req, res
 
   // Check expiry
   const now = new Date();
-  const expiresAt = new Date(record.expires_at + "Z");
+  const expiresAt = new Date(record.expires_at);
   if (now > expiresAt) {
     await prisma.verificationCode.update({ where: { id: record.id }, data: { used: 1 } });
     return res.status(400).json({ error: "Код истёк. Запросите новый код" });
