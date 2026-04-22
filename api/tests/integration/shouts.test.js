@@ -78,7 +78,7 @@ describe("Shouts routes", () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       // Use distinct timestamps (second-precision) to guarantee deterministic ordering
       const t = (offsetSecs) =>
-        new Date(Date.now() - offsetSecs * 1000).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "");
+        new Date(Date.now() - offsetSecs * 1000).toISOString();
 
       await createShout({ userId: user.id, content: "Oldest", created_at: t(10) });
       await createShout({ userId: user.id, content: "Middle", created_at: t(5) });

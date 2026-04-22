@@ -227,10 +227,11 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
         shout_id: id,
         multi: pollData.multi ? 1 : 0,
         options: {
-          create: pollData.options.map(text => ({
+          create: pollData.options.map((text, i) => ({
             id: crypto.randomUUID(),
             text,
             votes: 0,
+            position: i,
           })),
         },
       },

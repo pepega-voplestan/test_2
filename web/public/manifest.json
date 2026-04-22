@@ -1,0 +1,11 @@
+{
+  "name": "Вопли",
+  "short_name": "Вопли",
+  "description": "Социалка для гиков и геймеров. Мысли, мемы, без шума и рекламы.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#131314",
+  "theme_color": "#131314",
+  "lang": "ru",
+  "icons": [{ "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" }]
+}

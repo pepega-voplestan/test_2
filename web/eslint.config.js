@@ -25,5 +25,5 @@ export default tseslint.config(
       globals: { ...globals.browser },
     },
   },
-  { ignores: ["dist/**", "coverage/**"] }
+  { ignores: ["dist/**", "coverage/**", ".adminjs/**"] }
 );
