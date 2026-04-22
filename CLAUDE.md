@@ -2,6 +2,8 @@
 
 <!-- Use /docs command when updating documentation — do not edit CLAUDE.md manually -->
 
+> **IMPORTANT — updating docs**: If asked to update or edit CLAUDE.md (or any file in `docs/`), you MUST invoke the `/docs` skill from `.claude/commands/docs.md` instead of editing files directly. Never manually edit CLAUDE.md or `docs/*.md` — always go through `/docs`.
+
 <!-- ESSENTIAL:START — Project core. Update via /docs command, do not touch manually -->
 
 Twitter/X-style social media app ("shouts" = posts). Russian UI. Stack: React 18 + TypeScript + Vite / Node.js + Express + Prisma + PostgreSQL / BullMQ + Redis / Docker + Nginx
