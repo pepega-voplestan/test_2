@@ -183,10 +183,11 @@ model Poll {
 }
 
 model PollOption {
-  id      String @id @default(uuid())
-  poll_id String
-  text    String
-  votes   Int    @default(0)
+  id       String @id @default(uuid())
+  poll_id  String
+  text     String
+  votes    Int    @default(0)
+  position Int    @default(0)
 
   poll      Poll       @relation(fields: [poll_id], references: [id], onDelete: Cascade)
   pollVotes PollVote[]

@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "../db.js";
 import { hashPassword, verifyPassword } from "../auth.js";
 import { sendVerificationEmail } from "../email.js";
-import { asyncHandler, toSqliteDatetime, avatarFor } from "../helpers/common.js";
+import { asyncHandler, avatarFor } from "../helpers/common.js";
 import {
   sendCodeSchema, verifyCodeSchema, loginSchema,
   forgotPasswordSchema, resetPasswordSchema,
@@ -61,7 +61,7 @@ router.post("/auth/register/send-code", asyncHandler(async (req, res) => {
   const password_hash = await hashPassword(password);
   const avatar = avatarFor(username);
   const payload = JSON.stringify({ username, password_hash, avatar });
-  const expires_at = toSqliteDatetime(new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000));
+  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
   await prisma.verificationCode.create({
     data: { id, email, code, purpose: "register", payload, expires_at },
@@ -104,7 +104,7 @@ router.post("/auth/register/verify", asyncHandler(async (req, res) => {
 
   // Check expiry
   const now = new Date();
-  const expiresAt = new Date(record.expires_at + "Z");
+  const expiresAt = new Date(record.expires_at);
   if (now > expiresAt) {
     await prisma.verificationCode.update({
       where: { id: record.id },
@@ -246,7 +246,7 @@ router.post("/auth/forgot-password/send-code", asyncHandler(async (req, res) => 
 
   const code = generateCode();
   const id = crypto.randomUUID();
-  const expires_at = toSqliteDatetime(new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000));
+  const expires_at = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
   await prisma.verificationCode.create({
     data: {
@@ -291,7 +291,7 @@ router.post("/auth/forgot-password/reset", asyncHandler(async (req, res) => {
 
   // Check expiry
   const now = new Date();
-  const expiresAt = new Date(record.expires_at + "Z");
+  const expiresAt = new Date(record.expires_at);
   if (now > expiresAt) {
     await prisma.verificationCode.update({
       where: { id: record.id },
