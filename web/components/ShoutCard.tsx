@@ -666,7 +666,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {showMedia && comment.media?.type === 'video' && (
             <div className="mb-2 rounded-lg overflow-hidden">
-              <video src={comment.media.url} controls loop className="max-h-[200px] max-w-full rounded-lg" ref={el => { if (el) el.volume = 0.3; }} />
+              <video src={comment.media.url} controls loop className="max-h-[200px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={el => { if (el) el.volume = 0.3; }} />
             </div>
           )}
 
@@ -1035,7 +1035,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
       {shout.media?.type === 'video' && (
         <div className="mb-3 rounded-lg overflow-hidden">
-          <video src={shout.media.url} controls loop className="max-h-[300px] max-w-full rounded-lg" ref={el => { if (el) el.volume = 0.3; }} />
+          <video src={shout.media.url} controls loop className="max-h-[300px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={el => { if (el) el.volume = 0.3; }} />
         </div>
       )}
 
