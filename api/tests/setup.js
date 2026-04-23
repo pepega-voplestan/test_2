@@ -35,11 +35,14 @@ export async function setup() {
   });
 
   // Write env vars to a temp file so the test worker process can pick them up
+  const avatarTmpPath = path.join(apiDir, "tests", "avatars");
+  fs.mkdirSync(avatarTmpPath, { recursive: true });
   const envContent = [
     `DATABASE_URL=${dbUrl}`,
     `NODE_ENV=test`,
     `SESSION_SECRET=test-secret`,
     `MEDIA_PATH=${mediaTmpPath}`,
+    `AVATAR_PATH=${avatarTmpPath}`,
   ].join("\n");
   fs.writeFileSync(path.join(apiDir, "tests", ".env.test"), envContent);
 
