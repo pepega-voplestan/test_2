@@ -6,6 +6,7 @@ import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import { useScrollLock } from '../hooks/useScrollLock';
 import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
+import Lightbox from './Lightbox';
 import { ProfileSocialsDisplay, ProfileSocialsEditor } from './ProfileSocials';
 
 interface ProfilePageProps {
@@ -43,6 +44,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [avatarLightboxOpen, setAvatarLightboxOpen] = useState(false);
 
   // Pending avatar file for preview-only upload
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
@@ -462,7 +465,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         <div className="flex items-center gap-4 mb-3">
           <div className="w-16 h-16 rounded-full overflow-hidden bg-th-input shrink-0">
             {profile.avatar ? (
-              <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
+              <>
+                <img
+                  src={profile.avatar}
+                  alt={profile.name}
+                  className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setAvatarLightboxOpen(true)}
+                />
+                {avatarLightboxOpen && (
+                  <Lightbox src={profile.avatar} onClose={() => setAvatarLightboxOpen(false)} />
+                )}
+              </>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-th-text-3 text-2xl font-bold">
                 {profile.name.charAt(0).toUpperCase()}
