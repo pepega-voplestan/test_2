@@ -5,7 +5,7 @@ import AdminJSExpress from "@adminjs/express";
 import { Database, Resource, getModelByName } from "@adminjs/prisma";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
-import { getClientStats } from "./sse.js";
+import { getClientStats, broadcast } from "./sse.js";
 import { verifyPassword } from "./auth.js";
 
 AdminJS.registerAdapter({ Database, Resource });
@@ -219,6 +219,16 @@ export async function setupAdmin() {
           },
           actions: {
             bulkDelete: { isAccessible: false },
+            edit: {
+              after: async (response, request, context) => {
+                if (request.method !== 'post') return response;
+                const shoutId = context.record?.params?.id;
+                if (!shoutId) return response;
+                const newPin = parseInt(request.payload?.is_pinned ?? '0', 10);
+                broadcast(newPin === 1 ? 'pin_shout' : 'unpin_shout', { shoutId });
+                return response;
+              },
+            },
             // Default delete → soft-delete
             delete: {
               handler: async (request, response, context) => {

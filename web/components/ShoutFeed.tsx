@@ -102,6 +102,8 @@ const ShoutFeed: React.FC = () => {
   // Keep ref in sync
   activeTabRef.current = activeTab;
 
+  const fetchShoutsRef = useRef<(reset?: boolean) => Promise<void>>(async () => {});
+
   const fetchShouts = useCallback(async (reset = false) => {
     const currentTab = activeTabRef.current;
 
@@ -146,6 +148,7 @@ const ShoutFeed: React.FC = () => {
       setIsLoadingMore(false);
     }
   }, []);
+  fetchShoutsRef.current = fetchShouts;
 
   const fetchAnnouncement = useCallback(async () => {
     setAnnouncementLoading(true);
@@ -261,7 +264,10 @@ const ShoutFeed: React.FC = () => {
       if (activeTabRef.current !== 'new') return;
       const shout = data.shout as Shout | undefined;
       if (shout) {
-        setShouts(prev => [shout, ...prev]);
+        setShouts(prev => {
+          if (prev[0]?.isPinned) return [prev[0], shout, ...prev.slice(1)];
+          return [shout, ...prev];
+        });
       }
     },
     delete_shout: (data: Record<string, unknown>) => {
@@ -270,6 +276,34 @@ const ShoutFeed: React.FC = () => {
       setShouts(prev => prev.map(s =>
         s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
       ));
+    },
+    pin_shout: (data: Record<string, unknown>) => {
+      if (activeTabRef.current !== 'new') return;
+      const shoutId = data.shoutId as string;
+      setShouts(prev => {
+        const idx = prev.findIndex(s => s.id === shoutId);
+        if (idx === -1) {
+          // Pinned shout not in feed — reload to show it at top
+          fetchShoutsRef.current(true);
+          return prev;
+        }
+        const pinned = { ...prev[idx], isPinned: true };
+        const rest = prev.filter(s => s.id !== shoutId).map(s => ({ ...s, isPinned: false }));
+        return [pinned, ...rest];
+      });
+    },
+    unpin_shout: (data: Record<string, unknown>) => {
+      const shoutId = data.shoutId as string;
+      setShouts(prev => {
+        const idx = prev.findIndex(s => s.id === shoutId);
+        if (idx === -1) return prev;
+        const unpinned = { ...prev[idx], isPinned: false };
+        const rest = prev.filter(s => s.id !== shoutId);
+        // Insert in chronological order (newest first); drop if older than everything loaded
+        const insertAt = rest.findIndex(s => s.timestamp < unpinned.timestamp);
+        if (insertAt === -1) return rest; // falls off current page — remove it
+        return [...rest.slice(0, insertAt), unpinned, ...rest.slice(insertAt)];
+      });
     },
     new_comment: (data: Record<string, unknown>) => {
       if (data.userId === userIdRef.current) return;
@@ -420,7 +454,7 @@ const ShoutFeed: React.FC = () => {
       ) : (
         <>
           <div className="bg-th-feed rounded-xl px-5 py-4 mb-3">
-            <ShoutInput onShoutCreated={(shout) => { setShouts(prev => [shout, ...prev]); }} />
+            <ShoutInput onShoutCreated={(shout) => { setShouts(prev => prev[0]?.isPinned ? [prev[0], shout, ...prev.slice(1)] : [shout, ...prev]); }} />
           </div>
 
           {isLoading && shouts.length === 0 && (
