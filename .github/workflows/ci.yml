@@ -8,6 +8,31 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vopley_test
+          POSTGRES_PASSWORD: test-secret
+          POSTGRES_DB: vopley_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +62,8 @@ jobs:
 
       - name: Run API tests
         run: npm test --prefix api
+        env:
+          TEST_DATABASE_URL: postgresql://vopley_test:test-secret@localhost:5432/vopley_test
 
       - name: Run web tests
         run: npm test --prefix web
