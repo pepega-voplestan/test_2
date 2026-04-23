@@ -14,6 +14,7 @@ const ALL_EVENTS = [
   "shout_like", "comment_like",
   "notification",
   "poll_update",
+  "pin_shout", "unpin_shout",
 ];
 
 export function SSEProvider({ children }: { children: ReactNode }) {
