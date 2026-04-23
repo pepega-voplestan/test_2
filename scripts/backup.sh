@@ -20,7 +20,7 @@ RCLONE_REMOTE="gdrive"
 RCLONE_PATH="vopli-backups"
 
 if [ "$ENV" = "dev" ]; then
-    COMPOSE_FILE="docker-compose.dev.yml"
+    COMPOSE_FILE="docker-compose.local.yml"
     ENV_FILE="--env-file .env.dev"
     SERVICE="api-dev"
     PREFIX="dev"
