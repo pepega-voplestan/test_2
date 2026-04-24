@@ -112,6 +112,15 @@ export const updateSocialSchema = z.object({
   url: z.string().min(1).max(500),
 });
 
+export const EDIT_WINDOW_MS = 60 * 1000; // 1 minute after creation
+
+export const editContentSchema = z.object({
+  content: z.string().min(1, { message: "Текст не может быть пустым" }).refine(
+    (val) => effectiveCharCount(val) <= SHOUT_MAX_LENGTH,
+    { message: `Текст слишком длинный (макс. ${SHOUT_MAX_LENGTH} символов)` }
+  ),
+});
+
 export const CODE_EXPIRY_MINUTES = 10;
 export const CODE_MAX_ATTEMPTS = 5;
 
