@@ -245,6 +245,17 @@ const ShoutFeed: React.FC = () => {
     ));
   }, []);
 
+  const editShout = useCallback((shoutId: string, newContent: string) => {
+    setShouts(prev => prev.map(s => s.id === shoutId ? { ...s, content: newContent } : s));
+  }, []);
+
+  const editComment = useCallback((shoutId: string, commentId: string, newContent: string) => {
+    setShouts(prev => prev.map(s => s.id === shoutId ? {
+      ...s,
+      comments: (s.comments || []).map(c => c.id === commentId ? { ...c, content: newContent } : c),
+    } : s));
+  }, []);
+
   // Accordion toggle: open clicked thread, close any previously open
   const handleThreadToggle = useCallback((shoutId: string) => {
     const el = shoutRefs.current.get(shoutId);
@@ -357,6 +368,20 @@ const ShoutFeed: React.FC = () => {
           c.id === commentId ? { ...c, likes } : c
         ),
       })));
+    },
+    edit_shout: (data: Record<string, unknown>) => {
+      const shoutId = data.shoutId as string;
+      const content = data.content as string;
+      setShouts(prev => prev.map(s => s.id === shoutId ? { ...s, content } : s));
+    },
+    edit_comment: (data: Record<string, unknown>) => {
+      const shoutId = data.shoutId as string;
+      const commentId = data.commentId as string;
+      const content = data.content as string;
+      setShouts(prev => prev.map(s => s.id === shoutId ? {
+        ...s,
+        comments: (s.comments || []).map(c => c.id === commentId ? { ...c, content } : c),
+      } : s));
     },
     poll_update: (data: Record<string, unknown>) => {
       const pollId = data.pollId as string;
@@ -504,6 +529,8 @@ const ShoutFeed: React.FC = () => {
                   onCommentAdded={addCommentToShout}
                   onDelete={removeShout}
                   onCommentDeleted={removeComment}
+                  onShoutEdited={editShout}
+                  onCommentEdited={editComment}
                   isThreadOpen={openThreadId === shout.id}
                   onThreadToggle={handleThreadToggle}
                 />
