@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
@@ -15,12 +15,15 @@ interface ShoutCardProps {
   onCommentAdded?: (shoutId: string, comment: Comment) => void;
   onDelete?: (shoutId: string) => void;
   onCommentDeleted?: (shoutId: string, commentId: string) => void;
+  onShoutEdited?: (shoutId: string, newContent: string) => void;
+  onCommentEdited?: (shoutId: string, commentId: string, newContent: string) => void;
   isThreadOpen?: boolean;
   onThreadToggle?: (shoutId: string) => void;
 }
 
 const SHOUT_MAX_LENGTH = 400;
 const NEWLINE_CHAR_COST = 40;
+const EDIT_WINDOW_MS = 60 * 1000;
 const MEDIA_MAX_MB = 10;
 
 const YT_PATTERNS = [
@@ -525,10 +528,11 @@ interface CommentCardProps {
   comment: Comment;
   showMedia?: boolean;
   onDelete?: (commentId: string) => void;
+  onEdit?: (commentId: string, newContent: string) => void;
   onReply?: (author: { id: string; name: string }) => void;
 }
 
-const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, onDelete, onReply }) => {
+const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, onDelete, onEdit, onReply }) => {
   const { user, openModal } = useAuth();
   const { isIgnored } = useIgnoredUsers();
   const [likes, setLikes] = useState(comment.likes);
@@ -543,6 +547,23 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const isOwner = user && user.id === comment.user.id;
   const isCommentAuthorIgnored = isIgnored(comment.user.id);
   const isCommentIgnored = isCommentAuthorIgnored && !ignoreRevealed;
+
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [tick, setTick] = useState(() => Date.now());
+  const editInputRef = useRef<MentionInputHandle>(null);
+  const editEndTime = useMemo(() => new Date(comment.timestamp).getTime() + EDIT_WINDOW_MS, [comment.timestamp]);
+  useEffect(() => {
+    if (!isOwner) return;
+    if (Date.now() >= editEndTime) return;
+    const id = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isOwner, editEndTime]);
+  const editSecsLeft = Math.max(0, Math.ceil((editEndTime - tick) / 1000));
+  const canEdit = !!isOwner && editSecsLeft > 0;
+  useEffect(() => { if (!canEdit && editMode) setEditMode(false); }, [canEdit, editMode]);
 
   useScrollLock(confirmDelete);
 
@@ -566,6 +587,26 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
       const data = await res.json();
       setLikes(data.likes); setIsLiked(data.isLiked);
     } catch { setIsLiked(!newIsLiked); setLikes(prev => newIsLiked ? prev - 1 : prev + 1); }
+  };
+
+  const handleSaveCommentEdit = async () => {
+    if (!user || !isOwner || !canEdit) return;
+    const trimmed = editContent.trim();
+    if (!trimmed) { setEditError('Текст не может быть пустым'); return; }
+    if (effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH) { setEditError(`Максимум ${SHOUT_MAX_LENGTH} символов`); return; }
+    setIsEditing(true); setEditError(null);
+    try {
+      const res = await fetch(`/api/v1/comments/${comment.id}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: trimmed }),
+      });
+      if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Ошибка ${res.status}`); }
+      setEditMode(false);
+      if (onEdit) onEdit(comment.id, trimmed);
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Ошибка сохранения');
+    } finally { setIsEditing(false); }
   };
 
   const handleDelete = async () => {
@@ -625,19 +666,53 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           </a>
           <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
           {isOwner && (
-            <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors ml-auto" title="Удалить">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1.5 ml-auto">
+              {canEdit && (
+                <>
+                  <span className="text-[10px] text-th-text-4 tabular-nums">{editSecsLeft}с</span>
+                  <button onClick={() => { setEditMode(true); setEditContent(comment.content); setEditError(null); }} className="text-xs text-th-text-4 hover:text-sky-400 transition-colors" title="Редактировать">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
+                </>
+              )}
+              <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors" title="Удалить">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
 
-          {comment.content && (
+          {editMode ? (
+            <div className="mb-2 bg-th-card p-3 rounded">
+              <MentionInput
+                ref={editInputRef}
+                placeholder="Редактировать..."
+                disabled={isEditing}
+                onContentChange={(text) => { setEditContent(text); setEditError(null); }}
+                onSubmit={handleSaveCommentEdit}
+                initialValue={editContent}
+                size="sm"
+              />
+              <div className="flex items-center justify-end gap-2 mt-2">
+                {editError && <span className="text-xs text-red-400 mr-auto">{editError}</span>}
+                <span className={`text-xs whitespace-nowrap tabular-nums ${effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH ? 'text-red-400 font-semibold' : 'text-th-text-4'}`}>
+                  {editSecsLeft}с · {effectiveLength(editContent, NEWLINE_CHAR_COST)}/{SHOUT_MAX_LENGTH}
+                </span>
+                <button onClick={() => { setEditMode(false); setEditError(null); }} disabled={isEditing} className="text-sm font-medium text-th-text-4 hover:text-th-text-2 transition-colors">Отмена</button>
+                <button onClick={handleSaveCommentEdit} disabled={isEditing || effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH || !editContent.trim()} className="text-sm font-medium text-[#0087ff] hover:text-blue-400 disabled:opacity-30 transition-colors">
+                  {isEditing ? '...' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
+          ) : comment.content ? (
             <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2">
               {renderContent(comment.content)}
             </div>
-          )}
+          ) : null}
 
           {showMedia ? embeds.map((embed, idx) => (
             <EmbedCard key={`embed-${idx}`} embed={embed} />
@@ -763,6 +838,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
 const ShoutCard: React.FC<ShoutCardProps> = ({
   shout, showMedia = true, onCommentAdded, onDelete, onCommentDeleted,
+  onShoutEdited, onCommentEdited,
   isThreadOpen, onThreadToggle
 }) => {
   const { user, openModal } = useAuth();
@@ -783,6 +859,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const mentionInputRef = useRef<MentionInputHandle>(null);
+  const editInputRef = useRef<MentionInputHandle>(null);
   const [pendingMention, setPendingMention] = useState<{ id: string; name: string } | null>(null);
 
   const [likes, setLikes] = useState(shout.likes);
@@ -809,6 +886,22 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
   const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
   const isOwner = user && shout.user && user.id === shout.user.id;
+
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [tick, setTick] = useState(() => Date.now());
+  const editEndTime = useMemo(() => new Date(shout.timestamp).getTime() + EDIT_WINDOW_MS, [shout.timestamp]);
+  useEffect(() => {
+    if (!isOwner || !!shout.isDeleted) return;
+    if (Date.now() >= editEndTime) return;
+    const id = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isOwner, shout.isDeleted, editEndTime]);
+  const editSecsLeft = Math.max(0, Math.ceil((editEndTime - tick) / 1000));
+  const canEdit = !!isOwner && !shout.isDeleted && editSecsLeft > 0;
+  useEffect(() => { if (!canEdit && editMode) setEditMode(false); }, [canEdit, editMode]);
 
   // Content hiding state
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
@@ -1004,6 +1097,30 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   const handleCommentDelete = (commentId: string) => {
     if (onCommentDeleted) onCommentDeleted(shout.id, commentId);
+  };
+
+  const handleSaveShoutEdit = async () => {
+    if (!user || !isOwner || !canEdit) return;
+    const trimmed = editContent.trim();
+    if (!trimmed) { setEditError('Текст не может быть пустым'); return; }
+    if (effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH) { setEditError(`Максимум ${SHOUT_MAX_LENGTH} символов`); return; }
+    setIsEditing(true); setEditError(null);
+    try {
+      const res = await fetch(`/api/v1/shouts/${shout.id}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: trimmed }),
+      });
+      if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Ошибка ${res.status}`); }
+      setEditMode(false);
+      if (onShoutEdited) onShoutEdited(shout.id, trimmed);
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Ошибка сохранения');
+    } finally { setIsEditing(false); }
+  };
+
+  const handleCommentEdit = (commentId: string, newContent: string) => {
+    if (onCommentEdited) onCommentEdited(shout.id, commentId, newContent);
   };
 
   const insertEmoji = (emoji: string) => mentionInputRef.current?.insertText(emoji);
@@ -1221,6 +1338,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                         </span>
                       </>
                     )}
+                    {canEdit && !editMode && (
+                      <>
+                        <span className="text-[10px] text-th-text-4 tabular-nums">{editSecsLeft}с</span>
+                        <button onClick={() => { setEditMode(true); setEditContent(shout.content); setEditError(null); }} className="text-xs text-th-text-4 hover:text-sky-400 transition-colors" title="Редактировать">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                     <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors" title="Удалить">
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -1230,7 +1357,29 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 )}
               </div>
 
-              {fullHide ? (
+              {editMode ? (
+                /* --- Edit mode --- */
+                <div className="mb-3 bg-th-card p-3 rounded">
+                  <MentionInput
+                    ref={editInputRef}
+                    placeholder="Редактировать..."
+                    disabled={isEditing}
+                    onContentChange={(text) => { setEditContent(text); setEditError(null); }}
+                    onSubmit={handleSaveShoutEdit}
+                    initialValue={editContent}
+                  />
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    {editError && <span className="text-xs text-red-400 mr-auto">{editError}</span>}
+                    <span className={`text-xs whitespace-nowrap tabular-nums ${effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH ? 'text-red-400 font-semibold' : 'text-th-text-4'}`}>
+                      {editSecsLeft}с · {effectiveLength(editContent, NEWLINE_CHAR_COST)}/{SHOUT_MAX_LENGTH}
+                    </span>
+                    <button onClick={() => { setEditMode(false); setEditError(null); }} disabled={isEditing} className="text-sm font-medium text-th-text-4 hover:text-th-text-2 transition-colors">Отмена</button>
+                    <button onClick={handleSaveShoutEdit} disabled={isEditing || effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH || !editContent.trim()} className="text-sm font-medium text-[#0087ff] hover:text-blue-400 disabled:opacity-30 transition-colors">
+                      {isEditing ? '...' : 'Сохранить'}
+                    </button>
+                  </div>
+                </div>
+              ) : fullHide ? (
                 /* --- Politics: blurred content overlay matching real body size --- */
                 <div className="relative rounded-lg overflow-hidden">
                   <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
@@ -1342,7 +1491,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       {repliesOpen && (
         <div className="mt-2">
            {hasComments && shout.comments!.map(comment => (
-               <CommentCard key={comment.id} comment={comment} showMedia={showMedia} onDelete={handleCommentDelete} onReply={handleMentionReply} />
+               <CommentCard key={comment.id} comment={comment} showMedia={showMedia} onDelete={handleCommentDelete} onEdit={handleCommentEdit} onReply={handleMentionReply} />
            ))}
            {user && !isShoutAuthorIgnored && (
              <div className="mt-4">
