@@ -135,6 +135,17 @@ const ShoutFeed: React.FC = () => {
       setShouts(prev => reset ? data.shouts : [...prev, ...data.shouts]);
       setHasMore(data.hasMore);
 
+      if (reset) {
+        const pinnedId = (data.shouts as { id: string; isPinned?: boolean }[]).find(s => s.isPinned)?.id ?? null;
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('pinnedCollapsed:') && key !== `pinnedCollapsed:${pinnedId}`) {
+            localStorage.removeItem(key);
+            i--;
+          }
+        }
+      }
+
       if (currentTab === 'popular') {
         popularOffsetRef.current = (reset ? 0 : popularOffsetRef.current) + data.shouts.length;
       } else {
