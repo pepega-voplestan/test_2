@@ -9,9 +9,9 @@ web/
 │   ├── AuthModal.tsx           # Login/register/password-reset modal (multi-step, email verification)
 │   ├── ShoutFeed.tsx           # Feed: new/popular/announcements tabs, SSE updates; popular has dual sort
 │   ├── ShoutInput.tsx          # Composer: media, emoji, polls, drag-drop, Ctrl+Enter; spoiler/nsfw require media
-│   ├── ShoutCard.tsx           # Shout display: comments, likes, delete; inline embeds
+│   ├── ShoutCard.tsx           # Shout display: comments, likes, delete, inline edit (60s window with countdown); inline embeds; collapsible pinned shout (eye icon, localStorage)
 │   ├── ShoutPage.tsx           # Single shout detail view (#/shout/:id)
-│   ├── MentionInput.tsx        # contenteditable composer with @mention autocomplete
+│   ├── MentionInput.tsx        # contenteditable composer with @mention autocomplete; ref handle: clear/focus/scrollIntoView/insertText/insertMention/wrapSpoiler/populate
 │   ├── NotificationDropdown.tsx # Bell + unread badge + hover-to-read list + infinite scroll
 │   ├── ProfilePage.tsx         # Profile view/edit + social links
 │   ├── ProfileSocials.tsx      # Social icons grid (copy-to-clipboard) + modal editor
@@ -66,6 +66,8 @@ web/
 - **Social links**: 12 platforms, one per platform per user. Non-URL socials (Discord, Battle.net, PSN, Xbox, Epic Games) support copy-to-clipboard.
 - Lightbox: drag-to-dismiss (vertical swipe + velocity), Escape, click-outside, scroll lock. Pointer events (unified mouse/touch). Pinch-to-zoom, scroll-to-zoom, pan when zoomed, double-tap/click to toggle zoom.
 - **`NotificationDropdown.tsx`**: bell icon + unread badge in Header; notifications as `<a>` elements (right-click open in new tab); actor avatar, text, snippet, relative timestamp; "mark all read" button; infinite scroll via `IntersectionObserver`.
+- **Collapsible pinned shout**: eye icon in ShoutCard owner header toggles collapse. State persisted in `localStorage` at `pinnedCollapsed:${shoutId}`; stale keys pruned on feed reset (when current pinned id changes); `unpin_shout` SSE clears the key immediately.
+- **Inline editing (shout/comment)**: edit button appears for the author within 60s of creation, with a live countdown. Uses `MentionInput` with `populate()` to pre-fill existing content. Saves via `PUT /shouts/:id` or `PUT /comments/:id`; result broadcast via `edit_shout`/`edit_comment` SSE to all clients.
 
 ## Mobile & iOS — Known Issues and Rules
 
