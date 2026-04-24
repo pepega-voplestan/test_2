@@ -51,6 +51,18 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
     );
   }
 
+  function handleShoutEdited(_shoutId: string, newContent: string) {
+    setShout((prev) => prev ? { ...prev, content: newContent } : prev);
+  }
+
+  function handleCommentEdited(_shoutId: string, commentId: string, newContent: string) {
+    setShout((prev) =>
+      prev
+        ? { ...prev, comments: (prev.comments || []).map((c) => c.id === commentId ? { ...c, content: newContent } : c) }
+        : prev
+    );
+  }
+
   function handleDelete() {
     // Mark as deleted in-place so comments remain visible
     setShout((prev) =>
@@ -84,6 +96,21 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
       setShout((prev) =>
         prev
           ? { ...prev, comments: (prev.comments || []).filter((c) => c.id !== commentId) }
+          : prev
+      );
+    },
+    edit_shout: (data: Record<string, unknown>) => {
+      if (data.shoutId !== shoutId) return;
+      const content = data.content as string;
+      setShout((prev) => prev ? { ...prev, content } : prev);
+    },
+    edit_comment: (data: Record<string, unknown>) => {
+      if (data.shoutId !== shoutId) return;
+      const commentId = data.commentId as string;
+      const content = data.content as string;
+      setShout((prev) =>
+        prev
+          ? { ...prev, comments: (prev.comments || []).map((c) => c.id === commentId ? { ...c, content } : c) }
           : prev
       );
     },
@@ -176,6 +203,8 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
             onCommentAdded={handleCommentAdded}
             onDelete={handleDelete}
             onCommentDeleted={handleCommentDeleted}
+            onShoutEdited={handleShoutEdited}
+            onCommentEdited={handleCommentEdited}
           />
         </div>
       )}
