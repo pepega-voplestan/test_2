@@ -1099,14 +1099,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   return (
     <div className="flex flex-col relative">
       {shout.isPinned && !isDeleted && !isOwner && !isPinnedCollapsed && (
-        <div
-          className="absolute top-0 right-0 cursor-pointer"
-          title="Свернуть вопль"
-          onClick={togglePinnedCollapsed}
-        >
+        <div className="absolute top-0 right-0 flex flex-col items-center gap-0.5">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700] rotate-45" viewBox="0 0 24 24" fill="currentColor">
             <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
           </svg>
+          <span className="cursor-pointer" onClick={togglePinnedCollapsed} title="Свернуть вопль">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700]" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+              <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+            </svg>
+          </span>
         </div>
       )}
       {shout.isPinned && !isDeleted && isPinnedCollapsed ? (
@@ -1207,14 +1209,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 {isOwner && (
                   <div className="flex items-center gap-2 ml-auto">
                     {shout.isPinned && (
-                      <span
-                        className="cursor-pointer"
-                        title={isPinnedCollapsed ? 'Раскрыть вопль' : 'Свернуть вопль'}
-                        onClick={togglePinnedCollapsed}
-                      >
+                      <span className="flex flex-col items-center gap-0.5">
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700] rotate-45" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
                         </svg>
+                        <span className="cursor-pointer" onClick={togglePinnedCollapsed} title="Свернуть вопль">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700]" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                            <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                          </svg>
+                        </span>
                       </span>
                     )}
                     <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors" title="Удалить">
