@@ -47,6 +47,8 @@ All prefixed `/api/v1/`. Auth = session cookie required. Full spec at `/api/docs
 | POST | `/announcements` | Secret | Replace announcement (requires `ANNOUNCEMENTS_SECRET`; soft-deletes all previous) |
 | GET | `/users/mentions` | — | All non-banned users for @mention autocomplete |
 | GET | `/shouts` | — | `limit`, `offset`, `sortBy=new\|popular`, max 50 |
+| PUT | `/shouts/:id` | Yes | Edit shout content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
+| PUT | `/comments/:id` | Yes | Edit comment content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
 | POST | `/upload/media` | Yes | ≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP |
 | POST | `/upload/avatar` | Yes | ≤2MB; generates 64/128/256px square WebP |
 | GET | `/notifications` | Yes | Cursor-paginated (14-day window, default 20, max 50); `cursor` = ISO timestamp |
@@ -90,6 +92,10 @@ Single shared `EventSource` in `SSEContext.tsx`. All consumers subscribe via `su
 | `shout_like` | `{ id, likes }` | Shout like toggled |
 | `comment_like` | `{ id, likes }` | Comment like toggled |
 | `poll_update` | `{ pollId, options: [{ id, votes }], totalVoters }` | Poll vote cast |
+| `pin_shout` | `{ shoutId }` | Admin pins a shout |
+| `unpin_shout` | `{ shoutId }` | Admin unpins a shout |
+| `edit_shout` | `{ shoutId, content }` | Shout content edited by author |
+| `edit_comment` | `{ shoutId, commentId, content }` | Comment content edited by author |
 
 **Targeted (`broadcastToUser`):**
 
@@ -208,6 +214,7 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - Sharp: auto-rotate, strip EXIF, generate WebP variants, atomic tmp→permanent move
 - Animated GIFs: preserve `original.gif` + WebP thumbnail from first frame; `animated: true` in media DTO
 - Char limit: 400 effective chars; each newline costs 40 (`effectiveCharCount` helper)
+- Edit window: 60s after creation (`EDIT_WINDOW_MS` in `helpers/validation.js`); enforced by backend timestamp check, mirrored on frontend with countdown
 - Error responses: `{ error: "message" }`; graceful SIGTERM/SIGINT → Prisma disconnect
 - Request logging: `[API] METHOD /path` to stdout (skipped in test mode)
 - Unused vars prefixed `_`
