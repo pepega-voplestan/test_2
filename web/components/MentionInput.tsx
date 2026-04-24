@@ -10,6 +10,7 @@ export interface MentionInputHandle {
   insertText(text: string): void;
   insertMention(user: { id: string; name: string }): void;
   wrapSpoiler(): void;
+  populate(serialized: string): void;
 }
 
 export interface MentionInputProps {
@@ -20,6 +21,7 @@ export interface MentionInputProps {
   onImagePaste?: (file: File) => void;
   className?: string;
   size?: 'sm' | 'md';
+  initialValue?: string;
 }
 
 // Exported so parents can compute the effective character count.
@@ -495,8 +497,55 @@ function scrollFormIntoView(el: HTMLElement, expectKeyboard = false): void {
   }, 800);
 }
 
+// Parse a serialized string (mentions + spoilers) and populate the contenteditable el.
+function populateFromSerialized(el: HTMLElement, serialized: string): void {
+  el.innerHTML = '';
+  if (!serialized) return;
+
+  const TOKEN_RE = /(@\[([^\]]+):([^\]]+)\]|\|\|(.+?)\|\|)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  const appendText = (text: string) => {
+    const lines = text.split('\n');
+    lines.forEach((line, i) => {
+      if (i > 0) el.appendChild(document.createElement('br'));
+      if (line) el.appendChild(document.createTextNode(line));
+    });
+  };
+
+  let lastWasMention = false;
+  while ((match = TOKEN_RE.exec(serialized)) !== null) {
+    if (match.index > lastIndex) {
+      appendText(serialized.slice(lastIndex, match.index));
+      lastWasMention = false;
+    }
+    if (match[1].startsWith('@[')) {
+      const span = document.createElement('span');
+      span.contentEditable = 'false';
+      span.dataset.mentionId = match[3];
+      span.dataset.mentionName = match[2];
+      span.textContent = `@${match[2]}`;
+      span.className = 'text-blue-400 font-medium';
+      el.appendChild(span);
+      lastWasMention = true;
+    } else {
+      const span = document.createElement('span');
+      span.dataset.spoiler = '';
+      span.className = 'bg-th-text-4/30 rounded px-0.5';
+      span.textContent = match[4] ?? '';
+      el.appendChild(span);
+      lastWasMention = false;
+    }
+    lastIndex = TOKEN_RE.lastIndex;
+  }
+
+  if (lastIndex < serialized.length) appendText(serialized.slice(lastIndex));
+  else if (lastWasMention) el.appendChild(document.createTextNode('​'));
+}
+
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
-  const { placeholder, disabled, onContentChange, onSubmit, onImagePaste, className, size = 'md' } = props;
+  const { placeholder, disabled, onContentChange, onSubmit, onImagePaste, className, size = 'md', initialValue } = props;
 
   const editorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -746,7 +795,23 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
       el.dispatchEvent(new InputEvent('input', { bubbles: true }));
     },
+    populate(serialized: string) {
+      const el = editorRef.current;
+      if (!el) return;
+      populateFromSerialized(el, serialized);
+      setIsEmpty(serialized === '');
+      onContentChangeRef.current(serialized);
+    },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Populate from initialValue on mount (used by edit mode)
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el || !initialValue) return;
+    populateFromSerialized(el, initialValue);
+    setIsEmpty(initialValue === '');
+    onContentChangeRef.current(initialValue);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function doInsertMention(query: MentionQuery, user: MentionUser) {
     const { atNode, atNodeOffset, query: q } = query;
