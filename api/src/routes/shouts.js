@@ -5,7 +5,7 @@ import { requireAuth } from "../auth.js";
 import { broadcast, broadcastToUser } from "../sse.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { asyncHandler, utcTimestamp } from "../helpers/common.js";
-import { shoutSchema, SHOUT_MAX_LENGTH } from "../helpers/validation.js";
+import { shoutSchema, editContentSchema, SHOUT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
 import { enrichFeed } from "../helpers/feed.js";
 
@@ -101,6 +101,36 @@ router.get("/shouts/:id", asyncHandler(async (req, res) => {
   if (!raw) return res.status(404).json({ error: "Запись не найдена" });
   const [dto] = await enrichFeed([raw], currentUserId);
   res.json({ shout: dto });
+}));
+
+/* edit shout content (author only, within 1 minute of creation) */
+router.put("/shouts/:id", requireAuth, asyncHandler(async (req, res) => {
+  const shoutId = req.params.id;
+  const userId = req.session.user.id;
+
+  const shout = await prisma.shout.findFirst({
+    where: { id: shoutId, is_deleted: 0 },
+    select: { id: true, user_id: true, created_at: true },
+  });
+  if (!shout) return res.status(404).json({ error: "Запись не найдена" });
+  if (shout.user_id !== userId) return res.status(403).json({ error: "Можно редактировать только свои записи" });
+
+  const ageMs = Date.now() - new Date(shout.created_at).getTime();
+  if (ageMs > EDIT_WINDOW_MS) return res.status(403).json({ error: "Время редактирования истекло" });
+
+  const parsed = editContentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
+    return res.status(400).json({ error: "Текст не может быть пустым" });
+  }
+
+  const { content } = parsed.data;
+  await prisma.shout.update({ where: { id: shoutId }, data: { content } });
+
+  console.log(`[Shouts] Edited shout ${shoutId} by ${userId}`);
+  broadcast("edit_shout", { shoutId, content });
+  res.json({ ok: true });
 }));
 
 /* delete shout (soft-delete, author only) */
