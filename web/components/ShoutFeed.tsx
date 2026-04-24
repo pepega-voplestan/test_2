@@ -294,6 +294,7 @@ const ShoutFeed: React.FC = () => {
     },
     unpin_shout: (data: Record<string, unknown>) => {
       const shoutId = data.shoutId as string;
+      localStorage.removeItem(`pinnedCollapsed:${shoutId}`);
       setShouts(prev => {
         const idx = prev.findIndex(s => s.id === shoutId);
         if (idx === -1) return prev;
