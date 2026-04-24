@@ -5,7 +5,7 @@ import { requireAuth } from "../auth.js";
 import { broadcast, broadcastToUser } from "../sse.js";
 import { asyncHandler, utcTimestamp } from "../helpers/common.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
-import { commentSchema, SHOUT_MAX_LENGTH } from "../helpers/validation.js";
+import { commentSchema, editContentSchema, SHOUT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
 
 const router = Router();
@@ -202,6 +202,36 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   }
 
   res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
+}));
+
+/* edit comment content (author only, within 1 minute of creation) */
+router.put("/comments/:id", requireAuth, asyncHandler(async (req, res) => {
+  const commentId = req.params.id;
+  const userId = req.session.user.id;
+
+  const comment = await prisma.comment.findFirst({
+    where: { id: commentId, is_deleted: 0 },
+    select: { id: true, user_id: true, shout_id: true, created_at: true },
+  });
+  if (!comment) return res.status(404).json({ error: "Комментарий не найден" });
+  if (comment.user_id !== userId) return res.status(403).json({ error: "Можно редактировать только свои комментарии" });
+
+  const ageMs = Date.now() - new Date(comment.created_at).getTime();
+  if (ageMs > EDIT_WINDOW_MS) return res.status(403).json({ error: "Время редактирования истекло" });
+
+  const parsed = editContentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
+    return res.status(400).json({ error: "Текст не может быть пустым" });
+  }
+
+  const { content } = parsed.data;
+  await prisma.comment.update({ where: { id: commentId }, data: { content } });
+
+  console.log(`[Comments] Edited comment ${commentId} by ${userId}`);
+  broadcast("edit_comment", { shoutId: comment.shout_id, commentId, content });
+  res.json({ ok: true });
 }));
 
 /* delete comment (soft-delete, author only) */
