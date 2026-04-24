@@ -816,6 +816,18 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [politicsRevealed, setPoliticsRevealed] = useState(false);
   const [ignoreRevealed, setIgnoreRevealed] = useState(false);
 
+  const pinnedCollapseKey = shout.isPinned ? `pinnedCollapsed:${shout.id}` : null;
+  const [isPinnedCollapsed, setIsPinnedCollapsed] = useState(() =>
+    pinnedCollapseKey ? localStorage.getItem(pinnedCollapseKey) === '1' : false
+  );
+  const togglePinnedCollapsed = () => {
+    if (!pinnedCollapseKey) return;
+    const next = !isPinnedCollapsed;
+    setIsPinnedCollapsed(next);
+    if (next) localStorage.setItem(pinnedCollapseKey, '1');
+    else localStorage.removeItem(pinnedCollapseKey);
+  };
+
   const isDeleted = !!shout.isDeleted;
   const isShoutAuthorIgnored = !isDeleted && !!shout.user && isIgnored(shout.user.id);
   const isShoutIgnored = isShoutAuthorIgnored && !ignoreRevealed;
@@ -1086,14 +1098,32 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
   return (
     <div className="flex flex-col relative">
-      {shout.isPinned && !isDeleted && !isOwner && (
-        <div className="absolute top-0 right-0" title="Закреплено">
+      {shout.isPinned && !isDeleted && !isOwner && !isPinnedCollapsed && (
+        <div
+          className="absolute top-0 right-0 cursor-pointer"
+          title="Свернуть вопль"
+          onClick={togglePinnedCollapsed}
+        >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700] rotate-45" viewBox="0 0 24 24" fill="currentColor">
             <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
           </svg>
         </div>
       )}
-      {isShoutIgnored ? (
+      {shout.isPinned && !isDeleted && isPinnedCollapsed ? (
+        <div className="flex items-center justify-center py-0.5">
+          <button
+            onClick={togglePinnedCollapsed}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-th-card border border-th-border shadow-sm hover:bg-th-elevated transition-colors text-xs text-th-text-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-[12px] h-[12px] text-[#e6a700] rotate-45 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
+            </svg>
+            <span className="font-bold">ЗАКРЕП</span>
+            <span>·</span>
+            <span className="font-bold">ПОКАЗАТЬ</span>
+          </button>
+        </div>
+      ) : isShoutIgnored ? (
         /* --- Ignored user shout: fully hidden behind spoiler overlay --- */
         <div
           className="flex items-center gap-3 py-2 cursor-pointer rounded-lg bg-th-text-4/40 hover:bg-th-text-4/50 px-4 transition-all duration-200 select-none"
@@ -1177,7 +1207,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 {isOwner && (
                   <div className="flex items-center gap-2 ml-auto">
                     {shout.isPinned && (
-                      <span title="Закреплено">
+                      <span
+                        className="cursor-pointer"
+                        title={isPinnedCollapsed ? 'Раскрыть вопль' : 'Свернуть вопль'}
+                        onClick={togglePinnedCollapsed}
+                      >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700] rotate-45" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
                         </svg>
