@@ -804,6 +804,49 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // iOS Safari places the cursor at the end of the content after deleting a
+  // contentEditable=false mention span. Intercept the deletion ourselves so we
+  // can remove the span and place the caret at the correct position.
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el || !isIOS()) return;
+
+    const onBeforeInput = (e: InputEvent) => {
+      if (e.inputType !== 'deleteContentBackward') return;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      if (!range.collapsed) return;
+
+      const { startContainer, startOffset } = range;
+      let mentionSpan: HTMLElement | null = null;
+
+      if (startContainer.nodeType === Node.TEXT_NODE && startOffset === 0) {
+        const prev = startContainer.previousSibling;
+        if (prev?.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).dataset.mentionId) {
+          mentionSpan = prev as HTMLElement;
+        }
+      } else if (startContainer.nodeType === Node.ELEMENT_NODE && startOffset > 0) {
+        const prev = (startContainer as Element).childNodes[startOffset - 1];
+        if (prev?.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).dataset.mentionId) {
+          mentionSpan = prev as HTMLElement;
+        }
+      }
+
+      if (!mentionSpan) return;
+
+      e.preventDefault();
+      const charOffset = getCharOffset(el, range);
+      const mentionLen = (mentionSpan.textContent ?? '').length;
+      mentionSpan.remove();
+      setCaretAtOffset(el, charOffset - mentionLen);
+      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    };
+
+    el.addEventListener('beforeinput', onBeforeInput as EventListener);
+    return () => el.removeEventListener('beforeinput', onBeforeInput as EventListener);
+  }, []);
+
   // Populate from initialValue on mount (used by edit mode)
   useEffect(() => {
     const el = editorRef.current;
