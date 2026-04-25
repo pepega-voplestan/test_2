@@ -54,8 +54,10 @@ export function buildSnippet(content, options = {}) {
   if (!content) return "";
   if (spoiler === "politics" || spoiler === true) return "ПОЛИТИКА";
 
+  const trimmed = content.replace(/^(@\[[^\]]+:[^\]]+\]\s*)+/, '');
+
   // Replace inline spoiler ||text|| with asterisks matching the hidden text length
-  const withMaskedSpoilers = content.replace(/\|\|(.+?)\|\|/gs, (_, inner) =>
+  const withMaskedSpoilers = (trimmed || content).replace(/\|\|(.+?)\|\|/gs, (_, inner) =>
     "*".repeat(inner.replace(/@\[([^\]:]+):[^\]]+\]/g, "@$1").length)
   );
 
