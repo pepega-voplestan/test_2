@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Shout, Comment } from '../types';
+import { Shout, Comment, CommentQuote, ShoutMedia } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
@@ -522,6 +522,61 @@ function renderInline(text: string, keyPrefix: string) {
   });
 }
 
+/* ---------- Quote block (Discord-style) ---------- */
+
+const QuoteBlock: React.FC<{ quote: CommentQuote; ignored: boolean; replyToId: string | null }> = ({ quote, ignored, replyToId }) => {
+  const handleClick = () => {
+    if (!replyToId) return;
+    const el = document.getElementById(`comment-${replyToId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'background-color 0.2s ease-in, background-color 0.8s ease-out 0.2s';
+    el.style.backgroundColor = 'rgba(0, 135, 255, 0.18)';
+    setTimeout(() => { el.style.backgroundColor = ''; setTimeout(() => { el.style.transition = ''; }, 800); }, 400);
+  };
+
+  let content: React.ReactNode;
+  if (ignored) {
+    content = <span className="italic">Ответ на комментарий игнорируемого пользователя</span>;
+  } else if (quote.deleted) {
+    content = <span className="italic">Комментарий удалён</span>;
+  } else if (quote.mediaOnly) {
+    content = (
+      <>
+        {quote.author && (
+          <span className="font-semibold text-th-text-2 shrink-0">@{quote.author.name}:&nbsp;</span>
+        )}
+        <span className="italic truncate">{quote.text}</span>
+      </>
+    );
+  } else {
+    content = (
+      <>
+        {quote.author && (
+          <span className="font-semibold text-th-text-2 shrink-0">@{quote.author.name}:&nbsp;</span>
+        )}
+        <span className="truncate">{quote.text}</span>
+      </>
+    );
+  }
+
+  const isClickable = !!replyToId && !quote.deleted && !ignored;
+  return (
+    <div
+      className={`flex items-center gap-1 mb-2 pl-2 border-l-2 border-[#0087ff] bg-th-inset/40 rounded-r text-xs text-th-text-4 overflow-hidden ${isClickable ? 'cursor-pointer hover:bg-th-inset/70 transition-colors' : ''}`}
+      style={{ minHeight: 28, WebkitTapHighlightColor: 'transparent' }}
+      onClick={isClickable ? handleClick : undefined}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0 opacity-50" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+      </svg>
+      <div className="flex items-baseline min-w-0 overflow-hidden py-1">
+        {content}
+      </div>
+    </div>
+  );
+};
+
 /* ---------- Comment card (separate entity) ---------- */
 
 interface CommentCardProps {
@@ -529,7 +584,7 @@ interface CommentCardProps {
   showMedia?: boolean;
   onDelete?: (commentId: string) => void;
   onEdit?: (commentId: string, newContent: string) => void;
-  onReply?: (author: { id: string; name: string }) => void;
+  onReply?: (author: { id: string; name: string }, commentId: string, content: string, media?: ShoutMedia) => void;
 }
 
 const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, onDelete, onEdit, onReply }) => {
@@ -624,6 +679,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   };
 
   const embeds = comment.content ? extractEmbeds(comment.content) : [];
+  const quoteAuthorIgnored = comment.quote?.author ? isIgnored(comment.quote.author.id) : false;
 
   if (isCommentIgnored) {
     return (
@@ -685,6 +741,10 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             </div>
           )}
         </div>
+
+          {comment.quote && (
+            <QuoteBlock quote={comment.quote} ignored={quoteAuthorIgnored} replyToId={comment.replyToId ?? null} />
+          )}
 
           {editMode ? (
             <div className="mb-2 bg-th-card p-3 rounded">
@@ -784,7 +844,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             {isCommentAuthorIgnored ? (
               <span className="opacity-30 cursor-default" title="Вы игнорируете этого пользователя">Ответить</span>
             ) : (
-              <button onClick={() => onReply?.({ id: comment.user.id, name: comment.user.name })} className="hover:text-th-text-2 transition-colors">Ответить</button>
+              <button onClick={() => onReply?.({ id: comment.user.id, name: comment.user.name }, comment.id, comment.content, comment.media)} className="hover:text-th-text-2 transition-colors" style={{ WebkitTapHighlightColor: 'transparent' }}>Ответить</button>
             )}
             {isCommentAuthorIgnored ? (
               <span className="flex items-center gap-1 opacity-30 cursor-default" title="Вы игнорируете этого пользователя">
@@ -861,6 +921,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const mentionInputRef = useRef<MentionInputHandle>(null);
   const editInputRef = useRef<MentionInputHandle>(null);
   const [pendingMention, setPendingMention] = useState<{ id: string; name: string } | null>(null);
+
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [replyToAuthor, setReplyToAuthor] = useState<{ id: string; name: string } | null>(null);
+  const [replyToPreview, setReplyToPreview] = useState<string>('');
+
+  const clearReplyTo = () => { setReplyToId(null); setReplyToAuthor(null); setReplyToPreview(''); };
 
   const [likes, setLikes] = useState(shout.likes);
   const [isLiked, setIsLiked] = useState(
@@ -974,8 +1040,21 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     return () => clearTimeout(id);
   }, [repliesOpen, pendingFocus]);
 
-  const handleMentionReply = (author: { id: string; name: string }) => {
+  const handleMentionReply = (author: { id: string; name: string }, commentId: string, content: string, media?: ShoutMedia) => {
     if (!user) { openModal(); return; }
+    setReplyToId(commentId);
+    setReplyToAuthor(author);
+    const masked = content.replace(/\|\|(.+?)\|\|/gs, (_: string, inner: string) => '*'.repeat(inner.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').length));
+    const stripped = masked.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
+    let preview: string;
+    if (stripped) {
+      preview = stripped.length > 120 ? stripped.slice(0, 120) + '…' : stripped;
+    } else if (media) {
+      preview = media.type === 'image' ? 'Прикрепленное изображение' : 'Прикрепленное видео';
+    } else {
+      preview = '';
+    }
+    setReplyToPreview(preview);
     if (!repliesOpen) {
       toggleThread();
       setPendingMention(author);
@@ -1045,6 +1124,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       const body: Record<string, string> = { content: replyContent.trim() };
       if (replyMediaId) body.mediaId = replyMediaId;
       else if (replyDetectedYtId) { const m = replyContent.match(/https?:\/\/[^\s]+/); if (m) body.youtubeUrl = m[0]; }
+      if (replyToId) body.replyToId = replyToId;
       const res = await fetch(`/api/v1/shouts/${shout.id}/replies`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -1057,11 +1137,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
         user: { id: user.id, name: user.name, avatar: user.avatar },
         content: replyContent.trim(), timestamp: new Date().toISOString(),
         likes: 0, likedBy: [],
+        replyToId: replyToId ?? null,
+        quote: data.quote ?? null,
         ...(data.media ? { media: data.media } : {}),
       };
       mentionInputRef.current?.clear(); // also calls onContentChange('') → setReplyContent('')
       setReplyMediaId(null); setReplyMediaPreview(null);
       setReplyDetectedYtId(null); setReplyError(null);
+      clearReplyTo();
       if (onCommentAdded) onCommentAdded(shout.id, newComment);
     } catch (err: unknown) {
       setReplyError(err instanceof Error ? err.message : 'Не удалось отправить ответ');
@@ -1497,6 +1580,26 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
              <div className="mt-4">
                <div className="bg-th-card p-3 rounded flex gap-4">
                   <form className="w-full flex flex-col gap-2 min-w-0" onSubmit={(e) => { e.preventDefault(); submitReply(); }}>
+                      {replyToId && replyToAuthor && (
+                        <div className="flex items-center gap-2 pl-2 border-l-2 border-[#0087ff] bg-th-inset/40 rounded-r text-xs text-th-text-4 overflow-hidden">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0 opacity-50" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          <span className="font-semibold text-th-text-2 shrink-0">@{replyToAuthor.name}:&nbsp;</span>
+                          <span className="truncate flex-1 py-1">{replyToPreview}</span>
+                          <button
+                            type="button"
+                            onClick={clearReplyTo}
+                            className="shrink-0 flex items-center justify-center text-th-text-4 hover:text-th-text-2 transition-colors"
+                            style={{ minWidth: 44, minHeight: 36, WebkitTapHighlightColor: 'transparent' }}
+                            title="Отменить ответ"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                       <MentionInput
                           ref={mentionInputRef}
                           placeholder="Напишите ответ..."
