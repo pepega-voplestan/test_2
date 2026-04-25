@@ -97,12 +97,15 @@ model Comment {
   user_id    String
   content    String
   media_id   String?
+  reply_to   String?
   is_deleted Int     @default(0)
   created_at DateTime @default(now())
 
   shout         Shout          @relation(fields: [shout_id], references: [id])
   user          User           @relation(fields: [user_id], references: [id])
   media         Media?         @relation(fields: [media_id], references: [id])
+  repliedTo     Comment?       @relation("CommentReplies", fields: [reply_to], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  replies       Comment[]      @relation("CommentReplies")
   likes         CommentLike[]
   notifications Notification[]
 
