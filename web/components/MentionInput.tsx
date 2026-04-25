@@ -845,7 +845,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
     el.addEventListener('beforeinput', onBeforeInput as EventListener);
     return () => el.removeEventListener('beforeinput', onBeforeInput as EventListener);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Populate from initialValue on mount (used by edit mode)
   useEffect(() => {
