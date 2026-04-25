@@ -58,6 +58,7 @@ export const commentSchema = z.object({
   ),
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
+  replyToId: z.string().uuid().nullable().optional(),
 });
 
 export const announcementSchema = z.object({
