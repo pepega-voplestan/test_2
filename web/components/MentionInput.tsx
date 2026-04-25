@@ -550,6 +550,7 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
   const editorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const savedOffsetRef = useRef<{ start: number; end: number } | null>(null);
+  const iosPostDeleteOffsetRef = useRef<number | null>(null);
   const { users, loading, fetchUsers } = useMentionUsers();
   const { user: currentUser } = useAuth();
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
@@ -804,9 +805,11 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // iOS Safari places the cursor at the end of the content after deleting a
-  // contentEditable=false mention span. Intercept the deletion ourselves so we
-  // can remove the span and place the caret at the correct position.
+  // iOS Safari drops the cursor to the end after deleting a contentEditable=false
+  // mention span. Record the correct target offset in beforeinput (before iOS moves
+  // the cursor), then restore it in handleInput via rAF after iOS finishes.
+  // We do NOT preventDefault — letting iOS handle the DOM removal avoids breaking
+  // the native input event flow (which the @ picker depends on).
   useEffect(() => {
     const el = editorRef.current;
     if (!el || !isIOS()) return;
@@ -835,12 +838,8 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
       if (!mentionSpan) return;
 
-      e.preventDefault();
       const charOffset = getCharOffset(el, range);
-      const mentionLen = (mentionSpan.textContent ?? '').length;
-      mentionSpan.remove();
-      setCaretAtOffset(el, charOffset - mentionLen);
-      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      iosPostDeleteOffsetRef.current = charOffset - (mentionSpan.textContent ?? '').length;
     };
 
     el.addEventListener('beforeinput', onBeforeInput as EventListener);
@@ -928,6 +927,15 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
 
     // Decorate new ||text|| patterns in plain text nodes (skips existing spoiler spans)
     decorateSpoilers(el);
+
+    // iOS drops the cursor to the end after deleting a mention span — restore it.
+    if (iosPostDeleteOffsetRef.current !== null) {
+      const target = iosPostDeleteOffsetRef.current;
+      iosPostDeleteOffsetRef.current = null;
+      requestAnimationFrame(() => {
+        if (editorRef.current) setCaretAtOffset(editorRef.current, target);
+      });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
