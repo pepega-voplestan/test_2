@@ -17,6 +17,15 @@ export function avatarFor(username) {
   )}`;
 }
 
+import { buildSnippet } from "./mentions.js";
+
+export function resolveQuoteText(content, media) {
+  const text = buildSnippet(content, { maxLen: 150 });
+  if (text) return { text, mediaOnly: false };
+  if (!media) return { text: "", mediaOnly: false };
+  return { text: media.media_type === "image" ? "Прикрепленное изображение" : "Прикрепленное видео", mediaOnly: true };
+}
+
 /** Wrap async Express handler to forward rejections to error middleware */
 export const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
