@@ -23,6 +23,13 @@ export type ShoutMedia =
   | { type: 'video'; url: string; thumb?: string; width?: number; height?: number }
   | { type: 'youtube'; videoId: string; embedUrl: string; title?: string | null; channel?: string | null };
 
+export interface CommentQuote {
+  text: string;
+  deleted: boolean;
+  mediaOnly?: boolean;
+  author: { id: string; name: string } | null;
+}
+
 export interface Comment {
   id: string;
   shoutId: string;
@@ -32,6 +39,8 @@ export interface Comment {
   likes: number;
   likedBy?: string[];
   media?: ShoutMedia;
+  replyToId?: string | null;
+  quote?: CommentQuote | null;
 }
 
 export interface MentionUser {

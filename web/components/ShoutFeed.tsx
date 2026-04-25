@@ -8,6 +8,12 @@ import { useSSE } from '../hooks/useSSE';
 
 const PAGE_SIZE = 25;
 
+const QUOTE_MAX_LEN = 150;
+function clientSnippet(content: string): string {
+  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
+  return stripped.length > QUOTE_MAX_LEN ? stripped.slice(0, QUOTE_MAX_LEN) + '…' : stripped;
+}
+
 type FeedTab = 'new' | 'popular' | 'announcements';
 
 interface Announcement {
@@ -230,10 +236,16 @@ const ShoutFeed: React.FC = () => {
   }, []);
 
   const removeComment = useCallback((shoutId: string, commentId: string) => {
+    const deletedQuote = { text: 'Комментарий удалён', deleted: true, author: null };
     setShouts(prev =>
       prev.map(s =>
         s.id === shoutId
-          ? { ...s, comments: (s.comments || []).filter(c => c.id !== commentId) }
+          ? {
+              ...s,
+              comments: (s.comments || [])
+                .filter(c => c.id !== commentId)
+                .map(c => c.replyToId === commentId ? { ...c, quote: deletedQuote } : c),
+            }
           : s
       )
     );
@@ -250,9 +262,14 @@ const ShoutFeed: React.FC = () => {
   }, []);
 
   const editComment = useCallback((shoutId: string, commentId: string, newContent: string) => {
+    const newSnippet = clientSnippet(newContent);
     setShouts(prev => prev.map(s => s.id === shoutId ? {
       ...s,
-      comments: (s.comments || []).map(c => c.id === commentId ? { ...c, content: newContent } : c),
+      comments: (s.comments || []).map(c => {
+        if (c.id === commentId) return { ...c, content: newContent };
+        if (c.replyToId === commentId && c.quote && !c.quote.deleted) return { ...c, quote: { ...c.quote, text: newSnippet } };
+        return c;
+      }),
     } : s));
   }, []);
 
@@ -344,9 +361,15 @@ const ShoutFeed: React.FC = () => {
       if (data.userId === userIdRef.current) return;
       const shoutId = data.shoutId as string;
       const commentId = data.commentId as string;
+      const deletedQuote = { text: 'Комментарий удалён', deleted: true, author: null };
       setShouts(prev => prev.map(s =>
         s.id === shoutId
-          ? { ...s, comments: (s.comments || []).filter(c => c.id !== commentId) }
+          ? {
+              ...s,
+              comments: (s.comments || [])
+                .filter(c => c.id !== commentId)
+                .map(c => c.replyToId === commentId ? { ...c, quote: deletedQuote } : c),
+            }
           : s
       ));
     },
@@ -378,9 +401,14 @@ const ShoutFeed: React.FC = () => {
       const shoutId = data.shoutId as string;
       const commentId = data.commentId as string;
       const content = data.content as string;
+      const newSnippet = clientSnippet(content);
       setShouts(prev => prev.map(s => s.id === shoutId ? {
         ...s,
-        comments: (s.comments || []).map(c => c.id === commentId ? { ...c, content } : c),
+        comments: (s.comments || []).map(c => {
+          if (c.id === commentId) return { ...c, content };
+          if (c.replyToId === commentId && c.quote && !c.quote.deleted) return { ...c, quote: { ...c.quote, text: newSnippet } };
+          return c;
+        }),
       } : s));
     },
     poll_update: (data: Record<string, unknown>) => {

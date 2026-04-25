@@ -1,6 +1,7 @@
 import { prisma } from "../db.js";
 import { buildMedia } from "./media.js";
-import { utcTimestamp } from "./common.js";
+import { utcTimestamp, resolveQuoteText } from "./common.js";
+
 
 export async function enrichFeed(topShouts, currentUserId) {
   const topIds = topShouts.map((s) => s.id);
@@ -100,6 +101,22 @@ export async function enrichFeed(topShouts, currentUserId) {
     }
   }
 
+  // Batch-fetch quoted comments (any is_deleted value — we show tombstone for deleted ones)
+  const replyToIds = [...new Set(comments.map(c => c.reply_to).filter(Boolean))];
+  const quotedComments = replyToIds.length
+    ? await prisma.comment.findMany({
+        where: { id: { in: replyToIds } },
+        select: { id: true, content: true, is_deleted: true, user: { select: { id: true, username: true } }, media: { select: { media_type: true } } },
+      })
+    : [];
+  const quoteMap = new Map();
+  for (const qc of quotedComments) {
+    quoteMap.set(qc.id, qc.is_deleted > 0
+      ? { text: "Комментарий удалён", deleted: true, author: null }
+      : { ...resolveQuoteText(qc.content, qc.media), deleted: false, author: { id: qc.user.id, name: qc.user.username } }
+    );
+  }
+
   // Group comments by shout
   const commentsByShout = new Map();
   for (const c of comments) {
@@ -122,6 +139,8 @@ export async function enrichFeed(topShouts, currentUserId) {
       timestamp: utcTimestamp(row.created_at),
       likes: commentLikesCount.get(row.id) || 0,
       likedBy: currentUserId && commentLikedSet.has(row.id) ? [currentUserId] : [],
+      replyToId: row.reply_to ?? null,
+      quote: row.reply_to ? (quoteMap.get(row.reply_to) ?? null) : null,
       ...(media ? { media } : {}),
     };
   }

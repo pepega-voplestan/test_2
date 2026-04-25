@@ -3,12 +3,13 @@ import crypto from "crypto";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { broadcast, broadcastToUser } from "../sse.js";
-import { asyncHandler, utcTimestamp } from "../helpers/common.js";
+import { asyncHandler, utcTimestamp, resolveQuoteText } from "../helpers/common.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { commentSchema, editContentSchema, SHOUT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
 
 const router = Router();
+
 
 /* reply (create comment) */
 router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) => {
@@ -30,7 +31,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   if (!parent)
     return res.status(404).json({ error: "Запись не найдена" });
 
-  const { content, mediaId, youtubeUrl } = parsed.data;
+  const { content, mediaId, youtubeUrl, replyToId } = parsed.data;
 
   // Must have content or media
   if (!content.trim() && !mediaId && !youtubeUrl) {
@@ -39,6 +40,18 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
 
   if (mediaId && youtubeUrl) {
     return res.status(400).json({ error: "Можно прикрепить или изображение, или видео" });
+  }
+
+  // Validate reply_to if provided
+  let referencedComment = null;
+  if (replyToId) {
+    referencedComment = await prisma.comment.findUnique({
+      where: { id: replyToId },
+      select: { id: true, shout_id: true, is_deleted: true, content: true, user: { select: { id: true, username: true } }, media: { select: { media_type: true } } },
+    });
+    if (!referencedComment || referencedComment.shout_id !== shoutId) {
+      return res.status(400).json({ error: "Комментарий для цитирования не найден" });
+    }
   }
 
   let finalMediaId = null;
@@ -97,12 +110,19 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
       user_id: req.session.user.id,
       content,
       media_id: finalMediaId,
+      reply_to: replyToId ?? null,
     },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
       media: true,
     },
   });
+
+  const quote = referencedComment
+    ? referencedComment.is_deleted > 0
+      ? { text: "Комментарий удалён", deleted: true, author: null }
+      : { ...resolveQuoteText(referencedComment.content, referencedComment.media), deleted: false, author: { id: referencedComment.user.id, name: referencedComment.user.username } }
+    : null;
 
   const commentDto = {
     id: comment.id,
@@ -117,6 +137,8 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     timestamp: utcTimestamp(comment.created_at),
     likes: 0,
     likedBy: [],
+    replyToId: replyToId ?? null,
+    quote,
     ...(comment.media ? { media: buildMedia(comment.media) } : {}),
   };
 
@@ -135,8 +157,17 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   // the parent shout's visibility_tag does NOT spoiler comment notifications
   const snippet = buildSnippet(content);
 
+  // The author of the comment being directly replied to (via replyToId) — may be null
+  const replyCommentAuthorId = (referencedComment && !referencedComment.is_deleted && referencedComment.user.id !== req.session.user.id)
+    ? referencedComment.user.id
+    : null;
+
   // Collect all potential notification recipients and filter out those who ignore the actor
-  const allRecipientIds = [...new Set([...mentionedIds, ...((!shoutDeleted && parent.user_id !== req.session.user.id) ? [parent.user_id] : [])])];
+  const allRecipientIds = [...new Set([
+    ...mentionedIds,
+    ...(!shoutDeleted && parent.user_id !== req.session.user.id ? [parent.user_id] : []),
+    ...(replyCommentAuthorId ? [replyCommentAuthorId] : []),
+  ])];
   const ignoreRows = allRecipientIds.length > 0
     ? await prisma.ignoredUser.findMany({
         where: { owner_user_id: { in: allRecipientIds }, target_user_id: req.session.user.id },
@@ -175,7 +206,8 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
 
   // Notify shout author of the reply (skip if deleted, commenter is author, already mentioned, or ignoring actor)
   const shoutAuthorId = parent.user_id;
-  if (!shoutDeleted && shoutAuthorId !== req.session.user.id && !mentionedIds.includes(shoutAuthorId) && !ignoringSet.has(shoutAuthorId)) {
+  const shoutAuthorGetsReply = !shoutDeleted && shoutAuthorId !== req.session.user.id && !mentionedIds.includes(shoutAuthorId) && !ignoringSet.has(shoutAuthorId);
+  if (shoutAuthorGetsReply) {
     const replyNotifId = crypto.randomUUID();
     await prisma.notification.create({
       data: {
@@ -201,7 +233,35 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     console.log(`[Comments] Sent reply notification for comment ${id} to shout author ${shoutAuthorId}`);
   }
 
-  res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}) });
+  // Notify the directly-quoted comment's author (always, regardless of @mention in text)
+  // Skip if: they're the same as shout author (already notified above), already getting a mention, or ignoring actor
+  if (replyCommentAuthorId && !mentionedIds.includes(replyCommentAuthorId) && !ignoringSet.has(replyCommentAuthorId) && !(replyCommentAuthorId === shoutAuthorId && shoutAuthorGetsReply)) {
+    const replyCommentNotifId = crypto.randomUUID();
+    await prisma.notification.create({
+      data: {
+        id: replyCommentNotifId,
+        user_id: replyCommentAuthorId,
+        actor_id: req.session.user.id,
+        type: "reply",
+        shout_id: shoutId,
+        comment_id: id,
+        created_at: now,
+      },
+    });
+    broadcastToUser(replyCommentAuthorId, "notification", {
+      id: replyCommentNotifId,
+      type: "reply",
+      actor,
+      shoutId,
+      commentId: id,
+      isRead: false,
+      timestamp: utcTimestamp(now),
+      snippet,
+    });
+    console.log(`[Comments] Sent reply notification for comment ${id} to quoted comment author ${replyCommentAuthorId}`);
+  }
+
+  res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}), ...(quote ? { quote } : {}) });
 }));
 
 /* edit comment content (author only, within 1 minute of creation) */

@@ -123,6 +123,8 @@ SSE real-time updates only apply to the `new` tab. Popular and announcements tab
 
 PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. All historical migrations squashed into a single `0001_init` baseline. Sessions stored in Redis.
 
+**Migration / FK conventions**: IDs (UUIDs) are never updated in this project. Do not add `ON UPDATE CASCADE` to FK constraints — it will never fire and is dead boilerplate. Always use `ON UPDATE NO ACTION` (Prisma: `onUpdate: NoAction`) explicitly instead of relying on Prisma's default of `Cascade`.
+
 ### Models
 
 **User** (`users`)
@@ -218,6 +220,7 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - Error responses: `{ error: "message" }`; graceful SIGTERM/SIGINT → Prisma disconnect
 - Request logging: `[API] METHOD /path` to stdout (skipped in test mode)
 - Unused vars prefixed `_`
+- Shared helper functions belong in `helpers/` (e.g. `helpers/common.js`) — never duplicate a function across route or helper files; if it's needed in more than one place, extract it first
 
 ## Architecture Notes (Backend)
 
