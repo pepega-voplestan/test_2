@@ -1,5 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Shout, Comment } from '../types';
+
+const QUOTE_MAX_LEN = 150;
+function clientSnippet(content: string): string {
+  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
+  return stripped.length > QUOTE_MAX_LEN ? stripped.slice(0, QUOTE_MAX_LEN) + '…' : stripped;
+}
 import { navigateTo } from '../hooks/useRoute';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useAuth } from '../context/AuthContext';
@@ -44,9 +50,15 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
   }
 
   function handleCommentDeleted(_shoutId: string, commentId: string) {
+    const deletedQuote = { text: 'Комментарий удалён', deleted: true, author: null };
     setShout((prev) =>
       prev
-        ? { ...prev, comments: (prev.comments || []).filter((c) => c.id !== commentId) }
+        ? {
+            ...prev,
+            comments: (prev.comments || [])
+              .filter((c) => c.id !== commentId)
+              .map((c) => c.replyToId === commentId ? { ...c, quote: deletedQuote } : c),
+          }
         : prev
     );
   }
@@ -56,9 +68,17 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
   }
 
   function handleCommentEdited(_shoutId: string, commentId: string, newContent: string) {
+    const newSnippet = clientSnippet(newContent);
     setShout((prev) =>
       prev
-        ? { ...prev, comments: (prev.comments || []).map((c) => c.id === commentId ? { ...c, content: newContent } : c) }
+        ? {
+            ...prev,
+            comments: (prev.comments || []).map((c) => {
+              if (c.id === commentId) return { ...c, content: newContent };
+              if (c.replyToId === commentId && c.quote && !c.quote.deleted) return { ...c, quote: { ...c.quote, text: newSnippet } };
+              return c;
+            }),
+          }
         : prev
     );
   }
@@ -90,12 +110,18 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
       }
     },
     delete_comment: (data: Record<string, unknown>) => {
-      if (data.userId === userIdRef.current) return;
+      if (data.userId === userIdRef.current) return; // own deletions handled via handleCommentDeleted
       if (data.shoutId !== shoutId) return;
       const commentId = data.commentId as string;
+      const deletedQuote = { text: 'Комментарий удалён', deleted: true, author: null };
       setShout((prev) =>
         prev
-          ? { ...prev, comments: (prev.comments || []).filter((c) => c.id !== commentId) }
+          ? {
+              ...prev,
+              comments: (prev.comments || [])
+                .filter((c) => c.id !== commentId)
+                .map((c) => c.replyToId === commentId ? { ...c, quote: deletedQuote } : c),
+            }
           : prev
       );
     },
@@ -108,9 +134,17 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
       if (data.shoutId !== shoutId) return;
       const commentId = data.commentId as string;
       const content = data.content as string;
+      const newSnippet = clientSnippet(content);
       setShout((prev) =>
         prev
-          ? { ...prev, comments: (prev.comments || []).map((c) => c.id === commentId ? { ...c, content } : c) }
+          ? {
+              ...prev,
+              comments: (prev.comments || []).map((c) => {
+                if (c.id === commentId) return { ...c, content };
+                if (c.replyToId === commentId && c.quote && !c.quote.deleted) return { ...c, quote: { ...c.quote, text: newSnippet } };
+                return c;
+              }),
+            }
           : prev
       );
     },
