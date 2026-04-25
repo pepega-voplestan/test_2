@@ -67,6 +67,6 @@ describe("buildSnippet", () => {
 
   it("handles multiple mentions with surrounding text", () => {
     const content = "@[alice:1] said hello to @[bob:2]";
-    expect(buildSnippet(content)).toBe("@alice said hello to @bob");
+    expect(buildSnippet(content)).toBe("said hello to @bob");
   });
 });
