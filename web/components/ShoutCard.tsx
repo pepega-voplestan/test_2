@@ -1044,7 +1044,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!user) { openModal(); return; }
     setReplyToId(commentId);
     setReplyToAuthor(author);
-    const masked = content.replace(/\|\|(.+?)\|\|/gs, (_: string, inner: string) => '*'.repeat(inner.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').length));
+    const trimmed = content.replace(/^(@\[[^\]]+:[^\]]+\]\s*)+/, '');
+    const masked = (trimmed || content).replace(/\|\|(.+?)\|\|/gs, (_: string, inner: string) => '*'.repeat(inner.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').length));
     const stripped = masked.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
     let preview: string;
     if (stripped) {
