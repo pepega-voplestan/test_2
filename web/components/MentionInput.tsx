@@ -929,12 +929,14 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     decorateSpoilers(el);
 
     // iOS drops the cursor to the end after deleting a mention span — restore it.
+    // Synchronous restoration (no rAF) prevents the one-frame flash where iOS's
+    // wrong cursor position is painted before we can correct it. iOS completes the
+    // DOM mutation and selection update before firing the input event, so the
+    // selection is safe to override here.
     if (iosPostDeleteOffsetRef.current !== null) {
       const target = iosPostDeleteOffsetRef.current;
       iosPostDeleteOffsetRef.current = null;
-      requestAnimationFrame(() => {
-        if (editorRef.current) setCaretAtOffset(editorRef.current, target);
-      });
+      setCaretAtOffset(el, target);
     }
   };
 
