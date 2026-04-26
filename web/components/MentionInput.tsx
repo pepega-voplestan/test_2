@@ -805,11 +805,17 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // iOS Safari drops the cursor to the end after deleting a contentEditable=false
-  // mention span. Record the correct target offset in beforeinput (before iOS moves
-  // the cursor), then restore it in handleInput via rAF after iOS finishes.
-  // We do NOT preventDefault — letting iOS handle the DOM removal avoids breaking
-  // the native input event flow (which the @ picker depends on).
+  // iOS Safari repositions the cursor after any deletion adjacent to a contentEditable=false
+  // mention span.  Two strategies are used depending on what is being deleted:
+  //
+  // Cases 1 & 2 (deleting the span itself): record the target char offset in beforeinput,
+  // then restore it synchronously in handleInput.  iOS deletes the span cleanly and the
+  // post-delete cursor jump is predictable enough for the ref+restore approach.
+  //
+  // Cases 3 & 4 (deleting the single trailing space text node after the span): use
+  // e.preventDefault() to stop iOS entirely, then manually remove the text node and place
+  // the cursor.  The ref+restore approach is too racy here — iOS overrides our correction
+  // after the input event handler returns because the span is still in the DOM.
   useEffect(() => {
     const el = editorRef.current;
     if (!el || !isIOS()) return;
@@ -824,6 +830,8 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
       const { startContainer, startOffset } = range;
       let mentionSpan: HTMLElement | null = null;
 
+      // Cases 1 & 2: cursor is directly before a mention span — let iOS delete the span,
+      // then restore cursor position in handleInput via iosPostDeleteOffsetRef.
       if (startContainer.nodeType === Node.TEXT_NODE && startOffset === 0) {
         const prev = startContainer.previousSibling;
         if (prev?.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).dataset.mentionId) {
@@ -842,32 +850,57 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         return;
       }
 
-      // Case 3 — text-level cursor at offset 1, previous sibling is a mention span:
-      // backspace deletes the last char (the non-breaking space after the mention),
-      // leaving cursor directly adjacent to the span. iOS then jumps to end-of-content.
-      if (startContainer.nodeType === Node.TEXT_NODE && startOffset === 1) {
+      // Cases 3 & 4: cursor is at the end of the single-char text node (the non-breaking
+      // space) that follows a mention span.  Intercepting with preventDefault keeps iOS
+      // from ever running its own deletion+cursor logic, so our placement sticks.
+      let adjacentSpan: HTMLElement | null = null;
+      let textNodeToDelete: Text | null = null;
+
+      // Case 3: text-level cursor, text node has exactly 1 character
+      if (
+        startContainer.nodeType === Node.TEXT_NODE &&
+        startOffset === 1 &&
+        (startContainer as Text).length === 1
+      ) {
         const prev = (startContainer as Text).previousSibling;
         if (prev?.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).dataset.mentionId) {
-          const charOffset = getCharOffset(el, range);
-          iosPostDeleteOffsetRef.current = charOffset - 1;
-          return;
+          adjacentSpan = prev as HTMLElement;
+          textNodeToDelete = startContainer as Text;
         }
       }
 
-      // Case 4 — element-level cursor after a 1-char text node preceded by a mention span:
-      // iOS places an element-level range (e.g. {container: div, offset: N}) on tap-to-focus
-      // when no explicit cursor was set in the DOM (the reply-button auto-insert path).
-      // Case 2 above only checks if the child before the cursor is a mention span element;
-      // it misses when that child is the non-breaking space text node. Detect that here.
-      if (startContainer.nodeType === Node.ELEMENT_NODE && startOffset >= 2) {
+      // Case 4: element-level cursor (tap-to-focus on reply path sets no explicit DOM cursor,
+      // so iOS picks its own element-level position); child before cursor is a 1-char text
+      // node preceded by a mention span.
+      if (!adjacentSpan && startContainer.nodeType === Node.ELEMENT_NODE && startOffset >= 2) {
         const prevChild = (startContainer as Element).childNodes[startOffset - 1];
         if (prevChild?.nodeType === Node.TEXT_NODE && (prevChild as Text).length === 1) {
           const prevPrev = (startContainer as Element).childNodes[startOffset - 2];
           if (prevPrev?.nodeType === Node.ELEMENT_NODE && (prevPrev as HTMLElement).dataset.mentionId) {
-            const charOffset = getCharOffset(el, range);
-            iosPostDeleteOffsetRef.current = charOffset - 1;
+            adjacentSpan = prevPrev as HTMLElement;
+            textNodeToDelete = prevChild as Text;
           }
         }
+      }
+
+      if (adjacentSpan && textNodeToDelete) {
+        e.preventDefault();
+        const nextNode = textNodeToDelete.nextSibling;
+        textNodeToDelete.parentNode?.removeChild(textNodeToDelete);
+        const r = document.createRange();
+        // Prefer a text-level anchor when there is a text node immediately after the span
+        // so iOS has a concrete position to render the caret into.
+        if (nextNode?.nodeType === Node.TEXT_NODE) {
+          r.setStart(nextNode, 0);
+        } else {
+          r.setStartAfter(adjacentSpan);
+        }
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        // Fire input manually (preventDefault suppressed the native one) so handleInput
+        // serializes the updated content.
+        el.dispatchEvent(new InputEvent('input', { bubbles: true }));
       }
     };
 
