@@ -541,7 +541,7 @@ function populateFromSerialized(el: HTMLElement, serialized: string): void {
   }
 
   if (lastIndex < serialized.length) appendText(serialized.slice(lastIndex));
-  else if (lastWasMention) el.appendChild(document.createTextNode('​'));
+  else if (lastWasMention) el.appendChild(document.createTextNode('\u200B'));
 }
 
 const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((props, ref) => {
@@ -888,12 +888,22 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         const nextNode = textNodeToDelete.nextSibling;
         textNodeToDelete.parentNode?.removeChild(textNodeToDelete);
         const r = document.createRange();
-        // Prefer a text-level anchor when there is a text node immediately after the span
-        // so iOS has a concrete position to render the caret into.
         if (nextNode?.nodeType === Node.TEXT_NODE) {
+          // Existing text after the span — text-level cursor, iOS renders it correctly.
           r.setStart(nextNode, 0);
         } else {
-          r.setStartAfter(adjacentSpan);
+          // No text node after the span.  r.setStartAfter(span) would produce an
+          // element-level cursor ({container: parentBlock, offset: N}).  On iOS,
+          // element-level cursors inside a <div> block render at the right edge of
+          // that block — the "far right corner" jump.  This happens specifically in
+          // the reply path where iOS wraps the editor content in a <div> when the
+          // element is focused after being blurred.  Inserting a zero-width space
+          // gives the range a TEXT-LEVEL anchor so iOS renders the caret immediately
+          // after the mention text, not at the container edge.
+          // serializeContent() strips zero-width space nodes, so no content leak.
+          const anchor = document.createTextNode('\u200B');
+          adjacentSpan.after(anchor);
+          r.setStart(anchor, 0);
         }
         r.collapse(true);
         sel.removeAllRanges();
