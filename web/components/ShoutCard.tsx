@@ -920,7 +920,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const mentionInputRef = useRef<MentionInputHandle>(null);
   const editInputRef = useRef<MentionInputHandle>(null);
-  const [pendingMention, setPendingMention] = useState<{ id: string; name: string } | null>(null);
 
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [replyToAuthor, setReplyToAuthor] = useState<{ id: string; name: string } | null>(null);
@@ -1005,25 +1004,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (onThreadToggle) onThreadToggle(shout.id);
   };
 
-  // Once the thread is open and a pending mention is queued, insert it.
-  // Async context (useEffect + setTimeout) breaks iOS user activation,
-  // so on iOS we only scroll into view — the user taps to open keyboard.
-  // insertMention() still runs (it uses preventScroll focus for DOM ops).
-  useEffect(() => {
-    if (!repliesOpen || !pendingMention) return;
-    const id = setTimeout(() => {
-      if (isIOS()) {
-        mentionInputRef.current?.insertMention(pendingMention);
-        mentionInputRef.current?.scrollIntoView();
-      } else {
-        mentionInputRef.current?.focus(true);
-        mentionInputRef.current?.insertMention(pendingMention);
-      }
-      setPendingMention(null);
-    }, 50);
-    return () => clearTimeout(id);
-  }, [repliesOpen, pendingMention]);
-
   // Scroll reply input into view after the thread opens via "Ответить".
   // On iOS: scroll only, user taps to focus. On others: focus + scroll.
   const [pendingFocus, setPendingFocus] = useState(false);
@@ -1058,15 +1038,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     setReplyToPreview(preview);
     if (!repliesOpen) {
       toggleThread();
-      setPendingMention(author);
+      setPendingFocus(true);
     } else if (isIOS()) {
-      // iOS: insert mention (uses preventScroll focus for DOM ops), scroll only.
-      mentionInputRef.current?.insertMention(author);
       mentionInputRef.current?.scrollIntoView();
     } else {
-      // Android/Desktop: focus first to open keyboard, then insert mention.
       mentionInputRef.current?.focus(true);
-      mentionInputRef.current?.insertMention(author);
     }
   };
 
