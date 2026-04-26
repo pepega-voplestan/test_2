@@ -842,15 +842,31 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         return;
       }
 
-      // Cursor at offset 1 in a text node whose previous sibling is a mention span:
-      // backspace will delete that last character (typically the non-breaking space inserted after
-      // the mention), leaving the cursor directly adjacent to the span. iOS then
-      // jumps the cursor to end-of-content. Record the correct post-deletion offset.
+      // Case 3 — text-level cursor at offset 1, previous sibling is a mention span:
+      // backspace deletes the last char (the non-breaking space after the mention),
+      // leaving cursor directly adjacent to the span. iOS then jumps to end-of-content.
       if (startContainer.nodeType === Node.TEXT_NODE && startOffset === 1) {
         const prev = (startContainer as Text).previousSibling;
         if (prev?.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).dataset.mentionId) {
           const charOffset = getCharOffset(el, range);
           iosPostDeleteOffsetRef.current = charOffset - 1;
+          return;
+        }
+      }
+
+      // Case 4 — element-level cursor after a 1-char text node preceded by a mention span:
+      // iOS places an element-level range (e.g. {container: div, offset: N}) on tap-to-focus
+      // when no explicit cursor was set in the DOM (the reply-button auto-insert path).
+      // Case 2 above only checks if the child before the cursor is a mention span element;
+      // it misses when that child is the non-breaking space text node. Detect that here.
+      if (startContainer.nodeType === Node.ELEMENT_NODE && startOffset >= 2) {
+        const prevChild = (startContainer as Element).childNodes[startOffset - 1];
+        if (prevChild?.nodeType === Node.TEXT_NODE && (prevChild as Text).length === 1) {
+          const prevPrev = (startContainer as Element).childNodes[startOffset - 2];
+          if (prevPrev?.nodeType === Node.ELEMENT_NODE && (prevPrev as HTMLElement).dataset.mentionId) {
+            const charOffset = getCharOffset(el, range);
+            iosPostDeleteOffsetRef.current = charOffset - 1;
+          }
         }
       }
     };
