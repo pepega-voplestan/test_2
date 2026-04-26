@@ -3,7 +3,9 @@ import { Shout, Comment } from '../types';
 
 const QUOTE_MAX_LEN = 150;
 function clientSnippet(content: string): string {
-  const stripped = content.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
+  const trimmed = content.replace(/^(@\[[^\]]+:[^\]]+\]\s*)+/, '');
+  const masked = (trimmed || content).replace(/\|\|(.+?)\|\|/gs, (_: string, inner: string) => '*'.repeat(inner.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').length));
+  const stripped = masked.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
   return stripped.length > QUOTE_MAX_LEN ? stripped.slice(0, QUOTE_MAX_LEN) + '…' : stripped;
 }
 import { navigateTo } from '../hooks/useRoute';
