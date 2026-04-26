@@ -836,10 +836,23 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         }
       }
 
-      if (!mentionSpan) return;
+      if (mentionSpan) {
+        const charOffset = getCharOffset(el, range);
+        iosPostDeleteOffsetRef.current = charOffset - (mentionSpan.textContent ?? '').length;
+        return;
+      }
 
-      const charOffset = getCharOffset(el, range);
-      iosPostDeleteOffsetRef.current = charOffset - (mentionSpan.textContent ?? '').length;
+      // Cursor at offset 1 in a text node whose previous sibling is a mention span:
+      // backspace will delete that last character (typically the non-breaking space inserted after
+      // the mention), leaving the cursor directly adjacent to the span. iOS then
+      // jumps the cursor to end-of-content. Record the correct post-deletion offset.
+      if (startContainer.nodeType === Node.TEXT_NODE && startOffset === 1) {
+        const prev = (startContainer as Text).previousSibling;
+        if (prev?.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).dataset.mentionId) {
+          const charOffset = getCharOffset(el, range);
+          iosPostDeleteOffsetRef.current = charOffset - 1;
+        }
+      }
     };
 
     el.addEventListener('beforeinput', onBeforeInput as EventListener);
