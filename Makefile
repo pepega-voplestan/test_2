@@ -71,19 +71,21 @@ deploy-local: ensure-htpasswd
 	./scripts/backup.sh dev
 	docker compose -f docker-compose.local.yml --env-file .env.dev up --build -d
 
-# Pull a safe hot-copy of the production database to ./app.db (container must be running)
+# Pull a pg_dump of the production database (container must be running)
 db-pull:
-	docker exec $$(docker compose -f docker-compose.yml ps -q api) sqlite3 /data/app.db ".backup /tmp/app.db.pull"
-	docker cp $$(docker compose -f docker-compose.yml ps -q api):/tmp/app.db.pull ./app.db
-	docker exec $$(docker compose -f docker-compose.yml ps -q api) rm /tmp/app.db.pull
-	@echo "Pulled production database to ./app.db"
+	@mkdir -p ./api/dev.dbdata
+	docker compose -f docker-compose.yml exec -T postgres \
+		sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -U "$$POSTGRES_USER" -Fc "$$POSTGRES_DB"' \
+		> ./api/dev.dbdata/prod-$$(date +%Y%m%d_%H%M%S).dump
+	@echo "Pulled production database to ./api/dev.dbdata/"
 
-# Pull a safe hot-copy of the local database to ./app.db (container must be running)
+# Pull a pg_dump of the local database (container must be running)
 db-pull-local:
-	docker exec $$(docker compose -f docker-compose.local.yml ps -q api-dev) sqlite3 /data/app.db ".backup /tmp/app.db.pull"
-	docker cp $$(docker compose -f docker-compose.local.yml ps -q api-dev):/tmp/app.db.pull ./app.db
-	docker exec $$(docker compose -f docker-compose.local.yml ps -q api-dev) rm /tmp/app.db.pull
-	@echo "Pulled local database to ./app.db"
+	@mkdir -p ./api/dev.dbdata
+	docker compose -f docker-compose.local.yml --env-file .env.dev exec -T postgres-dev \
+		sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -U "$$POSTGRES_USER" -Fc "$$POSTGRES_DB"' \
+		> ./api/dev.dbdata/local-$$(date +%Y%m%d_%H%M%S).dump
+	@echo "Pulled local database to ./api/dev.dbdata/"
 
 # Run API tests locally
 test:
