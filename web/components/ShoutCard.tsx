@@ -1345,7 +1345,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
           ) : (
             /* --- Normal shout content --- */
             <>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-start gap-2 mb-2">
                 {shout.user ? (
                   <a href={`/profile/${shout.user.id}`} className="shrink-0">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
@@ -1367,55 +1367,59 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                     </div>
                   </div>
                 )}
-                {shout.user && (
-                  <a href={`/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
-                    {shout.user.name}
-                  </a>
-                )}
-                <a href={`/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
-                {/* Content flag badges */}
-                {tag === 'spoiler' && (
-                  <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                      <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                    </svg>
-                  </span>
-                )}
-                {tag === 'nsfw' && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">NSFW</span>}
-                {tag === 'politics' && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">ПОЛИТИКА</span>}
-                {isOwner && (
-                  <div className="flex items-center gap-2 ml-auto">
-                    {shout.isPinned && (
-                      <>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700] rotate-45" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
-                        </svg>
-                        <span className="cursor-pointer text-th-text-4 hover:text-th-text transition-colors" onClick={togglePinnedCollapsed} title="Свернуть вопль">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                            <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                          </svg>
-                        </span>
-                      </>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {shout.user && (
+                      <a href={`/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+                        {shout.user.name}
+                      </a>
                     )}
-                    {canEdit && !editMode && (
-                      <>
-                        <span className="text-[10px] text-th-text-4 tabular-nums">{editSecsLeft}с</span>
-                        <button onClick={() => { setEditMode(true); setEditContent(shout.content); setEditError(null); }} className="text-xs text-th-text-4 hover:text-sky-400 transition-colors" title="Редактировать">
+                    <a href={`/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
+                    {/* Content flag badges */}
+                    {tag === 'spoiler' && (
+                      <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                          <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                        </svg>
+                      </span>
+                    )}
+                    {tag === 'nsfw' && <span className="text-[10px] font-bold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">NSFW</span>}
+                    {tag === 'politics' && <span className="text-[10px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded">ПОЛИТИКА</span>}
+                    {isOwner && (
+                      <div className="flex items-center gap-2 ml-auto">
+                        {shout.isPinned && (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px] text-[#e6a700] rotate-45" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M16 2c.55 0 1 .45 1 1v3.17l1.71 1.71c.18.18.29.43.29.71v3.41c0 .55-.45 1-1 1h-4v5l-1 2-1-2v-5H7c-.55 0-1-.45-1-1V8.59c0-.27.11-.52.29-.71L8 6.17V3c0-.55.45-1 1-1h7z" />
+                            </svg>
+                            <span className="cursor-pointer text-th-text-4 hover:text-th-text transition-colors" onClick={togglePinnedCollapsed} title="Свернуть вопль">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                              </svg>
+                            </span>
+                          </>
+                        )}
+                        {canEdit && !editMode && (
+                          <>
+                            <span className="text-[10px] text-th-text-4 tabular-nums">{editSecsLeft}с</span>
+                            <button onClick={() => { setEditMode(true); setEditContent(shout.content); setEditError(null); }} className="text-xs text-th-text-4 hover:text-sky-400 transition-colors" title="Редактировать">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                        <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors" title="Удалить">
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                           </svg>
                         </button>
-                      </>
+                      </div>
                     )}
-                    <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors" title="Удалить">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </button>
                   </div>
-                )}
+                </div>
               </div>
 
               {editMode ? (
