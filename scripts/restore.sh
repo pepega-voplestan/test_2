@@ -11,35 +11,34 @@ TIMESTAMP="${2:-}"
 BACKUP_DIR="./backups"
 
 if [ "$ENV" = "dev" ]; then
-    COMPOSE_FILE="docker-compose.local.yml"
+    COMPOSE_FILE="docker-compose.dev.yml"
     ENV_FILE="--env-file .env.dev"
-    PG_SERVICE="postgres-dev"
-    MEDIA_SERVICE="api-dev"
+    SERVICE="api-dev"
     PREFIX="dev"
 else
     COMPOSE_FILE="docker-compose.yml"
     ENV_FILE=""
-    PG_SERVICE="postgres"
-    MEDIA_SERVICE="api"
+    SERVICE="api"
     PREFIX="prod"
 fi
 
 # If no timestamp provided, find the latest backup
 if [ -z "$TIMESTAMP" ]; then
-    LATEST=$(ls -1 "$BACKUP_DIR/${PREFIX}-db-"*.dump 2>/dev/null | sort | tail -n1 || true)
+    LATEST=$(ls -1 "$BACKUP_DIR/${PREFIX}-appdata-"*.tar.gz 2>/dev/null | sort | tail -n1 || true)
     if [ -z "$LATEST" ]; then
         echo "ERROR: No backups found for $PREFIX in $BACKUP_DIR/"
         exit 1
     fi
-    TIMESTAMP=$(echo "$LATEST" | sed "s|.*${PREFIX}-db-\(.*\)\.dump|\1|")
+    TIMESTAMP=$(echo "$LATEST" | sed "s|.*${PREFIX}-appdata-\(.*\)\.tar\.gz|\1|")
     echo "Using latest backup: $TIMESTAMP"
 fi
 
-DBDUMP_FILE="$BACKUP_DIR/${PREFIX}-db-${TIMESTAMP}.dump"
+APPDATA_FILE="$BACKUP_DIR/${PREFIX}-appdata-${TIMESTAMP}.tar.gz"
 MEDIA_FILE="$BACKUP_DIR/${PREFIX}-media-${TIMESTAMP}.tar.gz"
 
-if [ ! -f "$DBDUMP_FILE" ]; then
-    echo "ERROR: Database backup not found: $DBDUMP_FILE"
+# Verify backup files exist
+if [ ! -f "$APPDATA_FILE" ]; then
+    echo "ERROR: Database backup not found: $APPDATA_FILE"
     exit 1
 fi
 if [ ! -f "$MEDIA_FILE" ]; then
@@ -48,7 +47,7 @@ if [ ! -f "$MEDIA_FILE" ]; then
 fi
 
 echo "=== Restore ($PREFIX) from $TIMESTAMP ==="
-echo "  Database: $DBDUMP_FILE ($(du -h "$DBDUMP_FILE" | cut -f1))"
+echo "  Database: $APPDATA_FILE ($(du -h "$APPDATA_FILE" | cut -f1))"
 echo "  Media:    $MEDIA_FILE ($(du -h "$MEDIA_FILE" | cut -f1))"
 echo ""
 
@@ -59,39 +58,23 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# Stop all containers
+# Stop running containers to avoid write conflicts
 echo "Stopping containers..."
 docker compose -f "$COMPOSE_FILE" $ENV_FILE down 2>/dev/null || true
 
-# Start only postgres so we can restore into it
-echo "Starting PostgreSQL..."
-docker compose -f "$COMPOSE_FILE" $ENV_FILE up -d "$PG_SERVICE"
-
-# Wait for postgres to be ready
-echo "Waiting for PostgreSQL to be ready..."
-until docker compose -f "$COMPOSE_FILE" $ENV_FILE exec -T "$PG_SERVICE" \
-    sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > /dev/null 2>&1; do
-    sleep 1
-done
-echo "  PostgreSQL ready"
-
-# Copy dump into the postgres container and restore
+# Restore database: clean /data (remove old WAL/SHM files too), extract clean .db files
 echo "Restoring database..."
-PG_CONTAINER=$(docker compose -f "$COMPOSE_FILE" $ENV_FILE ps -q "$PG_SERVICE")
-docker cp "$DBDUMP_FILE" "$PG_CONTAINER:/tmp/restore.dump"
-docker compose -f "$COMPOSE_FILE" $ENV_FILE exec -T "$PG_SERVICE" \
-    sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB" /tmp/restore.dump'
-docker compose -f "$COMPOSE_FILE" $ENV_FILE exec -T "$PG_SERVICE" \
-    rm /tmp/restore.dump
-echo "  Database restored"
+docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
+    --entrypoint sh \
+    -v "$(pwd)/$BACKUP_DIR:/backup" \
+    "$SERVICE" -c "rm -rf /data/* && tar xzf /backup/${PREFIX}-appdata-${TIMESTAMP}.tar.gz -C /data"
 
-# Restore media (start api/api-dev container briefly with media volume)
+# Restore media
 echo "Restoring media..."
 docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
     --entrypoint sh \
     -v "$(pwd)/$BACKUP_DIR:/backup" \
-    "$MEDIA_SERVICE" -c "rm -rf /media/* && tar xzf /backup/${PREFIX}-media-${TIMESTAMP}.tar.gz -C /media"
-echo "  Media restored"
+    "$SERVICE" -c "rm -rf /media/* && tar xzf /backup/${PREFIX}-media-${TIMESTAMP}.tar.gz -C /media"
 
 echo ""
 echo "Restore complete. Start the app with: make ${ENV}"
