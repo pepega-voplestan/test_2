@@ -564,7 +564,7 @@ const QuoteBlock: React.FC<{ quote: CommentQuote; ignored: boolean; replyToId: s
   return (
     <div
       className={`flex items-center gap-1 pr-2 bg-th-inset/40 rounded text-xs text-th-text-4 overflow-hidden ${isClickable ? 'cursor-pointer hover:bg-th-inset/70 transition-colors' : ''}`}
-      style={{ paddingBottom: '0.7rem', WebkitTapHighlightColor: 'transparent' }}
+      style={{ WebkitTapHighlightColor: 'transparent' }}
       onClick={isClickable ? handleClick : undefined}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0 opacity-50" viewBox="0 0 20 20" fill="currentColor">
