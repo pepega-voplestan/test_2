@@ -18,6 +18,7 @@ KEEP=3  # number of recent backups to keep per volume type
 
 RCLONE_REMOTE="gdrive"
 RCLONE_PATH="vopli-backups"
+DO_VOLUME_DIR="/mnt/vopli-backups"
 
 if [ "$ENV" = "dev" ]; then
     COMPOSE_FILE="docker-compose.local.yml"
@@ -86,6 +87,32 @@ for TYPE in appdata media; do
         done
     fi
 done
+
+# --- Copy to DigitalOcean volume (prod only) ---
+if [ "$ENV" != "dev" ] && [ -d "$DO_VOLUME_DIR" ]; then
+    echo ""
+    echo "Copying to DO volume ($DO_VOLUME_DIR)..."
+    mkdir -p "$DO_VOLUME_DIR"
+    cp "$BACKUP_DIR/${PREFIX}-appdata-${TIMESTAMP}.tar.gz" "$DO_VOLUME_DIR/"
+    cp "$BACKUP_DIR/${PREFIX}-media-${TIMESTAMP}.tar.gz" "$DO_VOLUME_DIR/"
+    echo "  Copied OK"
+
+    # Rotate DO volume backups
+    echo "Rotating DO volume backups (keeping last $KEEP)..."
+    for TYPE in appdata media; do
+        FILES=$(ls -1t "$DO_VOLUME_DIR/${PREFIX}-${TYPE}-"*.tar.gz 2>/dev/null || true)
+        COUNT=$(echo "$FILES" | grep -c . || true)
+        if [ "$COUNT" -gt "$KEEP" ]; then
+            echo "$FILES" | tail -n +"$((KEEP + 1))" | while read -r OLD; do
+                echo "  Deleting $OLD"
+                rm -f "$OLD"
+            done
+        fi
+    done
+elif [ "$ENV" != "dev" ]; then
+    echo ""
+    echo "DO volume not mounted at $DO_VOLUME_DIR, skipping."
+fi
 
 # --- Upload to cloud via rclone ---
 if [ "$UPLOAD" = true ]; then
