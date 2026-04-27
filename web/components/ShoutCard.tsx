@@ -544,7 +544,7 @@ const QuoteBlock: React.FC<{ quote: CommentQuote; ignored: boolean; replyToId: s
     content = (
       <>
         {quote.author && (
-          <span className="font-semibold text-th-text-2 shrink-0">@{quote.author.name}:&nbsp;</span>
+          <span className="font-semibold shrink-0">@{quote.author.name}:&nbsp;</span>
         )}
         <span className="italic truncate">{quote.text}</span>
       </>
@@ -553,7 +553,7 @@ const QuoteBlock: React.FC<{ quote: CommentQuote; ignored: boolean; replyToId: s
     content = (
       <>
         {quote.author && (
-          <span className="font-semibold text-th-text-2 shrink-0">@{quote.author.name}:&nbsp;</span>
+          <span className="font-semibold shrink-0">@{quote.author.name}:&nbsp;</span>
         )}
         <span className="truncate">{quote.text}</span>
       </>
@@ -563,14 +563,14 @@ const QuoteBlock: React.FC<{ quote: CommentQuote; ignored: boolean; replyToId: s
   const isClickable = !!replyToId && !quote.deleted && !ignored;
   return (
     <div
-      className={`flex items-center gap-1 mb-2 pl-2 border-l-2 border-[#0087ff] bg-th-inset/40 rounded-r text-xs text-th-text-4 overflow-hidden ${isClickable ? 'cursor-pointer hover:bg-th-inset/70 transition-colors' : ''}`}
-      style={{ minHeight: 28, WebkitTapHighlightColor: 'transparent' }}
+      className={`flex items-center gap-1 pr-2 bg-th-inset/40 rounded text-xs text-th-text-4 overflow-hidden ${isClickable ? 'cursor-pointer hover:bg-th-inset/70 transition-colors' : ''}`}
+      style={{ WebkitTapHighlightColor: 'transparent' }}
       onClick={isClickable ? handleClick : undefined}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0 opacity-50" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
       </svg>
-      <div className="flex items-baseline min-w-0 overflow-hidden py-1">
+      <div className="flex items-baseline min-w-0 overflow-hidden">
         {content}
       </div>
     </div>
@@ -704,49 +704,51 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
   const commentInner = (
     <>
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <a href={`/profile/${comment.user.id}`} className="shrink-0">
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
-              {comment.user.avatar ? (
-                <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
-                  {comment.user.name.charAt(0).toUpperCase()}
-                </div>
-              )}
-            </div>
-          </a>
-          <a href={`/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
-            {comment.user.name}
-          </a>
-          <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
-          {isOwner && (
-            <div className="flex items-center gap-1.5 ml-auto">
-              {canEdit && (
-                <>
-                  <span className="text-[10px] text-th-text-4 tabular-nums">{editSecsLeft}с</span>
-                  <button onClick={() => { setEditMode(true); setEditContent(comment.content); setEditError(null); }} className="text-xs text-th-text-4 hover:text-sky-400 transition-colors" title="Редактировать">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                    </svg>
-                  </button>
-                </>
-              )}
-              <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors" title="Удалить">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
-
+      <div className="flex items-start gap-2 mb-2">
+        <a href={`/profile/${comment.user.id}`} className="shrink-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-th-input hover:ring-2 hover:ring-th-border transition-all">
+            {comment.user.avatar ? (
+              <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-th-text-4 text-sm font-bold">
+                {comment.user.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+        </a>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <a href={`/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+              {comment.user.name}
+            </a>
+            <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
+            {isOwner && (
+              <div className="flex items-center gap-1.5 ml-auto">
+                {canEdit && (
+                  <>
+                    <span className="text-[10px] text-th-text-4 tabular-nums">{editSecsLeft}с</span>
+                    <button onClick={() => { setEditMode(true); setEditContent(comment.content); setEditError(null); }} className="text-xs text-th-text-4 hover:text-sky-400 transition-colors" title="Редактировать">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+                <button onClick={() => setConfirmDelete(true)} className="text-xs text-th-text-4 hover:text-red-400 transition-colors" title="Удалить">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
           {comment.quote && (
             <QuoteBlock quote={comment.quote} ignored={quoteAuthorIgnored} replyToId={comment.replyToId ?? null} />
           )}
+        </div>
+      </div>
 
-          {editMode ? (
+      {editMode ? (
             <div className="mb-2 bg-th-card p-3 rounded">
               <MentionInput
                 ref={editInputRef}
@@ -858,7 +860,6 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               </button>
             )}
           </div>
-      </div>
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ touchAction: 'none' }} onClick={() => !isDeleting && setConfirmDelete(false)}>
@@ -1029,7 +1030,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     const stripped = masked.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
     let preview: string;
     if (stripped) {
-      preview = stripped.length > 120 ? stripped.slice(0, 120) + '…' : stripped;
+      preview = stripped.length > 60 ? stripped.slice(0, 60) + '…' : stripped;
     } else if (media) {
       preview = media.type === 'image' ? 'Прикрепленное изображение' : 'Прикрепленное видео';
     } else {
@@ -1558,11 +1559,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                <div className="bg-th-card p-3 rounded flex gap-4">
                   <form className="w-full flex flex-col gap-2 min-w-0" onSubmit={(e) => { e.preventDefault(); submitReply(); }}>
                       {replyToId && replyToAuthor && (
-                        <div className="flex items-center gap-2 pl-2 border-l-2 border-[#0087ff] bg-th-inset/40 rounded-r text-xs text-th-text-4 overflow-hidden">
+                        <div className="flex items-center gap-2 pr-2 bg-th-inset/40 rounded text-xs text-th-text-4 overflow-hidden">
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0 opacity-50" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
-                          <span className="font-semibold text-th-text-2 shrink-0">@{replyToAuthor.name}:&nbsp;</span>
+                          <span className="font-semibold shrink-0">@{replyToAuthor.name}:&nbsp;</span>
                           <span className="truncate flex-1 py-1">{replyToPreview}</span>
                           <button
                             type="button"
