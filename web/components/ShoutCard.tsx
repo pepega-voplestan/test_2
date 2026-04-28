@@ -544,7 +544,7 @@ const QuoteBlock: React.FC<{ quote: CommentQuote; ignored: boolean; replyToId: s
     content = (
       <>
         {quote.author && (
-          <span className="font-semibold shrink-0">@{quote.author.name}:&nbsp;</span>
+          <span className="font-semibold shrink-0 text-blue-400">@{quote.author.name}:&nbsp;</span>
         )}
         <span className="italic truncate">{quote.text}</span>
       </>
@@ -553,7 +553,7 @@ const QuoteBlock: React.FC<{ quote: CommentQuote; ignored: boolean; replyToId: s
     content = (
       <>
         {quote.author && (
-          <span className="font-semibold shrink-0">@{quote.author.name}:&nbsp;</span>
+          <span className="font-semibold shrink-0 text-blue-400">@{quote.author.name}:&nbsp;</span>
         )}
         <span className="truncate">{quote.text}</span>
       </>
@@ -1567,7 +1567,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0 opacity-50" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
-                          <span className="font-semibold shrink-0">@{replyToAuthor.name}:&nbsp;</span>
+                          <span className="font-semibold shrink-0 text-blue-400">@{replyToAuthor.name}:&nbsp;</span>
                           <span className="truncate flex-1 py-1">{replyToPreview}</span>
                           <button
                             type="button"
