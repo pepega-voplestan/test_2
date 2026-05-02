@@ -842,7 +842,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             <MediaPlaceholder className="mb-2" />
           )}
 
-          <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none mt-2">
+          <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none">
             {isCommentAuthorIgnored ? (
               <span className="opacity-30 cursor-default" title="Вы игнорируете этого пользователя">Ответить</span>
             ) : (
@@ -1207,7 +1207,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       ))}
 
       {shout.media?.type === 'image' && (
-         <div className="mb-3 rounded-lg">
+         <div className="mb-2 rounded-lg">
              <img
                src={gifSrc} alt="attachment" loading="lazy"
                onClick={() => setLightboxOpen(true)}
@@ -1224,13 +1224,13 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       )}
 
       {shout.media?.type === 'video' && (
-        <div className="mb-3 rounded-lg overflow-hidden">
+        <div className="mb-2 rounded-lg overflow-hidden">
           <video src={shout.media.url} controls loop className="max-h-[300px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={el => { if (el) el.volume = 0.3; }} />
         </div>
       )}
 
       {shout.media?.type === 'youtube' && (
-          <div className="mb-3 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
+          <div className="mb-2 rounded-lg overflow-hidden bg-th-card border border-th-border/50">
             <div className="w-full aspect-video bg-black relative cursor-pointer" onClick={() => !ytLoaded && setYtLoaded(true)}>
                 {ytLoaded ? (
                   <iframe className="w-full h-full" src={`${shout.media.embedUrl}?autoplay=1`} title={shout.media.title || "YouTube"}
@@ -1264,7 +1264,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     return (
       <>
         {embeds.length > 0 && <MediaPlaceholder className="mb-2" />}
-        {shout.media && <MediaPlaceholder className="mb-3" />}
+        {shout.media && <MediaPlaceholder className="mb-2" />}
       </>
     );
   };
@@ -1338,7 +1338,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 </div>
                 <a href={`/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
               </div>
-              <div className="text-th-text-4 text-sm italic mb-3">
+              <div className="text-th-text-4 text-sm italic mb-2">
                 Этот вопль был удалён
               </div>
             </>
@@ -1449,7 +1449,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 <div className="relative rounded-lg overflow-hidden">
                   <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
                     {shout.content && (
-                      <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+                      <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2">
                         {renderContent(shout.content)}
                       </div>
                     )}
@@ -1470,14 +1470,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 /* --- Normal / NSFW content render --- */
                 <>
                   {shout.content && (
-                    <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-3">
+                    <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2">
                        {renderContent(shout.content)}
                     </div>
                   )}
 
                   {isMediaOnlyHidden && hasMediaContent ? (
                     /* --- NSFW / Spoiler: always blur actual media, not placeholders --- */
-                    <div className="relative rounded-lg overflow-hidden mb-3 inline-block max-w-full">
+                    <div className="relative rounded-lg overflow-hidden mb-2 inline-block max-w-full">
                       <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
                         {renderActualMedia()}
                       </div>
