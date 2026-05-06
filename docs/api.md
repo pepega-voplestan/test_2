@@ -49,7 +49,7 @@ All prefixed `/api/v1/`. Auth = session cookie required. Full spec at `/api/docs
 | GET | `/shouts` | — | `limit`, `offset`, `sortBy=new\|popular`, max 50 |
 | PUT | `/shouts/:id` | Yes | Edit shout content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
 | PUT | `/comments/:id` | Yes | Edit comment content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
-| POST | `/upload/media` | Yes | ≤5MB JPG/PNG/WebP/GIF; generates 320/960/1600px WebP |
+| POST | `/upload/media` | Yes | ≤10MB JPG/PNG/WebP/GIF/MP4; images generate 320/960/1600px WebP |
 | POST | `/upload/avatar` | Yes | ≤2MB; generates 64/128/256px square WebP |
 | GET | `/notifications` | Yes | Cursor-paginated (14-day window, default 20, max 50); `cursor` = ISO timestamp |
 | PATCH | `/notifications/read-batch` | Yes | Mark batch as read (max 50 ids) |
