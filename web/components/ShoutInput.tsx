@@ -277,8 +277,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
           </div>
         )}
 
-        {!isDragging && (
-          <>
+        <div className={isDragging ? 'hidden' : ''}>
             <div className="flex gap-4">
               <div className="grow flex flex-col min-w-0">
                 {user ? (
@@ -451,8 +450,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                 onChange={setPollPayload}
               />
             )}
-          </>
-        )}
+        </div>
       </form>
       {error && (
         <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
