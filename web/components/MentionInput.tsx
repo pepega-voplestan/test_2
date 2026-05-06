@@ -1091,6 +1091,19 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
     }
   };
 
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const saved = editorRef.current?.innerHTML;
+    const files = Array.from(e.dataTransfer.files);
+    const media = files.find(f => f.type.startsWith('image/') || f.type === 'video/mp4');
+    if (media && onImagePaste) onImagePaste(media);
+    // Chrome may still mutate the contenteditable DOM after preventDefault (no input event fired).
+    // Restore the snapshot so the displayed text matches the preserved React state.
+    requestAnimationFrame(() => {
+      if (editorRef.current && saved !== undefined) editorRef.current.innerHTML = saved;
+    });
+  };
+
   // iOS Safari auto-zooms any editable element with font-size < 16px.
   // Skip text-sm on iOS to prevent unwanted zoom on focus.
   const textSizeClass = size === 'sm' && !isIOS() ? 'text-sm' : '';
@@ -1114,6 +1127,8 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onDragOver={e => e.preventDefault()}
+        onDrop={handleDrop}
         onFocus={() => {
           // Intentionally empty — let the browser handle native scroll-to-focus
           // on direct tap.  Imperative focus(true) calls scrollFormIntoView
