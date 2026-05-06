@@ -717,11 +717,11 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           </div>
         </a>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className={`flex items-center gap-2${comment.quote ? ' mb-1' : ''}`}>
             <a href={`/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
               {comment.user.name}
             </a>
-            <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>
+            {comment.quote && <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>}
             {isOwner && (
               <div className="flex items-center gap-1.5 ml-auto">
                 {canEdit && (
@@ -742,6 +742,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               </div>
             )}
           </div>
+          {!comment.quote && <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>}
           {comment.quote && (
             <QuoteBlock quote={comment.quote} ignored={quoteAuthorIgnored} replyToId={comment.replyToId ?? null} />
           )}
@@ -1368,13 +1369,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2">
                     {shout.user && (
                       <a href={`/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
                         {shout.user.name}
                       </a>
                     )}
-                    <a href={`/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                     {/* Content flag badges */}
                     {tag === 'spoiler' && (
                       <span className="inline-flex items-center text-amber-400 bg-amber-500/15 p-1 rounded">
@@ -1419,6 +1419,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       </div>
                     )}
                   </div>
+                  <a href={`/shout/${shout.id}`} className="text-xs text-th-text-4 hover:underline">{formatTimestamp(shout.timestamp)}</a>
                 </div>
               </div>
 
