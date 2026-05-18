@@ -43,11 +43,6 @@ model Shout {
   visibility_tag  String  @default("")
   created_at DateTime @default(now())
 
-  // Legacy inline media columns — retained for baseline, remove in follow-up migration
-  media_type String?
-  media_url  String?
-  media_meta String?
-
   user          User           @relation(fields: [user_id], references: [id])
   parent        Shout?         @relation("ShoutReplies", fields: [parent_id], references: [id])
   children      Shout[]        @relation("ShoutReplies")
