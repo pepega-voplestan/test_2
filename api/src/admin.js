@@ -212,10 +212,6 @@ export async function setupAdmin() {
               type: "number",
               description: "1 = закреплённый вопль (отображается первым в ленте)",
             },
-            // Hide legacy inline media columns
-            media_type: { isVisible: false },
-            media_url: { isVisible: false },
-            media_meta: { isVisible: false },
           },
           actions: {
             bulkDelete: { isAccessible: false },
