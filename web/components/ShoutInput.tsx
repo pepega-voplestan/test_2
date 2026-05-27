@@ -9,7 +9,7 @@ interface ShoutInputProps {
   onShoutCreated: (shout: Shout) => void;
 }
 
-const SHOUT_MAX_LENGTH = 400;
+const SHOUT_MAX_LENGTH = 1000;
 const NEWLINE_CHAR_COST = 40;
 const MEDIA_MAX_MB = 10;
 
