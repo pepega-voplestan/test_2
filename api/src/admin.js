@@ -362,15 +362,12 @@ export async function setupAdmin() {
         resource: { model: getModelByName("Announcement"), client: prisma },
         options: {
           navigation: { name: "Контент", icon: "Document" },
-          sort: { sortBy: "release_date", direction: "desc" },
-          listProperties: ["title", "release_date", "is_deleted", "created_at"],
-          filterProperties: ["title", "release_date", "is_deleted"],
+          sort: { sortBy: "created_at", direction: "desc" },
+          listProperties: ["title", "is_deleted", "created_at"],
+          filterProperties: ["title", "is_deleted"],
           properties: {
             title: {
-              description: "Заголовок релиза, например «Социальные ссылки в профиле»",
-            },
-            release_date: {
-              description: "Дата релиза в формате YYYY-MM-DD, например 2026-05-24",
+              description: "Заголовок объявления, например «Социальные ссылки в профиле»",
             },
             content: {
               type: "textarea",

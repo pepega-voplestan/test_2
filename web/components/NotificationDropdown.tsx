@@ -8,7 +8,6 @@ import { useScrollLock } from '../hooks/useScrollLock';
 interface AnnouncementItem {
   id: string;
   title: string;
-  releaseDate: string;
   content: string;
   createdAt: string;
 }
@@ -333,7 +332,7 @@ const NotificationDropdown: React.FC = () => {
               {!announcementLoading && announcementItems.map((item) => (
                 <div key={item.id} className="px-4 py-4 border-b border-th-border-2 last:border-b-0">
                   <div className="inline-block bg-th-input text-th-text-3 border border-th-border rounded-full px-2 py-0.5 text-[10px] font-bold mb-2">
-                    РЕЛИЗ — {item.releaseDate}
+                    {new Date(item.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </div>
                   <h3 className="text-sm font-semibold text-th-text mb-2">{item.title}</h3>
                   <div className="text-xs text-th-text-2 leading-relaxed prose-announcement">
