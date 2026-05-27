@@ -61,8 +61,8 @@ describe("generateCode", () => {
 });
 
 describe("SHOUT_MAX_LENGTH", () => {
-  it("is 400", () => {
-    expect(SHOUT_MAX_LENGTH).toBe(400);
+  it("is 1000", () => {
+    expect(SHOUT_MAX_LENGTH).toBe(1000);
   });
 });
 
@@ -161,8 +161,13 @@ describe("shoutSchema", () => {
   });
 
   it("rejects content exceeding effective char limit", () => {
-    const result = shoutSchema.safeParse({ content: "a".repeat(401) });
+    const result = shoutSchema.safeParse({ content: "a".repeat(1001) });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts content up to 1000 chars", () => {
+    const result = shoutSchema.safeParse({ content: "a".repeat(1000) });
+    expect(result.success).toBe(true);
   });
 
   it("accepts optional mediaId as valid UUID", () => {
@@ -194,6 +199,8 @@ describe("commentSchema", () => {
 describe("announcementSchema", () => {
   it("accepts valid announcement", () => {
     const result = announcementSchema.safeParse({
+      title: "v1.2 release",
+      release_date: "2026-05-24",
       content: "System maintenance",
       secret_key: "secret",
     });
@@ -201,12 +208,31 @@ describe("announcementSchema", () => {
   });
 
   it("rejects empty content", () => {
-    const result = announcementSchema.safeParse({ content: "", secret_key: "s" });
+    const result = announcementSchema.safeParse({
+      title: "Title",
+      release_date: "2026-05-24",
+      content: "",
+      secret_key: "s",
+    });
     expect(result.success).toBe(false);
   });
 
   it("rejects missing secret_key", () => {
-    const result = announcementSchema.safeParse({ content: "test" });
+    const result = announcementSchema.safeParse({
+      title: "Title",
+      release_date: "2026-05-24",
+      content: "test",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid release_date format", () => {
+    const result = announcementSchema.safeParse({
+      title: "Title",
+      release_date: "24-05-2026",
+      content: "test",
+      secret_key: "s",
+    });
     expect(result.success).toBe(false);
   });
 });
