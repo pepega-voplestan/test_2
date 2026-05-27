@@ -5,7 +5,7 @@ import { requireAuth } from "../auth.js";
 import { broadcast, broadcastToUser } from "../sse.js";
 import { asyncHandler, utcTimestamp, resolveQuoteText } from "../helpers/common.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
-import { commentSchema, editContentSchema, SHOUT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
+import { commentSchema, editCommentSchema, COMMENT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
 import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
 
 const router = Router();
@@ -19,7 +19,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   const parsed = commentSchema.safeParse(req.body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
+    if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${COMMENT_MAX_LENGTH} символов` });
     return res.status(400).json({ error: "Ответ не может быть пустым" });
   }
 
@@ -279,10 +279,10 @@ router.put("/comments/:id", requireAuth, asyncHandler(async (req, res) => {
   const ageMs = Date.now() - new Date(comment.created_at).getTime();
   if (ageMs > EDIT_WINDOW_MS) return res.status(403).json({ error: "Время редактирования истекло" });
 
-  const parsed = editContentSchema.safeParse(req.body);
+  const parsed = editCommentSchema.safeParse(req.body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
+    if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${COMMENT_MAX_LENGTH} символов` });
     return res.status(400).json({ error: "Текст не может быть пустым" });
   }
 
