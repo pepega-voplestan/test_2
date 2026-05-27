@@ -6,18 +6,17 @@ import { announcementSchema } from "../helpers/validation.js";
 
 const router = Router();
 
-/* GET all active announcement items, newest release date first */
+/* GET all active announcement items, newest first */
 router.get("/announcements", asyncHandler(async (_req, res) => {
   const items = await prisma.announcement.findMany({
     where: { is_deleted: 0 },
-    orderBy: { release_date: "desc" },
+    orderBy: { created_at: "desc" },
   });
 
   res.json({
     items: items.map(a => ({
       id: a.id,
       title: a.title,
-      releaseDate: a.release_date,
       content: a.content,
       createdAt: utcTimestamp(a.created_at),
     })),
@@ -31,7 +30,7 @@ router.post("/announcements", asyncHandler(async (req, res) => {
     return res.status(400).json({ error: parsed.error.issues[0]?.message || "Некорректные данные" });
   }
 
-  const { title, release_date, content, secret_key } = parsed.data;
+  const { title, content, secret_key } = parsed.data;
 
   if (!ANNOUNCEMENTS_SECRET || secret_key !== ANNOUNCEMENTS_SECRET) {
     return res.status(403).json({ error: "Неверный ключ" });
@@ -39,10 +38,10 @@ router.post("/announcements", asyncHandler(async (req, res) => {
 
   const id = crypto.randomUUID();
   await prisma.announcement.create({
-    data: { id, title, release_date, content },
+    data: { id, title, content },
   });
 
-  console.log(`[Announcements] New item ${id}: "${title}" (${release_date})`);
+  console.log(`[Announcements] New item ${id}: "${title}"`);
   res.json({ ok: true, id });
 }));
 

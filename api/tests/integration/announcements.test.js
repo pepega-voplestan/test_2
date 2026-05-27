@@ -8,7 +8,6 @@ const SECRET = "test-ann-secret";
 
 const VALID_POST = {
   title: "v1.0",
-  release_date: "2026-05-24",
   content: "New announcement",
   secret_key: SECRET,
 };
@@ -33,13 +32,13 @@ describe("Announcements routes", () => {
       expect(res.body).toEqual({ items: [] });
     });
 
-    it("returns active announcements with id, title, releaseDate, content, createdAt", async () => {
-      await createAnnouncement({ title: "Hello", release_date: "2026-05-24", content: "Hello from test" });
+    it("returns active announcements with id, title, content, createdAt", async () => {
+      await createAnnouncement({ title: "Hello", content: "Hello from test" });
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
       expect(res.body.items).toHaveLength(1);
       const item = res.body.items[0];
-      expect(item).toMatchObject({ title: "Hello", content: "Hello from test", releaseDate: "2026-05-24" });
+      expect(item).toMatchObject({ title: "Hello", content: "Hello from test" });
       expect(typeof item.id).toBe("string");
       expect(typeof item.createdAt).toBe("string");
     });
@@ -51,9 +50,10 @@ describe("Announcements routes", () => {
       expect(res.body.items).toHaveLength(0);
     });
 
-    it("returns all active announcements sorted by release_date desc", async () => {
-      await createAnnouncement({ title: "Old", release_date: "2026-01-01", content: "Old" });
-      await createAnnouncement({ title: "New", release_date: "2026-05-24", content: "New" });
+    it("returns all active announcements sorted by created_at desc", async () => {
+      const earlier = new Date(Date.now() - 60_000).toISOString();
+      await createAnnouncement({ title: "Old", content: "Old", created_at: earlier });
+      await createAnnouncement({ title: "New", content: "New" });
 
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
@@ -69,7 +69,7 @@ describe("Announcements routes", () => {
     it("returns 400 when content is missing", async () => {
       const res = await (await request())
         .post("/api/v1/announcements")
-        .send({ title: "T", release_date: "2026-05-24", secret_key: SECRET });
+        .send({ title: "T", secret_key: SECRET });
       expect(res.status).toBe(400);
       expect(res.body.error).toBeDefined();
     });
@@ -77,14 +77,14 @@ describe("Announcements routes", () => {
     it("returns 400 when secret_key is missing", async () => {
       const res = await (await request())
         .post("/api/v1/announcements")
-        .send({ title: "T", release_date: "2026-05-24", content: "Hello" });
+        .send({ title: "T", content: "Hello" });
       expect(res.status).toBe(400);
     });
 
     it("returns 403 when secret_key is wrong", async () => {
       const res = await (await request())
         .post("/api/v1/announcements")
-        .send({ title: "T", release_date: "2026-05-24", content: "Hello", secret_key: "wrong-key" });
+        .send({ title: "T", content: "Hello", secret_key: "wrong-key" });
       expect(res.status).toBe(403);
       expect(res.body.error).toBeDefined();
     });
@@ -110,16 +110,16 @@ describe("Announcements routes", () => {
     it("multiple announcements accumulate; all are visible via GET", async () => {
       await (await request())
         .post("/api/v1/announcements")
-        .send({ ...VALID_POST, title: "First", release_date: "2026-01-01", content: "First" });
+        .send({ ...VALID_POST, title: "First", content: "First" });
 
       await (await request())
         .post("/api/v1/announcements")
-        .send({ ...VALID_POST, title: "Second", release_date: "2026-05-24", content: "Second" });
+        .send({ ...VALID_POST, title: "Second", content: "Second" });
 
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
       expect(res.body.items).toHaveLength(2);
-      // Sorted by release_date desc: Second first
+      // Sorted by created_at desc: Second was posted last
       expect(res.body.items[0].content).toBe("Second");
     });
   });

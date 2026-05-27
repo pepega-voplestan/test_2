@@ -124,14 +124,13 @@ model CommentLike {
 }
 
 model Announcement {
-  id           String   @id @default(uuid())
-  title        String   @default("") @db.VarChar(200)
-  release_date String   @default("") @db.VarChar(20)
-  content      String
-  is_deleted   Int      @default(0)
-  created_at   DateTime @default(now())
+  id         String   @id @default(uuid())
+  title      String   @default("") @db.VarChar(200)
+  content    String
+  is_deleted Int      @default(0)
+  created_at DateTime @default(now())
 
-  @@index([is_deleted, release_date], name: "idx_announcements_active")
+  @@index([is_deleted, created_at], name: "idx_announcements_active")
   @@map("announcements")
 }
 

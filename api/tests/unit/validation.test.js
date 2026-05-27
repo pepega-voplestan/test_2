@@ -200,7 +200,6 @@ describe("announcementSchema", () => {
   it("accepts valid announcement", () => {
     const result = announcementSchema.safeParse({
       title: "v1.2 release",
-      release_date: "2026-05-24",
       content: "System maintenance",
       secret_key: "secret",
     });
@@ -208,31 +207,17 @@ describe("announcementSchema", () => {
   });
 
   it("rejects empty content", () => {
-    const result = announcementSchema.safeParse({
-      title: "Title",
-      release_date: "2026-05-24",
-      content: "",
-      secret_key: "s",
-    });
+    const result = announcementSchema.safeParse({ title: "Title", content: "", secret_key: "s" });
     expect(result.success).toBe(false);
   });
 
   it("rejects missing secret_key", () => {
-    const result = announcementSchema.safeParse({
-      title: "Title",
-      release_date: "2026-05-24",
-      content: "test",
-    });
+    const result = announcementSchema.safeParse({ title: "Title", content: "test" });
     expect(result.success).toBe(false);
   });
 
-  it("rejects invalid release_date format", () => {
-    const result = announcementSchema.safeParse({
-      title: "Title",
-      release_date: "24-05-2026",
-      content: "test",
-      secret_key: "s",
-    });
+  it("rejects missing title", () => {
+    const result = announcementSchema.safeParse({ content: "test", secret_key: "s" });
     expect(result.success).toBe(false);
   });
 });
