@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, Shout, Comment, User, SocialDto } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import { useScrollLock } from '../hooks/useScrollLock';
@@ -15,9 +16,13 @@ interface ProfilePageProps {
 
 const PAGE_SIZE = 10;
 const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
+const HAS_LATIN = /[A-Za-z]/;
+const HAS_CYRILLIC = /[А-Яа-яЁё]/;
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const { user, refresh } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [pendingTheme, setPendingTheme] = useState<'light' | 'dark'>(theme);
   const { prefs } = useContentPreferences();
   const { isIgnored, addIgnoredUser, removeIgnoredUser, ignoredUserIds } = useIgnoredUsers();
 
@@ -84,7 +89,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
     editForm.currentPassword !== '' ||
     editForm.newPassword !== '' ||
     editForm.showNsfw !== !!profile.showNsfw ||
-    editForm.showPolitics !== !!profile.showPolitics
+    editForm.showPolitics !== !!profile.showPolitics ||
+    pendingTheme !== theme
   ) : false;
 
   // Fetch profile
@@ -366,6 +372,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         const u = editForm.username.trim();
         if (u.length < 3 || u.length > 32) throw new Error("Имя пользователя: от 3 до 32 символов");
         if (!USERNAME_RE.test(u)) throw new Error("Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел");
+        if (HAS_LATIN.test(u) && HAS_CYRILLIC.test(u)) throw new Error("Имя не может содержать одновременно латинские и кириллические буквы");
       }
 
       // Step 2: Build profile update body (no email — that goes through verification)
@@ -406,6 +413,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       setEditForm(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
       setPendingAvatarFile(null);
       setPendingAvatarPreview(null);
+      if (pendingTheme !== theme) toggleTheme();
 
       // If email changed, trigger verification flow instead of closing editor
       if (emailChanged) {
@@ -419,6 +427,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       } else {
         setEditSuccess('Профиль обновлён');
         setIsEditing(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         await refresh();
       }
     } catch (err: unknown) {
@@ -652,6 +661,20 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             />
 
             <div className="border-t border-th-border-2 pt-4">
+              <div className="text-xs text-th-text-3 mb-3">Тема</div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pendingTheme === 'dark'}
+                  onChange={(e) => setPendingTheme(e.target.checked ? 'dark' : 'light')}
+                  className="w-3.5 h-3.5 rounded border-th-border accent-[#0087ff]"
+                  disabled={isSaving}
+                />
+                <span className="text-sm text-th-text-2">Тёмная тема</span>
+              </label>
+            </div>
+
+            <div className="border-t border-th-border-2 pt-4">
               <div className="text-xs text-th-text-3 mb-3">Отображение контента</div>
               <div className="space-y-2">
                 <label className="flex items-center gap-3 cursor-pointer">
@@ -742,6 +765,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
                   setEmailStep('idle');
                   setEmailCode('');
                   setEmailError(null);
+                  setPendingTheme(theme);
                   setEditForm({
                     username: profile.name,
                     email: profile.email || '',

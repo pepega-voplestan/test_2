@@ -6,42 +6,59 @@ import { announcementSchema } from "../helpers/validation.js";
 
 const router = Router();
 
-/* get latest announcement */
+/* GET all active announcement items, newest release date first */
 router.get("/announcements", asyncHandler(async (_req, res) => {
-  const announcement = await prisma.announcement.findFirst({
+  const items = await prisma.announcement.findMany({
     where: { is_deleted: 0 },
-    orderBy: { created_at: "desc" },
+    orderBy: { release_date: "desc" },
   });
 
-  res.json({ announcement: announcement ? { id: announcement.id, content: announcement.content, createdAt: utcTimestamp(announcement.created_at) } : null });
+  res.json({
+    items: items.map(a => ({
+      id: a.id,
+      title: a.title,
+      releaseDate: a.release_date,
+      content: a.content,
+      createdAt: utcTimestamp(a.created_at),
+    })),
+  });
 }));
 
-/* create announcement */
+/* POST create a new announcement item */
 router.post("/announcements", asyncHandler(async (req, res) => {
   const parsed = announcementSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Некорректные данные" });
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "Некорректные данные" });
   }
 
-  const { content, secret_key } = parsed.data;
+  const { title, release_date, content, secret_key } = parsed.data;
 
   if (!ANNOUNCEMENTS_SECRET || secret_key !== ANNOUNCEMENTS_SECRET) {
     return res.status(403).json({ error: "Неверный ключ" });
   }
 
-  // Soft-delete all currently active announcements
-  await prisma.announcement.updateMany({
-    where: { is_deleted: 0 },
+  const id = crypto.randomUUID();
+  await prisma.announcement.create({
+    data: { id, title, release_date, content },
+  });
+
+  console.log(`[Announcements] New item ${id}: "${title}" (${release_date})`);
+  res.json({ ok: true, id });
+}));
+
+/* DELETE soft-delete an item by id */
+router.delete("/announcements/:id", asyncHandler(async (req, res) => {
+  const { secret_key } = req.body ?? {};
+  if (!ANNOUNCEMENTS_SECRET || secret_key !== ANNOUNCEMENTS_SECRET) {
+    return res.status(403).json({ error: "Неверный ключ" });
+  }
+
+  await prisma.announcement.update({
+    where: { id: req.params.id },
     data: { is_deleted: 1 },
   });
 
-  const id = crypto.randomUUID();
-  await prisma.announcement.create({
-    data: { id, content },
-  });
-
-  console.log(`[Announcements] New announcement ${id}`);
-  res.json({ ok: true, id });
+  res.json({ ok: true });
 }));
 
 export default router;

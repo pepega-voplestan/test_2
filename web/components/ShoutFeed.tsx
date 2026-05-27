@@ -16,52 +16,7 @@ function clientSnippet(content: string): string {
   return stripped.length > QUOTE_MAX_LEN ? stripped.slice(0, QUOTE_MAX_LEN) + '…' : stripped;
 }
 
-type FeedTab = 'new' | 'popular' | 'announcements';
-
-interface Announcement {
-  id: string;
-  content: string;
-  createdAt: string;
-}
-
-const AnnouncementBlock: React.FC<{ announcement: Announcement | null; isLoading: boolean; error: string | null }> = ({ announcement, isLoading, error }) => {
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-8">
-        <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center text-red-400 text-sm py-8">{error}</div>
-    );
-  }
-
-  if (!announcement) {
-    return (
-      <div className="text-center text-th-text-4 text-sm py-8">
-        Нет объявлений
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-th-card rounded-lg p-6 border border-th-border-2">
-      <div className="text-th-text whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: announcement.content }} />
-      <div className="mt-4 text-xs text-th-text-4">
-        {new Date(announcement.createdAt).toLocaleString('ru-RU', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })}
-      </div>
-    </div>
-  );
-};
+type FeedTab = 'new' | 'popular';
 
 const ShoutFeed: React.FC = () => {
   const { user } = useAuth();
@@ -76,11 +31,6 @@ const ShoutFeed: React.FC = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-
-  // Announcements state
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
-  const [announcementLoading, setAnnouncementLoading] = useState(false);
-  const [announcementError, setAnnouncementError] = useState<string | null>(null);
 
   // Accordion: only one thread open at a time
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
@@ -169,22 +119,6 @@ const ShoutFeed: React.FC = () => {
   }, []);
   fetchShoutsRef.current = fetchShouts;
 
-  const fetchAnnouncement = useCallback(async () => {
-    setAnnouncementLoading(true);
-    setAnnouncementError(null);
-    try {
-      const res = await fetch('/api/v1/announcements', { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setAnnouncement(data.announcement || null);
-    } catch (err) {
-      console.error('[ShoutFeed] Announcement fetch error:', err);
-      setAnnouncementError('Не удалось загрузить объявления.');
-    } finally {
-      setAnnouncementLoading(false);
-    }
-  }, []);
-
   // Initial load
   useEffect(() => {
     fetchShouts(true);
@@ -212,11 +146,7 @@ const ShoutFeed: React.FC = () => {
     activeTabRef.current = newTab;
     setOpenThreadId(null);
 
-    if (newTab === 'announcements') {
-      fetchAnnouncement();
-    } else {
-      fetchShouts(true);
-    }
+    fetchShouts(true);
   };
 
   const handlePopularSortChange = (sort: PopularSort) => {
@@ -483,14 +413,6 @@ const ShoutFeed: React.FC = () => {
                 Популярные
               </button>
             </div>
-            <button
-              onClick={() => handleTabChange('announcements')}
-              className={`px-3 py-1 text-sm font-medium rounded shadow-sm transition-all ${
-                activeTab === 'announcements' ? 'bg-th-elevated text-th-text' : 'text-th-text-3 hover:text-th-text'
-              }`}
-            >
-              Объявления
-            </button>
           </div>
 
           <button
@@ -510,17 +432,7 @@ const ShoutFeed: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'announcements' ? (
-        <div className="bg-th-feed rounded-xl px-5 py-4">
-          <AnnouncementBlock
-            announcement={announcement}
-            isLoading={announcementLoading}
-            error={announcementError}
-          />
-        </div>
-      ) : (
-        <>
-          <div className="bg-th-feed rounded-xl px-5 py-4 mb-3">
+      <div className="bg-th-feed rounded-xl px-5 py-4 mb-3">
             <ShoutInput onShoutCreated={(shout) => { setShouts(prev => prev[0]?.isPinned ? [prev[0], shout, ...prev.slice(1)] : [shout, ...prev]); }} />
           </div>
 
@@ -577,8 +489,6 @@ const ShoutFeed: React.FC = () => {
               <span className="text-xs text-th-text-4">Всё загружено</span>
             )}
           </div>
-        </>
-      )}
     </div>
   );
 };
