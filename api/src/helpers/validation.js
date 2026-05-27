@@ -70,7 +70,6 @@ export const commentSchema = z.object({
 
 export const announcementSchema = z.object({
   title: z.string().min(1).max(200).trim(),
-  release_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Формат: YYYY-MM-DD"),
   content: z.string().min(1).max(10000),
   secret_key: z.string().min(1),
 });
