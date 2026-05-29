@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { navigateTo } from '../hooks/useRoute';
-import { useScrollLock } from '../hooks/useScrollLock';
 
 interface UserResult {
   id: string;
@@ -92,7 +91,18 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
   const [loading, setLoading] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
-  useScrollLock(focused);
+  // Block desktop scroll without position:fixed (avoids layout shift from scrollbar change)
+  // Mobile scroll is blocked by touch-action:none on the backdrop
+  useEffect(() => {
+    if (!focused) return;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = '';
+      document.body.style.paddingRight = '';
+    };
+  }, [focused]);
   const [inputFontSize, setInputFontSize] = useState('16px');
 
   useEffect(() => {
@@ -247,7 +257,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
       )}
       </div>
 
-      {focused && <div className="fixed inset-0 z-40" onPointerDown={handleClose} />}
+      {focused && <div className="fixed inset-0 z-40" onPointerDown={handleClose} style={{ touchAction: 'none' }} />}
 
       {/* Results panel — fixed so it clears the sticky header correctly */}
       {focused && (
