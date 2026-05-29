@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { navigateTo } from '../hooks/useRoute';
@@ -11,6 +11,8 @@ const Header: React.FC = () => {
   const { theme, toggle } = useTheme();
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => { if (!user) setSearchOpen(false); }, [user]);
 
   useScrollLock(confirmLogout);
 
@@ -38,7 +40,7 @@ const Header: React.FC = () => {
         <div className="flex items-center gap-4 ml-auto">
           <div className="flex items-center gap-2 text-th-text-3">
             {/* Search */}
-            <SearchDropdown onFocusChange={setSearchOpen} />
+            {user && <SearchDropdown onFocusChange={setSearchOpen} />}
 
             {/* Notifications */}
             {user && <NotificationDropdown />}
