@@ -148,8 +148,10 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
     if (window.innerWidth - right - PANEL_W < PAD) {
       right = window.innerWidth - PANEL_W - PAD;
     }
+    const top = rect.bottom + 14;
     // Panel position is anchored to where the icon button sat; panel width is fixed so right edge stays put
-    setPanelStyle({ position: 'fixed', top: rect.bottom + 14, right: Math.min(right, window.innerWidth - PANEL_W - PAD) });
+    // maxHeight uses dvh so it shrinks automatically when the virtual keyboard opens on Android
+    setPanelStyle({ position: 'fixed', top, right: Math.min(right, window.innerWidth - PANEL_W - PAD), maxHeight: `calc(100dvh - ${top + 16}px)` });
     setFocused(true);
     onFocusChange?.(true);
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -249,7 +251,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
       {focused && (
         <div
           style={panelStyle}
-          className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
+          className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 flex flex-col overflow-hidden"
         >
           {/* Tabs */}
           <div className="flex border-b border-th-border">
@@ -286,7 +288,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
           )}
 
           {/* Results */}
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="overflow-y-auto flex-1 min-h-0">
             {trimmed.length < 2 && (
               <div className="py-8 text-center text-sm text-th-text-3">
                 Введите хотя бы 2 символа
