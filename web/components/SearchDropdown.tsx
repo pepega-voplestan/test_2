@@ -92,18 +92,18 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Scroll lock: overflow:hidden on <html> avoids position:fixed which causes
-  // layout shifts on mobile. Backdrop touch-action:none handles iOS touch scroll.
-  // Deferred unlock handles React StrictMode's effect double-invoke.
+  // Desktop-only scroll lock: on mobile the backdrop's touch-action:none + overscroll-contain
+  // handle scroll prevention without touching the DOM (which causes layout shifts on mobile).
   useEffect(() => {
     if (!focused) return;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth === 0) return; // mobile — no scrollbar, no DOM changes needed
     if (unlockTimerRef.current !== null) {
       clearTimeout(unlockTimerRef.current);
       unlockTimerRef.current = null;
     }
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.documentElement.style.overflow = 'hidden';
-    document.documentElement.style.paddingRight = scrollbarWidth > 0 ? `${scrollbarWidth}px` : '';
+    document.documentElement.style.paddingRight = `${scrollbarWidth}px`;
     return () => {
       unlockTimerRef.current = setTimeout(() => {
         unlockTimerRef.current = null;

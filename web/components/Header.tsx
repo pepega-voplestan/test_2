@@ -37,11 +37,11 @@ const Header: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-th-text-3">
+            {/* Search */}
+            <SearchDropdown onFocusChange={setSearchOpen} />
+
             {/* Notifications */}
             {user && <NotificationDropdown />}
-
-            {/* Search — moved to where theme toggle was */}
-            <SearchDropdown onFocusChange={setSearchOpen} />
 
             {/* Theme toggle — only for guests; logged-in users access it via avatar menu */}
             {!user && (
