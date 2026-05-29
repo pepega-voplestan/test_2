@@ -334,8 +334,8 @@ const NotificationDropdown: React.FC = () => {
                   <div className="inline-block bg-th-input text-th-text-3 border border-th-border rounded-full px-2 py-0.5 text-[10px] font-bold mb-2">
                     {new Date(item.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </div>
-                  <h3 className="text-sm font-semibold text-th-text mb-2">{item.title}</h3>
-                  <div className="text-xs text-th-text-2 leading-relaxed prose-announcement">
+                  <h3 className="text-base font-semibold text-th-text mb-2">{item.title}</h3>
+                  <div className="text-[15px] text-th-text-2 leading-relaxed prose-announcement">
                     <ReactMarkdown
                       components={{
                         p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
@@ -344,15 +344,15 @@ const NotificationDropdown: React.FC = () => {
                         ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
                         ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
                         li: ({ children }) => <li>{children}</li>,
-                        code: ({ children }) => <code className="bg-th-input text-th-text-3 px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>,
+                        code: ({ children }) => <code className="bg-th-input text-th-text-3 px-1 py-0.5 rounded text-[13px] font-mono">{children}</code>,
                         a: ({ href, children }) => (
                           <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#8fb4ff] hover:underline">
                             {children}
                           </a>
                         ),
-                        h1: ({ children }) => <h1 className="text-sm font-bold text-th-text mt-3 mb-1">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-sm font-semibold text-th-text mt-3 mb-1">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-xs font-semibold text-th-text mt-2 mb-1">{children}</h3>,
+                        h1: ({ children }) => <h1 className="text-base font-bold text-th-text mt-3 mb-1">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base font-semibold text-th-text mt-3 mb-1">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold text-th-text mt-2 mb-1">{children}</h3>,
                       }}
                     >
                       {item.content}
