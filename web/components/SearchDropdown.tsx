@@ -290,7 +290,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
           )}
 
           {/* Results */}
-          <div className="max-h-[200px] sm:max-h-[420px] overflow-y-auto">
+          <div className="max-h-[200px] sm:max-h-[420px] overflow-y-auto overscroll-contain">
             {trimmed.length < 2 && (
               <div className="py-8 text-center text-sm text-th-text-3">
                 Введите хотя бы 2 символа
