@@ -102,7 +102,6 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
   const pillRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const panelTopRef = useRef<number>(0);
 
   // Escape to close
   useEffect(() => {
@@ -112,17 +111,6 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Shrink panel when virtual keyboard opens (iOS + Android)
-  useEffect(() => {
-    if (!focused || !window.visualViewport) return;
-    const update = () => {
-      const vh = window.visualViewport!.height;
-      setPanelStyle(prev => ({ ...prev, maxHeight: `${vh - panelTopRef.current - 16}px` }));
-    };
-    window.visualViewport.addEventListener('resize', update);
-    return () => window.visualViewport!.removeEventListener('resize', update);
-  }, [focused]);
 
   const search = useCallback(async (q: string, t: 'users' | 'shouts', uf: { id: string } | null) => {
     if (q.trim().length < 2) {
@@ -161,10 +149,8 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
       right = window.innerWidth - PANEL_W - PAD;
     }
     const top = rect.bottom + 14;
-    panelTopRef.current = top;
-    const vh = window.visualViewport?.height ?? window.innerHeight;
     // Panel position is anchored to where the icon button sat; panel width is fixed so right edge stays put
-    setPanelStyle({ position: 'fixed', top, right: Math.min(right, window.innerWidth - PANEL_W - PAD), maxHeight: `${vh - top - 16}px` });
+    setPanelStyle({ position: 'fixed', top, right: Math.min(right, window.innerWidth - PANEL_W - PAD) });
     setFocused(true);
     onFocusChange?.(true);
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -264,7 +250,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
       {focused && (
         <div
           style={panelStyle}
-          className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 flex flex-col overflow-hidden"
+          className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
         >
           {/* Tabs */}
           <div className="flex border-b border-th-border">
@@ -301,7 +287,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
           )}
 
           {/* Results */}
-          <div className="overflow-y-auto flex-1 min-h-0">
+          <div className="max-h-[420px] overflow-y-auto">
             {trimmed.length < 2 && (
               <div className="py-8 text-center text-sm text-th-text-3">
                 Введите хотя бы 2 символа
