@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { navigateTo } from '../hooks/useRoute';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface UserResult {
   id: string;
@@ -90,6 +91,8 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
   const [shouts, setShouts] = useState<ShoutResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+  useScrollLock(focused);
   const [inputFontSize, setInputFontSize] = useState('16px');
 
   useEffect(() => {
