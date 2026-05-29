@@ -304,8 +304,8 @@ const NotificationDropdown: React.FC = () => {
             <div className="max-h-[480px] overflow-y-auto">
               {/* Fixed header — Центральный документ */}
               <div className="px-4 pt-4 pb-3 border-b border-th-border-2">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-th-text-3 mb-1">Анонсы / Изменения</div>
-                <p className="text-xs text-th-text-3 leading-snug">
+                <div className="text-xs font-bold uppercase tracking-widest text-th-text-3 mb-1">Анонсы / Изменения</div>
+                <p className="text-[15px] text-th-text-3 leading-snug">
                   <strong className="text-th-text font-medium">Центральный документ</strong> с багами, фичами и направлением:{' '}
                   <a
                     href={DOC_URL}
@@ -331,7 +331,7 @@ const NotificationDropdown: React.FC = () => {
               )}
               {!announcementLoading && announcementItems.map((item) => (
                 <div key={item.id} className="px-4 py-4 border-b border-th-border-2 last:border-b-0">
-                  <div className="inline-block bg-th-input text-th-text-3 border border-th-border rounded-full px-2 py-0.5 text-[10px] font-bold mb-2">
+                  <div className="inline-block bg-th-input text-th-text-3 border border-th-border rounded-full px-2 py-0.5 text-xs font-bold mb-2">
                     {new Date(item.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </div>
                   <h3 className="text-base font-semibold text-th-text mb-2">{item.title}</h3>
