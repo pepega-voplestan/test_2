@@ -124,9 +124,10 @@ model CommentLike {
 }
 
 model Announcement {
-  id         String @id @default(uuid())
+  id         String   @id @default(uuid())
+  title      String   @default("") @db.VarChar(200)
   content    String
-  is_deleted Int    @default(0)
+  is_deleted Int      @default(0)
   created_at DateTime @default(now())
 
   @@index([is_deleted, created_at], name: "idx_announcements_active")

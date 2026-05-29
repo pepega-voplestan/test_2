@@ -21,7 +21,9 @@ interface ShoutCardProps {
   onThreadToggle?: (shoutId: string) => void;
 }
 
-const SHOUT_MAX_LENGTH = 400;
+const SHOUT_MAX_LENGTH = 1000;
+const COMMENT_MAX_LENGTH = 400;
+const DISPLAY_TRUNCATE_LIMIT = 400;
 const NEWLINE_CHAR_COST = 40;
 const EDIT_WINDOW_MS = 60 * 1000;
 const MEDIA_MAX_MB = 10;
@@ -481,6 +483,76 @@ const InlineSpoiler: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
 /* ---------- Content rendering ---------- */
 
+function getTruncationPoint(content: string): number {
+  let visible = 0;
+  let i = 0;
+  let lastWordBoundary = 0;
+
+  while (i < content.length) {
+    if (visible >= DISPLAY_TRUNCATE_LIMIT) break;
+
+    if (content[i] === '@' && content[i + 1] === '[') {
+      const close = content.indexOf(']', i + 2);
+      if (close !== -1) {
+        const colon = content.lastIndexOf(':', close);
+        const nameLen = (colon > i + 2 ? colon : close) - (i + 2);
+        visible += 1 + nameLen;
+        i = close + 1;
+        lastWordBoundary = i;
+        continue;
+      }
+    }
+
+    if (content[i] === '|' && content[i + 1] === '|') {
+      const close = content.indexOf('||', i + 2);
+      if (close !== -1) {
+        const inner = content.slice(i + 2, close).replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1');
+        visible += inner.length;
+        i = close + 2;
+        lastWordBoundary = i;
+        continue;
+      }
+    }
+
+    if (content[i] === ' ' || content[i] === '\n') lastWordBoundary = i;
+    visible++;
+    i++;
+  }
+
+  if (i >= content.length) return content.length;
+  return lastWordBoundary > 0 ? lastWordBoundary : i;
+}
+
+const ContentWithReadMore: React.FC<{ content: string; className?: string }> = ({
+  content,
+  className = 'text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap',
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const cutIndex = getTruncationPoint(content);
+  const needsTruncation = cutIndex < content.length;
+  const displayContent = needsTruncation && !expanded ? content.slice(0, cutIndex).trimEnd() : content;
+
+  return (
+    <>
+      <div className={className}>
+        {renderContent(displayContent)}
+        {needsTruncation && !expanded && <span>…</span>}
+      </div>
+      {needsTruncation && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="flex items-center gap-1 text-sm transition-colors mb-2 hover:underline" style={{ color: '#418af4' }}
+        >
+          <span>Показать полностью</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
+      )}
+    </>
+  );
+};
+
 function renderContent(text: string) {
   // First split on inline spoiler tokens ||...||, keeping delimiters
   const spoilerParts = text.split(/(\|\|[\s\S]*?\|\|)/);
@@ -648,7 +720,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
     if (!user || !isOwner || !canEdit) return;
     const trimmed = editContent.trim();
     if (!trimmed) { setEditError('Текст не может быть пустым'); return; }
-    if (effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH) { setEditError(`Максимум ${SHOUT_MAX_LENGTH} символов`); return; }
+    if (effectiveLength(editContent, NEWLINE_CHAR_COST) > COMMENT_MAX_LENGTH) { setEditError(`Максимум ${COMMENT_MAX_LENGTH} символов`); return; }
     setIsEditing(true); setEditError(null);
     try {
       const res = await fetch(`/api/v1/comments/${comment.id}`, {
@@ -762,19 +834,20 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
               />
               <div className="flex items-center justify-end gap-2 mt-2">
                 {editError && <span className="text-xs text-red-400 mr-auto">{editError}</span>}
-                <span className={`text-xs whitespace-nowrap tabular-nums ${effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH ? 'text-red-400 font-semibold' : 'text-th-text-4'}`}>
-                  {editSecsLeft}с · {effectiveLength(editContent, NEWLINE_CHAR_COST)}/{SHOUT_MAX_LENGTH}
+                <span className={`text-xs whitespace-nowrap tabular-nums ${effectiveLength(editContent, NEWLINE_CHAR_COST) > COMMENT_MAX_LENGTH ? 'text-red-400 font-semibold' : 'text-th-text-4'}`}>
+                  {editSecsLeft}с · {effectiveLength(editContent, NEWLINE_CHAR_COST)}/{COMMENT_MAX_LENGTH}
                 </span>
                 <button onClick={() => { setEditMode(false); setEditError(null); }} disabled={isEditing} className="text-sm font-medium text-th-text-4 hover:text-th-text-2 transition-colors">Отмена</button>
-                <button onClick={handleSaveCommentEdit} disabled={isEditing || effectiveLength(editContent, NEWLINE_CHAR_COST) > SHOUT_MAX_LENGTH || !editContent.trim()} className="text-sm font-medium text-[#0087ff] hover:text-blue-400 disabled:opacity-30 transition-colors">
+                <button onClick={handleSaveCommentEdit} disabled={isEditing || effectiveLength(editContent, NEWLINE_CHAR_COST) > COMMENT_MAX_LENGTH || !editContent.trim()} className="text-sm font-medium text-[#0087ff] hover:text-blue-400 disabled:opacity-30 transition-colors">
                   {isEditing ? '...' : 'Сохранить'}
                 </button>
               </div>
             </div>
           ) : comment.content ? (
-            <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2">
-              {renderContent(comment.content)}
-            </div>
+            <ContentWithReadMore
+              content={comment.content}
+              className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2"
+            />
           ) : null}
 
           {showMedia ? embeds.map((embed, idx) => (
@@ -949,7 +1022,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const hasComments = shout.comments && shout.comments.length > 0;
   const commentCount = shout.comments ? shout.comments.length : 0;
   const replyCharCount = effectiveLength(replyContent, NEWLINE_CHAR_COST);
-  const isReplyOverLimit = replyCharCount > SHOUT_MAX_LENGTH;
+  const isReplyOverLimit = replyCharCount > COMMENT_MAX_LENGTH;
   const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
   const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
   const isOwner = user && shout.user && user.id === shout.user.id;
@@ -1471,9 +1544,10 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 /* --- Normal / NSFW content render --- */
                 <>
                   {shout.content && (
-                    <div className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2">
-                       {renderContent(shout.content)}
-                    </div>
+                    <ContentWithReadMore
+                      content={shout.content}
+                      className="text-th-text-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap mb-2"
+                    />
                   )}
 
                   {isMediaOnlyHidden && hasMediaContent ? (
@@ -1616,8 +1690,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                         </div>
                         <input ref={replyFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4" className="hidden" onChange={handleReplyFileSelect} />
                         {(replyContent.trim() || replyHasMedia) && (
-                          <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > SHOUT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
-                            {replyCharCount}/{SHOUT_MAX_LENGTH}
+                          <span className={`text-xs whitespace-nowrap ${isReplyOverLimit ? 'text-red-400 font-semibold' : replyCharCount > COMMENT_MAX_LENGTH * 0.9 ? 'text-yellow-400' : 'text-th-text-4'}`}>
+                            {replyCharCount}/{COMMENT_MAX_LENGTH}
                           </span>
                         )}
                         <button type="submit" disabled={!canSubmitReply} className="text-[#0087ff] hover:text-blue-400 text-sm font-medium disabled:opacity-30">

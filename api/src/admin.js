@@ -357,19 +357,25 @@ export async function setupAdmin() {
         },
       },
 
-      // ── Announcements: new → auto-soft-deletes previous ──
+      // ── Announcements: structured release notes (markdown body) ──
       {
         resource: { model: getModelByName("Announcement"), client: prisma },
         options: {
           navigation: { name: "Контент", icon: "Document" },
           sort: { sortBy: "created_at", direction: "desc" },
+          listProperties: ["title", "is_deleted", "created_at"],
+          filterProperties: ["title", "is_deleted"],
           properties: {
+            title: {
+              description: "Заголовок объявления, например «Социальные ссылки в профиле»",
+            },
             content: {
               type: "textarea",
-              description: "Поддерживается HTML-разметка для форматированных объявлений",
+              description: "Текст объявления в формате Markdown (поддерживается **жирный**, _курсив_, списки, `код`, ссылки)",
             },
             id: { isDisabled: true },
             created_at: { isDisabled: true },
+            is_deleted: { isDisabled: true },
           },
           actions: {
             bulkDelete: { isAccessible: false },
@@ -386,22 +392,10 @@ export async function setupAdmin() {
                     resourceId: resource._decorated?.id() || resource.id(),
                   }),
                   notice: {
-                    message: "Объявление скрыто (soft-delete)",
+                    message: "Раздел скрыт (soft-delete)",
                     type: "success",
                   },
                 };
-              },
-            },
-            new: {
-              before: async (request) => {
-                // On POST (actual creation), soft-delete all active announcements first
-                if (request.method === "post") {
-                  await prisma.announcement.updateMany({
-                    where: { is_deleted: 0 },
-                    data: { is_deleted: 1 },
-                  });
-                }
-                return request;
               },
             },
           },

@@ -1,16 +1,23 @@
 import { z } from "zod";
 import crypto from "crypto";
 
-export const SHOUT_MAX_LENGTH = 400;
+export const SHOUT_MAX_LENGTH = 1000;
+export const COMMENT_MAX_LENGTH = 400;
 
 // Allowed: English, Russian letters, digits, dash, underscore, space (no leading/trailing spaces)
 const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
+const HAS_LATIN = /[A-Za-z]/;
+const HAS_CYRILLIC = /[А-Яа-яЁё]/;
 const usernameField = z.string().trim()
   .min(3, { message: "Имя пользователя: от 3 до 32 символов" })
   .max(32, { message: "Имя пользователя: от 3 до 32 символов" })
   .regex(USERNAME_RE, {
     message: "Имя может содержать только буквы, цифры, дефис, подчёркивание и пробел",
-  });
+  })
+  .refine(
+    (val) => !(HAS_LATIN.test(val) && HAS_CYRILLIC.test(val)),
+    { message: "Имя не может содержать одновременно латинские и кириллические буквы" }
+  );
 const NEWLINE_CHAR_COST = 40;
 
 export function effectiveCharCount(text) {
@@ -53,8 +60,8 @@ export const shoutSchema = z.object({
 
 export const commentSchema = z.object({
   content: z.string().default("").refine(
-    (val) => effectiveCharCount(val) <= SHOUT_MAX_LENGTH,
-    { message: `Текст слишком длинный (макс. ${SHOUT_MAX_LENGTH} символов)` }
+    (val) => effectiveCharCount(val) <= COMMENT_MAX_LENGTH,
+    { message: `Текст слишком длинный (макс. ${COMMENT_MAX_LENGTH} символов)` }
   ),
   mediaId: z.string().uuid().optional(),
   youtubeUrl: z.string().max(500).optional(),
@@ -62,7 +69,8 @@ export const commentSchema = z.object({
 });
 
 export const announcementSchema = z.object({
-  content: z.string().min(1).max(5000),
+  title: z.string().min(1).max(200).trim(),
+  content: z.string().min(1).max(10000),
   secret_key: z.string().min(1),
 });
 
@@ -119,6 +127,13 @@ export const editContentSchema = z.object({
   content: z.string().min(1, { message: "Текст не может быть пустым" }).refine(
     (val) => effectiveCharCount(val) <= SHOUT_MAX_LENGTH,
     { message: `Текст слишком длинный (макс. ${SHOUT_MAX_LENGTH} символов)` }
+  ),
+});
+
+export const editCommentSchema = z.object({
+  content: z.string().min(1, { message: "Текст не может быть пустым" }).refine(
+    (val) => effectiveCharCount(val) <= COMMENT_MAX_LENGTH,
+    { message: `Текст слишком длинный (макс. ${COMMENT_MAX_LENGTH} символов)` }
   ),
 });
 

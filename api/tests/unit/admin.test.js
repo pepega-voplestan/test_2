@@ -335,24 +335,6 @@ describe("admin action handlers", () => {
     });
   });
 
-  describe("Announcement new.before", () => {
-    let newBefore;
-    beforeAll(() => { newBefore = resources[4].options.actions.new.before; });
-
-    it("soft-deletes all active announcements before creating a new one", async () => {
-      mockPrisma.announcement.updateMany.mockResolvedValue({ count: 1 });
-      await newBefore({ method: "post" });
-      expect(mockPrisma.announcement.updateMany).toHaveBeenCalledWith({
-        where: { is_deleted: 0 },
-        data: { is_deleted: 1 },
-      });
-    });
-
-    it("does not soft-delete on non-POST (GET = form render)", async () => {
-      await newBefore({ method: "get" });
-      expect(mockPrisma.announcement.updateMany).not.toHaveBeenCalled();
-    });
-  });
 });
 
 // ── authenticate callback ─────────────────────────────────────────────────────
