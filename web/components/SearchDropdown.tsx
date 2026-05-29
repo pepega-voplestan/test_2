@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { navigateTo } from '../hooks/useRoute';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface UserResult {
   id: string;
@@ -90,28 +91,8 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
   const [shouts, setShouts] = useState<ShoutResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Desktop-only scroll lock: on mobile the backdrop's touch-action:none + overscroll-contain
-  // handle scroll prevention without touching the DOM (which causes layout shifts on mobile).
-  useEffect(() => {
-    if (!focused) return;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    if (scrollbarWidth === 0) return; // mobile — no scrollbar, no DOM changes needed
-    if (unlockTimerRef.current !== null) {
-      clearTimeout(unlockTimerRef.current);
-      unlockTimerRef.current = null;
-    }
-    document.documentElement.style.overflow = 'hidden';
-    document.documentElement.style.paddingRight = `${scrollbarWidth}px`;
-    return () => {
-      unlockTimerRef.current = setTimeout(() => {
-        unlockTimerRef.current = null;
-        document.documentElement.style.overflow = '';
-        document.documentElement.style.paddingRight = '';
-      }, 0);
-    };
-  }, [focused]);
+  useScrollLock(focused);
   const [inputFontSize, setInputFontSize] = useState('16px');
 
   useEffect(() => {
