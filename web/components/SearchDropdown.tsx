@@ -91,15 +91,16 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
   const [loading, setLoading] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
-  // Block desktop scroll without position:fixed (avoids layout shift from scrollbar change)
+  // Block desktop scroll without position:fixed (avoids layout shift)
+  // Both overflow and padding must be on the same element so compensation is correct
   // Mobile scroll is blocked by touch-action:none on the backdrop
   useEffect(() => {
     if (!focused) return;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = 'hidden';
     document.body.style.paddingRight = `${scrollbarWidth}px`;
-    document.documentElement.style.overflow = 'hidden';
     return () => {
-      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
       document.body.style.paddingRight = '';
     };
   }, [focused]);
