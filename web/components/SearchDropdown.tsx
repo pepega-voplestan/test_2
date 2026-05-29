@@ -250,7 +250,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
       {focused && (
         <div
           style={panelStyle}
-          className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden flex flex-col max-h-[45vh] sm:max-h-none"
+          className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
         >
           {/* Tabs */}
           <div className="flex border-b border-th-border">
@@ -287,7 +287,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
           )}
 
           {/* Results */}
-          <div className="flex-1 min-h-0 overflow-y-auto sm:max-h-[420px]">
+          <div className="max-h-[200px] sm:max-h-[420px] overflow-y-auto">
             {trimmed.length < 2 && (
               <div className="py-8 text-center text-sm text-th-text-3">
                 Введите хотя бы 2 символа
