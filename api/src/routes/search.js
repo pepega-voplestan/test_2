@@ -27,12 +27,14 @@ async function searchUsers({ q, limit, offset }) {
   return { users: rows.map(u => ({ id: u.id, name: u.username, avatar: u.avatar })) };
 }
 
-async function searchShouts({ q, limit, offset, userId, currentUserId }) {
+async function searchShouts({ q, limit, offset, userId, currentUserId, showNsfw, showPolitics }) {
   const pattern = `%${q}%`;
   const userFilter = userId ? Prisma.sql`AND s.user_id = ${userId}` : Prisma.empty;
   const ignoredFilter = currentUserId
     ? Prisma.sql`AND s.user_id NOT IN (SELECT target_user_id FROM ignored_users WHERE owner_user_id = ${currentUserId})`
     : Prisma.empty;
+  const nsfwFilter = showNsfw ? Prisma.empty : Prisma.sql`AND s.visibility_tag IS DISTINCT FROM 'nsfw'`;
+  const politicsFilter = showPolitics ? Prisma.empty : Prisma.sql`AND s.visibility_tag IS DISTINCT FROM 'politics'`;
 
   const rows = await prisma.$queryRaw(Prisma.sql`
     SELECT
@@ -50,6 +52,8 @@ async function searchShouts({ q, limit, offset, userId, currentUserId }) {
       AND u.is_banned = 0
       AND s.visibility_tag IS DISTINCT FROM 'spoiler'
       AND s.content ILIKE ${pattern}
+      ${nsfwFilter}
+      ${politicsFilter}
       ${userFilter}
       ${ignoredFilter}
     ORDER BY similarity(s.content, ${q}) DESC, s.created_at DESC
@@ -82,9 +86,12 @@ router.get("/search", asyncHandler(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message });
 
   const { q, type, userId, limit, offset } = parsed.data;
-  const currentUserId = req.session?.user?.id ?? null;
+  const sessionUser = req.session?.user ?? null;
+  const currentUserId = sessionUser?.id ?? null;
+  const showNsfw = sessionUser?.showNsfw ?? false;
+  const showPolitics = sessionUser?.showPolitics ?? false;
 
-  const result = await searchHandlers[type]({ q, userId, limit, offset, currentUserId });
+  const result = await searchHandlers[type]({ q, userId, limit, offset, currentUserId, showNsfw, showPolitics });
   return res.json(result);
 }));
 
