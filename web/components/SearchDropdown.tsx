@@ -110,8 +110,14 @@ const SearchDropdown: React.FC = () => {
       ) return;
       handleClose();
     }
-    // Close on resize (handles iOS keyboard open/close)
-    const closeOnResize = () => handleClose();
+    // Close on orientation change (width change); ignore height-only resize from virtual keyboard
+    let prevWidth = window.innerWidth;
+    const closeOnResize = () => {
+      if (window.innerWidth !== prevWidth) {
+        prevWidth = window.innerWidth;
+        handleClose();
+      }
+    };
     document.addEventListener('mousedown', handler);
     window.addEventListener('resize', closeOnResize);
     return () => {
