@@ -27,15 +27,15 @@ const Header: React.FC = () => {
   return (
     <>
     <header className="bg-th-page h-[52px] border-b border-th-border-2 sticky top-0 z-50 flex items-center justify-center transition-colors">
-      <div className="w-full max-w-[1100px] px-4 flex items-center justify-between">
-        {/* Logo — invisible on narrow screens while search is open, keeps layout space */}
-        <a href="/" onClick={handleLogoClick} className={`flex items-center ${searchOpen ? 'invisible sm:visible' : ''}`}>
+      <div className="w-full max-w-[1100px] px-4 flex items-center">
+        {/* Logo — removed from layout on narrow screens while search is open */}
+        <a href="/" onClick={handleLogoClick} className={`shrink-0 items-center ${searchOpen ? 'hidden sm:flex' : 'flex'}`}>
           <div className="text-th-text font-bold text-2xl tracking-tighter">
             ВОПЛИ
           </div>
         </a>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 ml-auto">
           <div className="flex items-center gap-2 text-th-text-3">
             {/* Search */}
             <SearchDropdown onFocusChange={setSearchOpen} />
