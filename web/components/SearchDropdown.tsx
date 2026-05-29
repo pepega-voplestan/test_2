@@ -97,34 +97,7 @@ const SearchDropdown: React.FC = () => {
 
   const pillRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!focused) return;
-    function handler(e: MouseEvent) {
-      if (
-        pillRef.current?.contains(e.target as Node) ||
-        panelRef.current?.contains(e.target as Node)
-      ) return;
-      handleClose();
-    }
-    // Close on orientation change (width change); ignore height-only resize from virtual keyboard
-    let prevWidth = window.innerWidth;
-    const closeOnResize = () => {
-      if (window.innerWidth !== prevWidth) {
-        prevWidth = window.innerWidth;
-        handleClose();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    window.addEventListener('resize', closeOnResize);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      window.removeEventListener('resize', closeOnResize);
-    };
-  }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Escape to close
   useEffect(() => {
@@ -219,7 +192,7 @@ const SearchDropdown: React.FC = () => {
 
   return (
     <>
-      <div ref={pillRef}>
+      <div ref={pillRef} className={focused ? 'relative z-50' : undefined}>
       {!focused ? (
         /* Idle state: plain icon button, no pill */
         <button
@@ -264,10 +237,11 @@ const SearchDropdown: React.FC = () => {
       )}
       </div>
 
+      {focused && <div className="fixed inset-0 z-40" onPointerDown={handleClose} />}
+
       {/* Results panel — fixed so it clears the sticky header correctly */}
       {focused && (
         <div
-          ref={panelRef}
           style={panelStyle}
           className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
         >
