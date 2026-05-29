@@ -14,8 +14,15 @@ import { useEffect } from 'react';
 let lockCount = 0;
 let savedScrollY = 0;
 let savedPaddingRight = '';
+let unlockTimer: ReturnType<typeof setTimeout> | null = null;
 
 function lock() {
+  // Cancel any pending unlock so StrictMode's unlock→re-lock cycle never touches the DOM
+  if (unlockTimer !== null) {
+    clearTimeout(unlockTimer);
+    unlockTimer = null;
+  }
+
   lockCount++;
   if (lockCount !== 1) return;
 
@@ -36,13 +43,20 @@ function unlock() {
   lockCount = Math.max(0, lockCount - 1);
   if (lockCount !== 0) return;
 
-  document.body.style.position = '';
-  document.body.style.top = '';
-  document.body.style.left = '';
-  document.body.style.right = '';
-  document.body.style.paddingRight = savedPaddingRight;
+  // Defer DOM restore by one tick — if lock() fires again immediately (React
+  // StrictMode double-invoke), the timer is cancelled and the DOM is never touched.
+  unlockTimer = setTimeout(() => {
+    unlockTimer = null;
+    if (lockCount !== 0) return;
 
-  window.scrollTo(0, savedScrollY);
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.paddingRight = savedPaddingRight;
+
+    window.scrollTo(0, savedScrollY);
+  }, 0);
 }
 
 export function useScrollLock(active: boolean) {
