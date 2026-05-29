@@ -28,8 +28,8 @@ const Header: React.FC = () => {
     <>
     <header className="bg-th-page h-[52px] border-b border-th-border-2 sticky top-0 z-50 flex items-center justify-center transition-colors">
       <div className="w-full max-w-[1100px] px-4 flex items-center justify-between">
-        {/* Logo — hidden on narrow screens while search is open */}
-        <a href="/" onClick={handleLogoClick} className={`flex items-center ${searchOpen ? 'hidden sm:flex' : ''}`}>
+        {/* Logo — invisible on narrow screens while search is open, keeps layout space */}
+        <a href="/" onClick={handleLogoClick} className={`flex items-center ${searchOpen ? 'invisible sm:visible' : ''}`}>
           <div className="text-th-text font-bold text-2xl tracking-tighter">
             ВОПЛИ
           </div>
