@@ -105,6 +105,7 @@ export async function createAnnouncement(overrides = {}) {
   return prisma.announcement.create({
     data: {
       id: overrides.id || uuid(),
+      title: overrides.title || "Test Title",
       content: overrides.content || "Test announcement",
       is_deleted: overrides.is_deleted ?? 0,
       created_at: overrides.created_at || now(),

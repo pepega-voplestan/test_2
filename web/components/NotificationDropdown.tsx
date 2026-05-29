@@ -1,8 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useNotifications } from '../context/NotificationsContext';
 import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
+
+interface AnnouncementItem {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+}
+
+const DOC_URL = 'https://docs.google.com/spreadsheets/d/1jwx6yVxiQ6-gD5DIFLHrUgzYVG1ESQXr9YTSg7BnhGA/edit?usp=sharing';
 
 function formatRelativeTime(isoTimestamp: string): string {
   const now = Date.now();
@@ -100,9 +110,12 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
   );
 };
 
+const DROPDOWN_W = 380;
+
 const NotificationDropdown: React.FC = () => {
   const { sortedNotifications, unreadCount, hasMore, isLoadingMore, loadMore, markAllAsRead, flushReads } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
+  const [tab, setTab] = useState<'notifications' | 'announcements'>('notifications');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const [frozenList, setFrozenList] = useState(sortedNotifications);
   const frozenIds = useRef(new Set<string>());
@@ -110,6 +123,11 @@ const NotificationDropdown: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const [announcementItems, setAnnouncementItems] = useState<AnnouncementItem[]>([]);
+  const [announcementLoading, setAnnouncementLoading] = useState(false);
+  const [announcementError, setAnnouncementError] = useState<string | null>(null);
+  const announcementFetched = useRef(false);
 
   useScrollLock(isOpen);
 
@@ -120,10 +138,11 @@ const NotificationDropdown: React.FC = () => {
       frozenIds.current = new Set(sortedNotifications.map((n) => n.id));
     } else {
       flushReads();
+      setTab('notifications');
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // While open: update isRead in-place (visual feedback) + append pages from loadMore
+  // While open: update isRead in-place + append pages from loadMore
   useEffect(() => {
     if (!isOpen) return;
     const updatedMap = new Map(sortedNotifications.map((n) => [n.id, n]));
@@ -138,7 +157,19 @@ const NotificationDropdown: React.FC = () => {
     });
   }, [isOpen, sortedNotifications]);
 
-  // Close on outside click or viewport resize (device rotation)
+  // Fetch announcements when tab is opened for the first time
+  useEffect(() => {
+    if (tab !== 'announcements' || announcementFetched.current) return;
+    announcementFetched.current = true;
+    setAnnouncementLoading(true);
+    fetch('/api/v1/announcements', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => setAnnouncementItems(data.items || []))
+      .catch(() => setAnnouncementError('Не удалось загрузить объявления'))
+      .finally(() => setAnnouncementLoading(false));
+  }, [tab]);
+
+  // Close on outside click or viewport resize
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
@@ -157,9 +188,7 @@ const NotificationDropdown: React.FC = () => {
     };
   }, [isOpen]);
 
-  // IntersectionObserver on sentinel — triggers loadMore when scrolled near bottom
-  // frozenList.length is a dep so the observer is re-created when the list populates
-  // (on first open after page refresh, the sentinel ref may not exist until the list renders)
+  // IntersectionObserver on sentinel
   useEffect(() => {
     if (!isOpen || !sentinelRef.current || !scrollRef.current) return;
     const observer = new IntersectionObserver(
@@ -177,14 +206,13 @@ const NotificationDropdown: React.FC = () => {
   function handleBellClick() {
     if (!isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      const DROPDOWN_W = 320;
       const PAD = 8;
       let right = window.innerWidth - rect.right;
       right = Math.max(PAD, right);
       if (window.innerWidth - right - DROPDOWN_W < PAD) {
         right = window.innerWidth - DROPDOWN_W - PAD;
       }
-      setDropdownStyle({ position: 'fixed', top: rect.bottom + 8, right });
+      setDropdownStyle({ position: 'fixed', top: rect.bottom + 14, right });
     }
     setIsOpen((o) => !o);
   }
@@ -214,40 +242,124 @@ const NotificationDropdown: React.FC = () => {
         <div
           ref={dropdownRef}
           style={dropdownStyle}
-          className="w-80 max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
+          className="w-[380px] max-w-[calc(100vw-1rem)] bg-th-card border border-th-border rounded-xl shadow-lg z-50 overflow-hidden"
         >
-          <div className="px-4 py-2.5 border-b border-th-border flex items-center justify-between">
-            <span className="text-sm font-semibold text-th-text">Уведомления</span>
-            {unreadCount > 0 && (
+          {/* Tabs */}
+          <div className="flex border-b border-th-border">
+            {(['notifications', 'announcements'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={[
+                  'flex-1 py-2.5 text-xs font-semibold transition-colors',
+                  tab === t
+                    ? 'text-th-text border-b-2 border-th-text -mb-px'
+                    : 'text-th-text-3',
+                ].join(' ')}
+              >
+                {t === 'notifications' ? 'Уведомления' : 'Объявления'}
+              </button>
+            ))}
+          </div>
+
+          {/* Mark all read strip */}
+          {tab === 'notifications' && unreadCount > 0 && (
+            <div className="px-4 py-1.5 border-b border-th-border-2 flex justify-end">
               <button
                 onClick={markAllAsRead}
                 className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
               >
                 Отметить все
               </button>
-            )}
-          </div>
-
-          {frozenList.length === 0 ? (
-            <div className="py-8 text-center text-sm text-th-text-3">
-              Нет уведомлений
             </div>
-          ) : (
-            <div ref={scrollRef} className="max-h-[420px] overflow-y-auto divide-y divide-th-border-2">
-              {frozenList.map((n) => (
-                <NotificationItem
-                  key={n.id}
-                  notification={n}
-                  onClose={() => setIsOpen(false)}
-                />
-              ))}
-              {/* Sentinel for IntersectionObserver — triggers next page load */}
-              <div ref={sentinelRef} className="h-px" />
-              {isLoadingMore && (
-                <div className="py-3 text-center text-xs text-th-text-3">
-                  Загрузка...
+          )}
+
+          {/* Notifications tab */}
+          {tab === 'notifications' && (
+            frozenList.length === 0 ? (
+              <div className="py-8 text-center text-sm text-th-text-3">
+                Нет уведомлений
+              </div>
+            ) : (
+              <div ref={scrollRef} className="max-h-[420px] overflow-y-auto divide-y divide-th-border-2">
+                {frozenList.map((n) => (
+                  <NotificationItem
+                    key={n.id}
+                    notification={n}
+                    onClose={() => setIsOpen(false)}
+                  />
+                ))}
+                <div ref={sentinelRef} className="h-px" />
+                {isLoadingMore && (
+                  <div className="py-3 text-center text-xs text-th-text-3">
+                    Загрузка...
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {/* Announcements tab */}
+          {tab === 'announcements' && (
+            <div className="max-h-[480px] overflow-y-auto">
+              {/* Fixed header — Центральный документ */}
+              <div className="px-4 pt-4 pb-3 border-b border-th-border-2">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-th-text-3 mb-1">Анонсы / Изменения</div>
+                <p className="text-xs text-th-text-3 leading-snug">
+                  <strong className="text-th-text font-medium">Центральный документ</strong> с багами, фичами и направлением:{' '}
+                  <a
+                    href={DOC_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#8fb4ff] hover:underline"
+                  >
+                    открыть таблицу
+                  </a>
+                </p>
+              </div>
+
+              {announcementLoading && (
+                <div className="flex justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
                 </div>
               )}
+              {!announcementLoading && announcementError && (
+                <div className="py-8 text-center text-sm text-red-400">{announcementError}</div>
+              )}
+              {!announcementLoading && !announcementError && announcementItems.length === 0 && (
+                <div className="py-8 text-center text-sm text-th-text-3">Нет объявлений</div>
+              )}
+              {!announcementLoading && announcementItems.map((item) => (
+                <div key={item.id} className="px-4 py-4 border-b border-th-border-2 last:border-b-0">
+                  <div className="inline-block bg-th-input text-th-text-3 border border-th-border rounded-full px-2 py-0.5 text-[10px] font-bold mb-2">
+                    {new Date(item.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </div>
+                  <h3 className="text-sm font-semibold text-th-text mb-2">{item.title}</h3>
+                  <div className="text-xs text-th-text-2 leading-relaxed prose-announcement">
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold text-th-text">{children}</strong>,
+                        em: ({ children }) => <em className="italic">{children}</em>,
+                        ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+                        li: ({ children }) => <li>{children}</li>,
+                        code: ({ children }) => <code className="bg-th-input text-th-text-3 px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>,
+                        a: ({ href, children }) => (
+                          <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#8fb4ff] hover:underline">
+                            {children}
+                          </a>
+                        ),
+                        h1: ({ children }) => <h1 className="text-sm font-bold text-th-text mt-3 mb-1">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-sm font-semibold text-th-text mt-3 mb-1">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-xs font-semibold text-th-text mt-2 mb-1">{children}</h3>,
+                      }}
+                    >
+                      {item.content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

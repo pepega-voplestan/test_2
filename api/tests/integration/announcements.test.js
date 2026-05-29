@@ -3,9 +3,14 @@ import { request, cleanDb, disconnectDb } from "../helpers.js";
 import { createAnnouncement } from "../fixtures/index.js";
 
 // Must be set before the app module is lazy-loaded on the first request() call.
-// common.js reads ANNOUNCEMENTS_SECRET at module-load time.
 process.env.ANNOUNCEMENTS_SECRET = "test-ann-secret";
 const SECRET = "test-ann-secret";
+
+const VALID_POST = {
+  title: "v1.0",
+  content: "New announcement",
+  secret_key: SECRET,
+};
 
 describe("Announcements routes", () => {
   beforeEach(async () => {
@@ -21,36 +26,40 @@ describe("Announcements routes", () => {
   // ── GET /api/v1/announcements ─────────────────────────────────────────────
 
   describe("GET /api/v1/announcements", () => {
-    it("returns null when no announcements exist", async () => {
+    it("returns empty items array when no announcements exist", async () => {
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ announcement: null });
+      expect(res.body).toEqual({ items: [] });
     });
 
-    it("returns the active announcement with id, content, createdAt", async () => {
-      await createAnnouncement({ content: "Hello from test" });
+    it("returns active announcements with id, title, content, createdAt", async () => {
+      await createAnnouncement({ title: "Hello", content: "Hello from test" });
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
-      expect(res.body.announcement).toMatchObject({ content: "Hello from test" });
-      expect(typeof res.body.announcement.id).toBe("string");
-      expect(typeof res.body.announcement.createdAt).toBe("string");
+      expect(res.body.items).toHaveLength(1);
+      const item = res.body.items[0];
+      expect(item).toMatchObject({ title: "Hello", content: "Hello from test" });
+      expect(typeof item.id).toBe("string");
+      expect(typeof item.createdAt).toBe("string");
     });
 
-    it("returns null when the only announcement is soft-deleted", async () => {
+    it("excludes soft-deleted announcements", async () => {
       await createAnnouncement({ content: "Deleted", is_deleted: 1 });
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
-      expect(res.body.announcement).toBeNull();
+      expect(res.body.items).toHaveLength(0);
     });
 
-    it("returns the most recently created announcement when multiple exist", async () => {
+    it("returns all active announcements sorted by created_at desc", async () => {
       const earlier = new Date(Date.now() - 60_000).toISOString();
-      await createAnnouncement({ content: "Old announcement", created_at: earlier });
-      await createAnnouncement({ content: "New announcement" });
+      await createAnnouncement({ title: "Old", content: "Old", created_at: earlier });
+      await createAnnouncement({ title: "New", content: "New" });
 
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
-      expect(res.body.announcement.content).toBe("New announcement");
+      expect(res.body.items).toHaveLength(2);
+      expect(res.body.items[0].title).toBe("New");
+      expect(res.body.items[1].title).toBe("Old");
     });
   });
 
@@ -60,7 +69,7 @@ describe("Announcements routes", () => {
     it("returns 400 when content is missing", async () => {
       const res = await (await request())
         .post("/api/v1/announcements")
-        .send({ secret_key: SECRET });
+        .send({ title: "T", secret_key: SECRET });
       expect(res.status).toBe(400);
       expect(res.body.error).toBeDefined();
     });
@@ -68,15 +77,14 @@ describe("Announcements routes", () => {
     it("returns 400 when secret_key is missing", async () => {
       const res = await (await request())
         .post("/api/v1/announcements")
-        .send({ content: "Hello" });
-      // announcementSchema requires secret_key min(1), so zod rejects it first
+        .send({ title: "T", content: "Hello" });
       expect(res.status).toBe(400);
     });
 
     it("returns 403 when secret_key is wrong", async () => {
       const res = await (await request())
         .post("/api/v1/announcements")
-        .send({ content: "Hello", secret_key: "wrong-key" });
+        .send({ title: "T", content: "Hello", secret_key: "wrong-key" });
       expect(res.status).toBe(403);
       expect(res.body.error).toBeDefined();
     });
@@ -84,7 +92,7 @@ describe("Announcements routes", () => {
     it("creates a new announcement and returns { ok, id }", async () => {
       const res = await (await request())
         .post("/api/v1/announcements")
-        .send({ content: "New announcement", secret_key: SECRET });
+        .send(VALID_POST);
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
       expect(typeof res.body.id).toBe("string");
@@ -93,27 +101,26 @@ describe("Announcements routes", () => {
     it("new announcement is visible via GET after POST", async () => {
       await (await request())
         .post("/api/v1/announcements")
-        .send({ content: "Posted announcement", secret_key: SECRET });
+        .send({ ...VALID_POST, content: "Posted announcement" });
 
       const res = await (await request()).get("/api/v1/announcements");
-      expect(res.body.announcement.content).toBe("Posted announcement");
+      expect(res.body.items[0].content).toBe("Posted announcement");
     });
 
-    it("soft-deletes previous active announcements when a new one is posted", async () => {
-      // Post first
+    it("multiple announcements accumulate; all are visible via GET", async () => {
       await (await request())
         .post("/api/v1/announcements")
-        .send({ content: "First", secret_key: SECRET });
+        .send({ ...VALID_POST, title: "First", content: "First" });
 
-      // Post second
       await (await request())
         .post("/api/v1/announcements")
-        .send({ content: "Second", secret_key: SECRET });
+        .send({ ...VALID_POST, title: "Second", content: "Second" });
 
-      // Only the second should be returned
       const res = await (await request()).get("/api/v1/announcements");
       expect(res.status).toBe(200);
-      expect(res.body.announcement.content).toBe("Second");
+      expect(res.body.items).toHaveLength(2);
+      // Sorted by created_at desc: Second was posted last
+      expect(res.body.items[0].content).toBe("Second");
     });
   });
 });

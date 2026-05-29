@@ -222,7 +222,7 @@ describe("Shouts routes", () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       const agent = await authenticatedAgent(user);
 
-      const res = await agent.post("/api/v1/shouts").send({ content: "x".repeat(401) });
+      const res = await agent.post("/api/v1/shouts").send({ content: "x".repeat(1001) });
       expect(res.status).toBe(400);
     });
 
