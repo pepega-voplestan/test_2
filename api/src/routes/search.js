@@ -14,26 +14,21 @@ const searchSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-router.get("/search", asyncHandler(async (req, res) => {
-  const parsed = searchSchema.safeParse(req.query);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message });
-
-  const { q, type, userId, limit, offset } = parsed.data;
+async function searchUsers({ q, limit, offset }) {
   const pattern = `%${q}%`;
+  const rows = await prisma.$queryRaw`
+    SELECT id, username, avatar
+    FROM users
+    WHERE is_banned = 0
+      AND username ILIKE ${pattern}
+    ORDER BY similarity(username, ${q}) DESC, username ASC
+    LIMIT ${limit} OFFSET ${offset}
+  `;
+  return { users: rows.map(u => ({ id: u.id, name: u.username, avatar: u.avatar })) };
+}
 
-  if (type === "users") {
-    const rows = await prisma.$queryRaw`
-      SELECT id, username, avatar
-      FROM users
-      WHERE is_banned = 0
-        AND username ILIKE ${pattern}
-      ORDER BY similarity(username, ${q}) DESC, username ASC
-      LIMIT ${limit} OFFSET ${offset}
-    `;
-    return res.json({ users: rows.map(u => ({ id: u.id, name: u.username, avatar: u.avatar })) });
-  }
-
-  const currentUserId = req.session?.user?.id ?? null;
+async function searchShouts({ q, limit, offset, userId, currentUserId }) {
+  const pattern = `%${q}%`;
   const userFilter = userId ? Prisma.sql`AND s.user_id = ${userId}` : Prisma.empty;
   const ignoredFilter = currentUserId
     ? Prisma.sql`AND s.user_id NOT IN (SELECT target_user_id FROM ignored_users WHERE owner_user_id = ${currentUserId})`
@@ -61,7 +56,7 @@ router.get("/search", asyncHandler(async (req, res) => {
     LIMIT ${limit} OFFSET ${offset}
   `);
 
-  return res.json({
+  return {
     shouts: rows.map(s => ({
       id: s.id,
       content: s.content,
@@ -74,7 +69,23 @@ router.get("/search", asyncHandler(async (req, res) => {
         isBanned: !!s.is_banned,
       },
     })),
-  });
+  };
+}
+
+const searchHandlers = {
+  users: searchUsers,
+  shouts: searchShouts,
+};
+
+router.get("/search", asyncHandler(async (req, res) => {
+  const parsed = searchSchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message });
+
+  const { q, type, userId, limit, offset } = parsed.data;
+  const currentUserId = req.session?.user?.id ?? null;
+
+  const result = await searchHandlers[type]({ q, userId, limit, offset, currentUserId });
+  return res.json(result);
 }));
 
 export default router;
