@@ -10,6 +10,7 @@ const Header: React.FC = () => {
   const { user, openModal, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useScrollLock(confirmLogout);
 
@@ -27,8 +28,8 @@ const Header: React.FC = () => {
     <>
     <header className="bg-th-page h-[52px] border-b border-th-border-2 sticky top-0 z-50 flex items-center justify-center transition-colors">
       <div className="w-full max-w-[1100px] px-4 flex items-center justify-between">
-        {/* Logo */}
-        <a href="/" onClick={handleLogoClick} className="flex items-center">
+        {/* Logo — hidden on narrow screens while search is open */}
+        <a href="/" onClick={handleLogoClick} className={`flex items-center ${searchOpen ? 'hidden sm:flex' : ''}`}>
           <div className="text-th-text font-bold text-2xl tracking-tighter">
             ВОПЛИ
           </div>
@@ -40,7 +41,7 @@ const Header: React.FC = () => {
             {user && <NotificationDropdown />}
 
             {/* Search — moved to where theme toggle was */}
-            <SearchDropdown />
+            <SearchDropdown onFocusChange={setSearchOpen} />
 
             {/* Theme toggle — only for guests; logged-in users access it via avatar menu */}
             {!user && (
