@@ -76,7 +76,11 @@ function renderExcerpt(content: string, query: string): React.ReactNode {
   );
 }
 
-const SearchDropdown: React.FC = () => {
+interface SearchDropdownProps {
+  onFocusChange?: (focused: boolean) => void;
+}
+
+const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
   const [focused, setFocused] = useState(false);
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const [query, setQuery] = useState('');
@@ -147,11 +151,13 @@ const SearchDropdown: React.FC = () => {
     // Panel position is anchored to where the icon button sat; panel width is fixed so right edge stays put
     setPanelStyle({ position: 'fixed', top: rect.bottom + 14, right: Math.min(right, window.innerWidth - PANEL_W - PAD) });
     setFocused(true);
+    onFocusChange?.(true);
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   function handleClose() {
     setFocused(false);
+    onFocusChange?.(false);
     setQuery('');
     setUsers([]);
     setShouts([]);
