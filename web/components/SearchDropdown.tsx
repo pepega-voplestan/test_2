@@ -202,7 +202,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
 
   return (
     <>
-      <div ref={pillRef} className={focused ? 'relative z-50' : undefined}>
+      <div ref={pillRef} className={`sm:w-56 flex items-center sm:justify-end${focused ? ' relative z-50' : ''}`}>
       {!focused ? (
         /* Idle state: plain icon button, no pill */
         <button
@@ -216,7 +216,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
       ) : (
         /* Active state: expanded pill with input */
         <div
-          className="flex items-center rounded-full bg-th-input ring-1 ring-th-border w-36 sm:w-56"
+          className="flex items-center rounded-full bg-th-input ring-1 ring-th-border w-36 sm:w-full"
           style={{ height: '36px' }}
         >
           <span className="shrink-0 flex items-center justify-center text-th-text-3 w-9">
