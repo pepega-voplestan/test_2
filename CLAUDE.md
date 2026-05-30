@@ -70,6 +70,7 @@ make prod             # Docker production (ports 80/443)
 | Add a new background job | `workers/src/jobs/` + register in `workers/src/index.ts` |
 | Change char counting logic | `api/src/helpers/common.js` + `web/tests/unit/effectiveLength.test.ts` |
 | Add a new context provider | Follow order in `web/App.tsx` (see provider order in [web docs](docs/web.md)) |
+| Extend search (add type) | `api/src/routes/search.js` — add handler to `searchHandlers` map + Zod enum |
 
 <!-- ESSENTIAL:END -->
 

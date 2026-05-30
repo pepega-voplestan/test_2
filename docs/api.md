@@ -25,6 +25,7 @@ api/src/
 │   ├── notifications.js    # Notification fetch + mark-read
 │   ├── ignored-users.js    # Ignored users list, add, remove
 │   ├── polls.js            # Poll voting
+│   ├── search.js           # User + shout full-text search via pg_trgm; respects session NSFW/politics prefs
 │   └── socials.js          # Social links CRUD (12 platforms)
 └── helpers/
     ├── common.js           # asyncHandler, requireAuth, shared middleware
@@ -47,6 +48,7 @@ All prefixed `/api/v1/`. Auth = session cookie required. Full spec at `/api/docs
 | POST | `/announcements` | Secret | Replace announcement (requires `ANNOUNCEMENTS_SECRET`; soft-deletes all previous) |
 | GET | `/users/mentions` | — | All non-banned users for @mention autocomplete |
 | GET | `/shouts` | — | `limit`, `offset`, `sortBy=new\|popular`, max 50 |
+| GET | `/search` | — | `q`, `type=shouts\|users`, `userId?`, `limit`, `offset`; NSFW/politics filtered by session prefs (guests default both off); frontend hides from unauthenticated users |
 | PUT | `/shouts/:id` | Yes | Edit shout content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
 | PUT | `/comments/:id` | Yes | Edit comment content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
 | POST | `/upload/media` | Yes | ≤10MB JPG/PNG/WebP/GIF/MP4; images generate 320/960/1600px WebP |
@@ -107,7 +109,7 @@ SSE real-time updates only apply to the `new` tab. Popular and announcements tab
 
 ## Notification System
 
-**Types:** `mention` (user @mentioned in shout/comment), `reply` (comment on your shout, not already a mention).
+**Types:** `mention` (user @mentioned in shout/comment), `reply` (comment on your shout not already a mention; OR sent to the author of a directly-quoted comment via `replyToId`).
 
 **Lifecycle:**
 - Created in `routes/shouts.js` (mention in new shouts) and `routes/comments.js` (mention + reply).
@@ -138,7 +140,7 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - Indices: `(parent_id, created_at)`, `(created_at)`
 
 **Comment** (`comments`)
-- `id`, `shout_id`→shouts, `user_id`→users, `content`, `media_id`→media?, `is_deleted`, `created_at`
+- `id`, `shout_id`→shouts, `user_id`→users, `content`, `media_id`→media?, `reply_to`→comments? (self-referential "CommentReplies"; SET NULL on delete), `is_deleted`, `created_at`
 - Indices: `(shout_id, created_at)`, `(user_id)`
 
 **Media** (`media`)
@@ -149,7 +151,7 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 **CommentLike** (`comment_likes`) — composite PK `(comment_id, user_id)`, cascade deletes
 
 **Announcement** (`announcements`)
-- `id`, `content`, `is_deleted`, `created_at`
+- `id`, `title` (VARCHAR 200, default ""), `content`, `is_deleted`, `created_at`
 - Index: `(is_deleted, created_at)`. Single-active-record: new POST soft-deletes all previous.
 
 **VerificationCode** (`verification_codes`)
