@@ -37,7 +37,7 @@ const Header: React.FC = () => {
           </div>
         </a>
 
-        <div className="flex items-center gap-4 ml-auto">
+        <div className={`flex items-center gap-4 sm:ml-auto sm:flex-none${searchOpen ? ' flex-1' : ' ml-auto'}`}>
           <div className="flex items-center gap-2 text-th-text-3">
             {/* Search */}
             {user && <SearchDropdown onFocusChange={setSearchOpen} />}
