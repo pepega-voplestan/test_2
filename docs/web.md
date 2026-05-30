@@ -5,7 +5,7 @@
 ```
 web/
 ├── components/
-│   ├── Header.tsx              # Auth, navigation, theme toggle, notification dropdown
+│   ├── Header.tsx              # Auth, navigation, theme toggle, search (auth-only), notification dropdown; logo hides on mobile while search open
 │   ├── AuthModal.tsx           # Login/register/password-reset modal (multi-step, email verification)
 │   ├── ShoutFeed.tsx           # Feed: new/popular/announcements tabs, SSE updates; popular has dual sort
 │   ├── ShoutInput.tsx          # Composer: media, emoji, polls, drag-drop, Ctrl+Enter; spoiler/nsfw require media
@@ -13,6 +13,7 @@ web/
 │   ├── ShoutPage.tsx           # Single shout detail view (#/shout/:id)
 │   ├── MentionInput.tsx        # contenteditable composer with @mention autocomplete; ref handle: clear/focus/scrollIntoView/insertText/insertMention/wrapSpoiler/populate
 │   ├── NotificationDropdown.tsx # Bell + unread badge + hover-to-read list + infinite scroll
+│   ├── SearchDropdown.tsx      # Search pill in header: user/shout search via pg_trgm, backdrop close, scroll lock; hidden for guests
 │   ├── ProfilePage.tsx         # Profile view/edit + social links
 │   ├── ProfileSocials.tsx      # Social icons grid (copy-to-clipboard) + modal editor
 │   ├── AvatarUpload.tsx        # Drag-drop avatar upload with preview
@@ -30,7 +31,7 @@ web/
 ├── hooks/
 │   ├── useRoute.ts             # Hash-based routing
 │   ├── useSSE.ts               # Thin wrapper around SSEContext.subscribe
-│   ├── useScrollLock.ts        # Scroll lock utility (used by Lightbox)
+│   ├── useScrollLock.ts        # Scroll lock utility (used by Lightbox, Header logout dialog, SearchDropdown)
 │   └── useMentionUsers.ts      # Module-level singleton cache for mention list
 ├── tests/
 │   ├── setup.ts                # DOM mocks (matchMedia, scrollTo)
@@ -60,6 +61,7 @@ web/
 
 - SPA with hash routing — no server-side route handling needed.
 - **@mentions**: serialized as `@[username:userId]` tokens. `MentionInput.tsx` = contenteditable div, `@` opens dropdown of up to 5 matching users (client-side filtered from module-level cached list). `renderContent` in ShoutCard parses tokens → `#/profile/:id` links. User list lazy-fetched on first `@` via `GET /users/mentions`, cached for browser session.
+- **Comment quoting**: clicking "Reply" on a comment sets `replyToId` in the POST body. Backend attaches `reply_to` FK (self-referential, SET NULL on delete). `QuoteBlock` in ShoutCard renders quoted snippet with author; click scrolls to original. The quoted comment's author always receives a `reply` notification, independent of @mention logic.
 - **Embeds** (`extractEmbeds()` in ShoutCard): auto-detects URLs and renders inline. Platforms: **YouTube** (iframe, oEmbed, 5s timeout), **Twitter/X** (fxtwitter API, module-level `tweetCache`, shows author/text/photos/stats; image proxy via `pbs.fxtwitter.com`), **Steam** (server-side proxy `/steam/app/:appId`, module-level `steamCache`, shows name/description/price/recommendations in Russian), **Imgur** (direct images + pages + albums), **Coub** (iframe), **Tenor** (iframe), **Giphy** (iframe, multiple URL patterns). Rendered in URL order found in text.
 - Popular tab: shouts from last 7 days; dual sort buttons (heart = likes, comment icon = comments) via `popularSort` state in ShoutFeed.
 - Content hidden by preferences: placeholder div (crossed-camera icon) rendered instead of removing from DOM — prevents layout jumps.
