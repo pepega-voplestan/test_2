@@ -37,7 +37,7 @@ web/
 │   ├── setup.ts                # DOM mocks (matchMedia, scrollTo)
 │   ├── helpers.tsx             # renderWithProviders()
 │   └── unit/effectiveLength.test.ts
-├── public/                     # favicon.svg, steam.svg, xbox.svg, playstation.svg, epicgames.png, boosty.png, retroachievements.png, battlenet.webp
+├── public/                     # favicon.svg, manifest.json, robots.txt, sitemap.xml, social icons (steam.svg, xbox.svg, playstation.svg, epicgames.png, boosty.png, retroachievements.png, battlenet.webp, exophase-com-icon.png, backloggd-icon-filled-256.webp, myshows.png)
 ├── App.tsx, index.tsx, types.ts, index.html
 ├── vite.config.ts              # Dev proxy: /api and /media → localhost:3000
 └── vitest.config.ts            # jsdom env, @testing-library, 10s test / 15s hook timeout
@@ -65,7 +65,7 @@ web/
 - **Embeds** (`extractEmbeds()` in ShoutCard): auto-detects URLs and renders inline. Platforms: **YouTube** (iframe, oEmbed, 5s timeout), **Twitter/X** (fxtwitter API, module-level `tweetCache`, shows author/text/photos/stats; image proxy via `pbs.fxtwitter.com`), **Steam** (server-side proxy `/steam/app/:appId`, module-level `steamCache`, shows name/description/price/recommendations in Russian), **Imgur** (direct images + pages + albums), **Coub** (iframe), **Tenor** (iframe), **Giphy** (iframe, multiple URL patterns). Rendered in URL order found in text.
 - Popular tab: shouts from last 7 days; dual sort buttons (heart = likes, comment icon = comments) via `popularSort` state in ShoutFeed.
 - Content hidden by preferences: placeholder div (crossed-camera icon) rendered instead of removing from DOM — prevents layout jumps.
-- **Social links**: 12 platforms, one per platform per user. Non-URL socials (Discord, Battle.net, PSN, Xbox, Epic Games) support copy-to-clipboard.
+- **Social links**: 14 platforms (steam, playstation, xbox, battlenet, epicgames, retroachievements, exophase, backloggd, youtube, myshows, telegram, x, discord, boosty), one per platform per user. Plain-text socials (Battle.net, Epic Games, Discord, Telegram) are stored as raw values; any social whose stored value isn't an `http(s)` URL renders as a copy-to-clipboard badge rather than a link.
 - Lightbox: drag-to-dismiss (vertical swipe + velocity), Escape, click-outside, scroll lock. Pointer events (unified mouse/touch). Pinch-to-zoom, scroll-to-zoom, pan when zoomed, double-tap/click to toggle zoom.
 - **`NotificationDropdown.tsx`**: bell icon + unread badge in Header; notifications as `<a>` elements (right-click open in new tab); actor avatar, text, snippet, relative timestamp; "mark all read" button; infinite scroll via `IntersectionObserver`.
 - **Collapsible pinned shout**: eye icon in ShoutCard owner header toggles collapse. State persisted in `localStorage` at `pinnedCollapsed:${shoutId}`; stale keys pruned on feed reset (when current pinned id changes); `unpin_shout` SSE clears the key immediately.
