@@ -80,3 +80,8 @@ make prod             # Docker production (ports 80/443)
 - [Web](docs/web.md) — components, contexts, hooks, frontend conventions, mobile/iOS rules, architecture
 - [Testing](docs/testing.md) — test setup, fixtures, CI/CD, linting
 - [Infrastructure](docs/infra.md) — Docker services, workers/jobs, backup/restore, known tech debt
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
