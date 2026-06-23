@@ -26,7 +26,7 @@ api/src/
 │   ├── ignored-users.js    # Ignored users list, add, remove
 │   ├── polls.js            # Poll voting
 │   ├── search.js           # User + shout full-text search via pg_trgm; respects session NSFW/politics prefs
-│   └── socials.js          # Social links CRUD (12 platforms)
+│   └── socials.js          # Social links CRUD (14 platforms)
 └── helpers/
     ├── common.js           # asyncHandler, requireAuth, shared middleware
     ├── feed.js             # enrichFeed: joins users/media/likes/polls onto rows
@@ -180,7 +180,7 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - UNIQUE `(owner_user_id, target_user_id)`; max 3 per owner (enforced in route)
 
 **Social** (`socials`)
-- `id`, `user_id`→users (CASCADE), `type` (steam|telegram|x|discord|battlenet|playstation|xbox|epicgames|youtube|spotify|boosty|retroachievements), `url`, `display_name` (default ""), `created_at`, `updated_at`
+- `id`, `user_id`→users (CASCADE), `type` (steam|playstation|xbox|battlenet|epicgames|retroachievements|exophase|backloggd|youtube|myshows|telegram|x|discord|boosty), `url`, `display_name` (default ""), `created_at`, `updated_at`
 - UNIQUE `(user_id, type)` — one per platform per user; index `(user_id)`
 
 ## Environment Variables
