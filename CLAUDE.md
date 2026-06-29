@@ -84,4 +84,5 @@ make prod             # Docker production (ports 80/443)
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
+at specs/001-restrict-anon-realtime/plan.md
 <!-- SPECKIT END -->
