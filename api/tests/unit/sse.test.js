@@ -1,44 +1,53 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import EventEmitter from "events";
-import { addClient, broadcast, broadcastToUser } from "../../src/sse.js";
 
-/** Create a mock request with optional session userId */
-function makeReq(userId = null) {
+// Mock the Prisma client used by reapInvalidClients' account-active check.
+const findUnique = vi.hoisted(() => vi.fn());
+vi.mock("../../src/db.js", () => ({ prisma: { user: { findUnique } } }));
+
+import { addClient, broadcast, broadcastToUser, reapInvalidClients } from "../../src/sse.js";
+
+/** A session store stub whose get() resolves to a controllable session. */
+function makeStore(session = { user: { id: "u" } }) {
+  return { get: vi.fn((_sid, cb) => cb(null, session)) };
+}
+
+/** Create a mock request for an authenticated client. */
+function makeReq(userId = "user-1", { sid = `sid-${userId}`, store } = {}) {
   const emitter = new EventEmitter();
   emitter.session = userId ? { user: { id: userId } } : null;
+  emitter.sessionID = sid;
+  emitter.sessionStore = store ?? makeStore({ user: { id: userId } });
   return emitter;
 }
 
-/** Create a mock response with write/writeHead spies */
+/** Create a mock response with write/writeHead/end spies. */
 function makeRes() {
-  return { writeHead: vi.fn(), write: vi.fn() };
+  return { writeHead: vi.fn(), write: vi.fn(), end: vi.fn() };
 }
 
 /**
  * Add a client and return a cleanup function that simulates disconnect.
  * Always call cleanup() after the test so the module's client map stays clean.
  */
-function connect(userId = null) {
-  const req = makeReq(userId);
+function connect(userId = "user-1", opts = {}) {
+  const req = makeReq(userId, opts);
   const res = makeRes();
   addClient(req, res);
   const cleanup = () => req.emit("close");
   return { req, res, cleanup };
 }
 
-// Each test starts with a clean client list by disconnecting after use.
-// Since sse.js keeps module-level state we use beforeEach to ensure any
-// leftover clients from a previously failed test are gone.
 beforeEach(() => {
-  // Nothing to reset — each test is responsible for its own cleanup via cleanup().
   vi.clearAllMocks();
+  findUnique.mockResolvedValue({ is_banned: 0 }); // active account by default
 });
 
 // ── addClient ─────────────────────────────────────────────────────────────────
 
 describe("addClient", () => {
-  it("writes SSE headers with content-type text/event-stream", () => {
-    const { res, cleanup } = connect();
+  it("writes SSE headers with content-type text/event-stream for an authed user", () => {
+    const { res, cleanup } = connect("user-1");
     expect(res.writeHead).toHaveBeenCalledWith(
       200,
       expect.objectContaining({ "Content-Type": "text/event-stream" })
@@ -47,13 +56,26 @@ describe("addClient", () => {
   });
 
   it("sends the :ok handshake on connect", () => {
-    const { res, cleanup } = connect();
+    const { res, cleanup } = connect("user-1");
     expect(res.write).toHaveBeenCalledWith(":ok\n\n");
     cleanup();
   });
 
+  it("refuses (401, no stream) and registers nothing when no session user is present", () => {
+    const { res, cleanup } = connect(null);
+
+    expect(res.writeHead).toHaveBeenCalledWith(401, expect.objectContaining({ "Content-Type": "application/json" }));
+    expect(res.write).not.toHaveBeenCalledWith(":ok\n\n");
+
+    // Not registered: a broadcast must not reach this response.
+    res.write.mockClear();
+    broadcast("new_shout", { id: "x" });
+    expect(res.write).not.toHaveBeenCalled();
+    cleanup();
+  });
+
   it("removes the client and stops receiving broadcasts after close", () => {
-    const { res, cleanup } = connect();
+    const { res, cleanup } = connect("user-1");
     cleanup(); // disconnect
     res.write.mockClear();
 
@@ -66,8 +88,8 @@ describe("addClient", () => {
 
 describe("broadcast", () => {
   it("writes correctly formatted SSE payload to all connected clients", () => {
-    const { res: res1, cleanup: c1 } = connect();
-    const { res: res2, cleanup: c2 } = connect();
+    const { res: res1, cleanup: c1 } = connect("user-1");
+    const { res: res2, cleanup: c2 } = connect("user-2");
     res1.write.mockClear();
     res2.write.mockClear();
 
@@ -81,16 +103,14 @@ describe("broadcast", () => {
   });
 
   it("is a no-op when no clients are connected", () => {
-    // Should not throw
     expect(() => broadcast("ping", {})).not.toThrow();
   });
 
   it("serialises data as JSON in the SSE frame", () => {
-    const { res, cleanup } = connect();
+    const { res, cleanup } = connect("user-1");
     res.write.mockClear();
 
-    const data = { likes: 42, isLiked: true };
-    broadcast("shout_like", data);
+    broadcast("shout_like", { likes: 42, isLiked: true });
 
     const [call] = res.write.mock.calls;
     expect(call[0]).toContain(`"likes":42`);
@@ -132,17 +152,57 @@ describe("broadcastToUser", () => {
     c1(); c2();
   });
 
-  it("does not write to anonymous (userId=null) clients", () => {
-    const { res, cleanup } = connect(null); // anonymous
+  it("is a no-op when no matching user is connected", () => {
+    expect(() => broadcastToUser("ghost", "event", {})).not.toThrow();
+  });
+});
+
+// ── reapInvalidClients (server-side invalidation: FR-006, SC-005) ───────────────
+
+describe("reapInvalidClients", () => {
+  it("keeps a client whose session is valid and account active", async () => {
+    const { res, cleanup } = connect("user-1");
     res.write.mockClear();
 
-    broadcastToUser("user-1", "notification", {});
+    await reapInvalidClients();
 
-    expect(res.write).not.toHaveBeenCalled();
+    expect(res.end).not.toHaveBeenCalled();
+    broadcast("new_shout", { id: "still-here" });
+    expect(res.write).toHaveBeenCalled(); // still registered
     cleanup();
   });
 
-  it("is a no-op when no matching user is connected", () => {
-    expect(() => broadcastToUser("ghost", "event", {})).not.toThrow();
+  it("drops a client whose session no longer has a user (signed out / expired)", async () => {
+    const store = makeStore(null); // session gone
+    const { res } = connect("user-1", { store });
+    res.write.mockClear();
+
+    await reapInvalidClients();
+
+    expect(res.end).toHaveBeenCalled();
+    broadcast("new_shout", { id: "gone" });
+    expect(res.write).not.toHaveBeenCalled(); // no longer registered
+  });
+
+  it("drops a client whose account has been banned", async () => {
+    const { res } = connect("user-1");
+    findUnique.mockResolvedValue({ is_banned: 1 }); // banned after connecting
+    res.write.mockClear();
+
+    await reapInvalidClients();
+
+    expect(res.end).toHaveBeenCalled();
+    broadcast("new_shout", { id: "banned" });
+    expect(res.write).not.toHaveBeenCalled();
+  });
+
+  it("drops a client whose account no longer exists", async () => {
+    const { res } = connect("user-1");
+    findUnique.mockResolvedValue(null); // deleted
+    res.write.mockClear();
+
+    await reapInvalidClients();
+
+    expect(res.end).toHaveBeenCalled();
   });
 });

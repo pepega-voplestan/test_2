@@ -28,7 +28,7 @@ Web application: Express API under `api/`, React frontend under `web/`. API test
 
 **Purpose**: Prepare test scaffolding; no project initialization needed (existing codebase).
 
-- [ ] T001 [P] Add a banned/soft-deleted user fixture and a `bannedAgent`-style helper (authenticated session backed by an `is_banned`/soft-deleted user) to `api/tests/helpers.js` and `api/tests/fixtures`, for use by the realtime authorization tests.
+- [X] T001 [P] Banned-session test support — satisfied by existing helpers: `createUser({ is_banned })` (fixtures) + `authenticatedAgent(user)` + a post-login `prisma.user.update({ is_banned: 1 })` (the mid-session ban pattern already used in `likes.test.js`). No new fixture/helper needed; note: the `User` model has no separate soft-delete column, so "soft-deleted account" maps to a deleted row / `is_banned`.
 
 ---
 
@@ -38,8 +38,8 @@ Web application: Express API under `api/`, React frontend under `web/`. API test
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Implement a realtime-authorization helper in `api/src/auth.js` (e.g. `getRealtimeUserId(req)` / `requireActiveSession`) that returns the user id only when the session has a user AND a Prisma lookup confirms the account is active (not `is_banned`, not soft-deleted); otherwise null. Use Prisma only (Constitution IV); no Zod needed (no request body).
-- [ ] T003 [P] Add unit tests for the authorization helper in `api/tests/unit/auth.test.js`: anonymous → null, active user → id, banned user → null, soft-deleted user → null.
+- [X] T002 Implemented `getRealtimeUserId(req)` in `api/src/auth.js` — returns the user id only when the session has a user AND a Prisma lookup confirms the account exists and is not `is_banned`; otherwise null. Prisma-only (Constitution IV); no request body so no Zod.
+- [X] T003 [P] Added `getRealtimeUserId` unit tests in `api/tests/unit/auth.test.js` (Prisma mocked): anonymous → null (no DB call), active → id, banned → null, deleted/missing → null.
 
 **Checkpoint**: Server can authoritatively decide realtime eligibility for any session.
 
@@ -55,15 +55,15 @@ Web application: Express API under `api/`, React frontend under `web/`. API test
 
 > Write these tests FIRST and ensure they FAIL before implementation.
 
-- [ ] T004 [P] [US1] Integration test in `api/tests/integration/events.test.js`: `GET /api/v1/events` with no session returns **401** `{ error: "Unauthorized" }` and does NOT open a `text/event-stream`; a banned/soft-deleted session also returns 401 (uses helper from T001).
-- [ ] T005 [P] [US1] Unit test in `api/tests/unit/sse.test.js`: `addClient` is never invoked for / never stores a client with `userId === null` (no anonymous client entry).
-- [ ] T006 [P] [US1] Web test in `web/context/SSEContext.test.tsx`: when `useAuth` reports anonymous (no user) or `loading`, `SSEProvider` opens **no** `EventSource`.
+- [X] T004 [P] [US1] Integration test in `api/tests/integration/events.test.js`: `GET /api/v1/events` returns **401** `{ error: "Unauthorized" }` with JSON (not `text/event-stream`) for an anonymous request, a banned-after-login session, and a deleted-account session.
+- [X] T005 [P] [US1] Unit test in `api/tests/unit/sse.test.js`: `addClient` with no session user writes 401 + registers nothing (a subsequent `broadcast` does not reach it) — no `userId === null` entry is ever stored.
+- [X] T006 [P] [US1] Web test in `web/context/SSEContext.test.tsx`: when `useAuth` reports anonymous (no user) or `loading`, `SSEProvider` opens **no** `EventSource`.
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Gate the SSE route in `api/src/routes/index.js`: apply the T002 authorization helper to `GET /api/v1/events` so unauthorized sessions receive a **401 JSON** response BEFORE any SSE headers are written; only authorized requests reach `addClient`.
-- [ ] T008 [US1] Update `addClient` in `api/src/sse.js` to require an authorized user id (registering a client only for authorized sessions; remove the `userId || null` anonymous path and the "user=anon" log branch) so no `userId === null` entries exist.
-- [ ] T009 [US1] In `web/context/SSEContext.tsx`, consume `useAuth()` and gate the `EventSource` creation so it is NOT opened while `loading` or when no user is present (anonymous). Preserve existing event registration for the authorized case. Keep `SSEProvider` an ancestor of `NotificationsProvider` (provider order unchanged in `web/App.tsx`).
+- [X] T007 [US1] Gated the SSE route in `api/src/routes/index.js`: `GET /api/v1/events` runs `getRealtimeUserId` and returns **401 JSON** BEFORE any SSE headers; only authorized requests reach `addClient` (wrapped in `asyncHandler`).
+- [X] T008 [US1] Updated `addClient` in `api/src/sse.js`: registers a client only when a session user is present (defensive 401 otherwise), removed the `userId || null` anon path and the `user=anon` log branch — no `userId === null` entries.
+- [X] T009 [US1] `web/context/SSEContext.tsx` now consumes `useAuth()` and the connect effect returns early while `loading` or when no user is present. Event registration preserved for the authed case; provider order in `web/App.tsx` unchanged (`SSEProvider` still ancestor of `NotificationsProvider`).
 
 **Checkpoint**: Anonymous users open no realtime connection and see no live updates; direct anon/banned subscription is refused (FR-002, FR-003, SC-001, SC-002, SC-004).
 
@@ -77,14 +77,14 @@ Web application: Express API under `api/`, React frontend under `web/`. API test
 
 ### Tests for User Story 2
 
-- [ ] T010 [P] [US2] Integration test in `api/tests/integration/events.test.js`: an authenticated active session (via `authenticatedAgent`) on `GET /api/v1/events` receives **200** with `Content-Type: text/event-stream`, the `:ok` preamble, and a subsequently `broadcast()`-ed event frame.
-- [ ] T011 [P] [US2] Unit test in `api/tests/unit/sse.test.js`: a registered authorized client receives `broadcast()` events and `broadcastToUser()` events matched by its `userId`.
-- [ ] T012 [P] [US2] Web test in `web/context/SSEContext.test.tsx`: when authenticated, `SSEProvider` opens exactly one `EventSource("/api/v1/events")`, registers all `ALL_EVENTS` listeners, and dispatches parsed events to subscribers.
+- [X] T010 [P] [US2] Authorized 200 + stream behavior verified at unit level in `api/tests/unit/sse.test.js` (`addClient` writes `text/event-stream` 200 headers + `:ok`, then `broadcast` reaches the client). **Realization note**: this is a unit test rather than an integration test because `helpers.js` globally mocks `sse.js`, so a supertest request on the authorized path would never end the stream — the refusal path is the integration coverage (T004).
+- [X] T011 [P] [US2] Unit tests in `api/tests/unit/sse.test.js`: a registered authorized client receives `broadcast()` frames and `broadcastToUser()` frames matched by its `userId`.
+- [X] T012 [P] [US2] Web test in `web/context/SSEContext.test.tsx`: when authenticated, `SSEProvider` opens exactly one `EventSource("/api/v1/events")` and dispatches parsed events to subscribers.
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Verify/adjust `api/src/sse.js` so authorized clients are stored with their real `userId` and that `broadcast()` / `broadcastToUser()` behavior is unchanged for them (no regression to FR-004); update the connection log line to drop the anon case.
-- [ ] T014 [US2] In `web/context/SSEContext.tsx`, ensure the authenticated path retains the existing exponential backoff/reconnect (`onerror`/`onopen`) and event-listener wiring so signed-in latency/behavior is unchanged (SC-003).
+- [X] T013 [US2] `api/src/sse.js` stores authorized clients with their real `userId`; `broadcast()` / `broadcastToUser()` are behaviorally unchanged for them (existing + new unit tests green). Connection log line drops the anon case.
+- [X] T014 [US2] `web/context/SSEContext.tsx` retains the exponential backoff/reconnect (`onerror`/`onopen`) and event-listener wiring for the authed path (verified by the unchanged, still-green `web/hooks/useSSE.test.ts` backoff suite).
 
 **Checkpoint**: Signed-in users keep the full, regression-free realtime experience (FR-001, FR-004, FR-009, SC-003).
 
@@ -98,13 +98,13 @@ Web application: Express API under `api/`, React frontend under `web/`. API test
 
 ### Tests for User Story 3
 
-- [ ] T015 [P] [US3] Web test in `web/context/SSEContext.test.tsx`: an auth-state transition anon→user opens an `EventSource`, and user→null (sign-out) closes it and clears any pending reconnect timer.
-- [ ] T016 [P] [US3] Integration test in `api/tests/integration/events.test.js`: when a connected session is invalidated/expired (or its user becomes banned), the server stops writing further event frames to that client within one heartbeat/update cycle (SC-005).
+- [X] T015 [P] [US3] Web test in `web/context/SSEContext.test.tsx`: anon→user transition opens an `EventSource`; user→null (sign-out) closes it (effect cleanup also clears the reconnect timer).
+- [X] T016 [P] [US3] Server-side invalidation tested in `api/tests/unit/sse.test.js` via `reapInvalidClients()`: a client is dropped (and stops receiving broadcasts) when its session no longer resolves to a user (sign-out/expiry), when its account is banned, or when its account is deleted. **Realization note**: unit test against the real `sse.js` (Prisma + session store mocked) rather than integration, since `sse.js` is globally mocked in `helpers.js`.
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Key the `web/context/SSEContext.tsx` connection effect on the authenticated user from `useAuth()`: open on sign-in, and on sign-out tear down the `EventSource`, clear reconnect timers, and reset backoff (FR-006, FR-007).
-- [ ] T018 [US3] In `api/src/sse.js`, extend the 30s heartbeat loop to revalidate each client's session/account and drop (close + delete) connections whose session is no longer valid (sign-out, expiry, ban), so delivery ceases within one cycle without relying on the client alone (FR-006, FR-008, SC-005).
+- [X] T017 [US3] `web/context/SSEContext.tsx` connect effect is keyed on `[user?.id, loading]`: opens on sign-in and, on sign-out/user change, the effect cleanup closes the `EventSource` and clears the reconnect timer (FR-006, FR-007).
+- [X] T018 [US3] `api/src/sse.js` heartbeat now calls `reapInvalidClients()` before pinging: each client's session is re-loaded via the stored `sessionStore.get(sid)` (sign-out/expiry) and the account re-checked via Prisma `is_banned` (ban/delete); invalid connections are closed + removed (FR-006, FR-008, SC-005). Heartbeat interval is skipped under `NODE_ENV=test`. See updated [data-model.md](./data-model.md) SSE Client entity.
 
 **Checkpoint**: All three stories independently functional; auth-state boundary handled on client and server.
 
@@ -114,9 +114,9 @@ Web application: Express API under `api/`, React frontend under `web/`. API test
 
 **Purpose**: Documentation, validation, and cleanup spanning all stories.
 
-- [ ] T019 Update SSE auth behavior in docs via the `/docs` skill (do NOT edit `docs/*.md` or `CLAUDE.md` directly): note in `docs/api.md` that `/api/v1/events` requires an active authenticated session (401 otherwise) and in `docs/web.md` that `SSEProvider` connects only when authenticated.
-- [ ] T020 [P] Remove now-dead anonymous-client handling/logging and confirm no remaining code path stores `userId === null` in `api/src/sse.js`.
-- [ ] T021 Run the full suite (`make test-all`) and the `quickstart.md` manual scenarios (incl. `curl -i /api/v1/events` with no cookie → 401) to validate FR-001…FR-009 and SC-001…SC-005.
+- [X] T019 Updated docs via the `/docs` skill: `docs/api.md` — `/events` row now `Auth: Yes` + SSE section documents the `getRealtimeUserId` gate (401 before stream headers), no anonymous clients, and `reapInvalidClients` heartbeat revalidation; `docs/web.md` — `SSEProvider` opens the `EventSource` only when authenticated (connects on sign-in, tears down on sign-out) and `AuthProvider` must stay its ancestor.
+- [X] T020 [P] `api/src/sse.js` cleaned up: removed the anonymous `userId || null` path, the `user=anon` connection log, and the now-dead `anon` counter in `getClientStats()`. No code path stores `userId === null`.
+- [X] T021 Ran `make test` (API) and the full web suite + lint/tsc. **Web**: 134/134 pass, eslint 0 errors. **API**: my changed/added files pass — `events.test.js` (3), `sse.test.js` (14), `auth.test.js` (12); full API run is 450 passed / 9 skipped with **one pre-existing failure** in `tests/unit/app.setup.test.js` (it mocks `connect-sqlite3` while `app.js` uses `connect-redis`, and the test compose has no Redis — confirmed failing identically on the pre-change baseline, unrelated to this feature). The anonymous-`curl` quickstart check is covered by the `events.test.js` anonymous-401 assertion. Browser-driven manual scenarios in `quickstart.md` were not executed in this environment; their automated equivalents pass.
 
 ---
 

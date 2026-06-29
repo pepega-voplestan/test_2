@@ -4,6 +4,11 @@ import { renderHook, act } from "@testing-library/react";
 import { useSSE } from "./useSSE";
 import { SSEProvider } from "../context/SSEContext";
 
+// SSEProvider only opens a connection for an authenticated user; mock useAuth
+// so these connection/backoff tests run against a live (authenticated) channel.
+const mockUseAuth = vi.hoisted(() => vi.fn());
+vi.mock("../context/AuthContext", () => ({ useAuth: () => mockUseAuth() }));
+
 // ── Controllable EventSource mock ─────────────────────────────────────────────
 
 class MockEventSource {
@@ -58,6 +63,7 @@ beforeEach(() => {
   MockEventSource.instances = [];
   vi.useFakeTimers();
   vi.stubGlobal("EventSource", MockEventSource);
+  mockUseAuth.mockReturnValue({ user: { id: "u1", name: "alice", avatar: "" }, loading: false });
 });
 
 afterEach(() => {
