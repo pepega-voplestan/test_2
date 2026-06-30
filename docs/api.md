@@ -42,7 +42,7 @@ All prefixed `/api/v1/`. Auth = session cookie required. Full spec at `/api/docs
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/events` | — | SSE stream |
+| GET | `/events` | Yes | SSE stream — active authenticated session only; 401 for anonymous/banned/deleted |
 | GET | `/steam/app/:appId` | — | Steam store proxy (1h cache, avoids CORS) |
 | POST | `/auth/register/send-code` | — | Send email code (rate: 20/min; blocked if `registration_open=false`) |
 | POST | `/announcements` | Secret | Replace announcement (requires `ANNOUNCEMENTS_SECRET`; soft-deletes all previous) |
@@ -82,6 +82,8 @@ Generate htpasswd: `docker run --rm httpd:alpine htpasswd -nbB admin_username YO
 ## SSE Real-Time Events
 
 Single shared `EventSource` in `SSEContext.tsx`. All consumers subscribe via `subscribe(event, handler)`. `useSSE(listeners)` is a thin convenience wrapper. Heartbeat every 30s. Exponential backoff reconnect (1s→30s max).
+
+**Authenticated only**: `GET /api/v1/events` is gated server-side by `getRealtimeUserId(req)` (in `auth.js`), which returns the user id only when the session has a user AND a Prisma `is_banned` lookup confirms the account exists and is active. Anonymous, banned, or deleted-account requests get `401 { error: "Unauthorized" }` **before** any `text/event-stream` headers, so the browser `EventSource` never establishes a stream. `addClient` only ever registers clients with a real `userId` — there are no anonymous/`null` clients. Each client entry also stores `sid`/`sessionStore`, and the 30s heartbeat first calls `reapInvalidClients()`, which re-loads each client's session via `sessionStore.get(sid)` and re-checks the account; connections whose session has signed out, expired, or been banned/deleted are closed and dropped within one cycle (so delivery stops authoritatively, not just when the client disconnects).
 
 **Broadcast (all clients):**
 

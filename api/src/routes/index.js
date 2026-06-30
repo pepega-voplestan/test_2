@@ -1,4 +1,6 @@
 import { addClient } from "../sse.js";
+import { getRealtimeUserId } from "../auth.js";
+import { asyncHandler } from "../helpers/common.js";
 import authRouter from "./auth.js";
 import shoutsRouter from "./shouts.js";
 import commentsRouter from "./comments.js";
@@ -19,8 +21,14 @@ export function mountRoutes(app) {
   /* health */
   app.get("/api/v1/health", (_req, res) => res.json({ ok: true }));
 
-  /* SSE event stream */
-  app.get("/api/v1/events", (req, res) => addClient(req, res));
+  /* SSE event stream — authenticated, active accounts only.
+     The 401 is sent BEFORE any text/event-stream headers so the browser
+     EventSource surfaces an error and does not establish a stream. */
+  app.get("/api/v1/events", asyncHandler(async (req, res) => {
+    const userId = await getRealtimeUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    addClient(req, res);
+  }));
 
   /* me */
   app.get("/api/v1/me", (req, res) => {
