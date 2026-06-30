@@ -39,19 +39,32 @@ Only read for this feature; not modified.
 
 ## Entity: SSE Client (existing — in-memory `Map` in `api/src/sse.js`)
 
-Represents an open realtime connection. Currently `clientId → { res, userId }`.
+Represents an open realtime connection. Previously `clientId → { res, userId }`.
+To make server-side invalidation (FR-006) authoritative, each entry now also
+carries a reference back to its session so the heartbeat can re-check liveness.
 
-| Field | Current | Change for this feature |
-|-------|---------|-------------------------|
+| Field | Previous | Change for this feature |
+|-------|----------|-------------------------|
 | `clientId` | counter string | unchanged |
 | `res` | HTTP response stream | unchanged |
 | `userId` | user id **or `null` (anon)** | **Never `null`** — anonymous connections are no longer added |
+| `sid` | — | **NEW** — `req.sessionID`, used to re-load the session on the heartbeat |
+| `sessionStore` | — | **NEW** — `req.sessionStore` reference, used to look the session up |
 
 - **Validation rule**: Entries are created **only** for authorized sessions; the
-  `userId: null` (anonymous) case is eliminated.
+  `userId: null` (anonymous) case is eliminated. `addClient` defensively refuses
+  (401) and registers nothing if no session user is present.
 - **Lifecycle**: created on authorized connect; removed on client `close`, on
-  client-side sign-out, and on server-side revalidation if the session is no
-  longer valid.
+  client-side sign-out (the browser closes the `EventSource`), and on
+  server-side revalidation (`reapInvalidClients`) when the stored session no
+  longer resolves to a user OR the account is banned/deleted.
+- **Server-side revalidation** (FR-006, SC-005): the 30s heartbeat calls
+  `reapInvalidClients()`, which for each client loads the session via
+  `sessionStore.get(sid)` (sign-out/expiry detection) and checks the account via
+  Prisma `is_banned` (ban/delete detection), closing and dropping any connection
+  that is no longer valid before pinging the survivors. Worst-case continued
+  delivery after invalidation is therefore bounded by the ~30s heartbeat
+  interval.
 
 ## Entity: Realtime Update (existing event payloads)
 
