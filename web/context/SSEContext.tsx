@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, ReactNode } from "react";
+import { useAuth } from "./AuthContext";
 
 type SSEHandler = (data: Record<string, unknown>) => void;
 
@@ -20,6 +21,7 @@ const ALL_EVENTS = [
 
 export function SSEProvider({ children }: { children: ReactNode }) {
   const handlersRef = useRef<Map<string, Set<SSEHandler>>>(new Map());
+  const { user, loading } = useAuth();
 
   function subscribe(event: string, handler: SSEHandler): () => void {
     if (!handlersRef.current.has(event)) {
@@ -29,7 +31,13 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     return () => { handlersRef.current.get(event)?.delete(handler); };
   }
 
+  // Open the realtime channel only for authenticated users. Anonymous visitors
+  // establish no EventSource at all; signing in opens it and signing out tears
+  // it down (re-running on the user id change). Authorization is also enforced
+  // authoritatively on the server — this is the client-side counterpart.
   useEffect(() => {
+    if (loading || !user) return;
+
     let es: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let backoff = 1000;
@@ -68,7 +76,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
       es?.close();
       if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [user?.id, loading]);
 
   const value = useMemo<SSEContextType>(() => ({ subscribe }), []); // eslint-disable-line react-hooks/exhaustive-deps
 

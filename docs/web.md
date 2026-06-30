@@ -24,7 +24,7 @@ web/
 ├── context/
 │   ├── AuthContext.tsx         # useAuth()
 │   ├── ThemeContext.tsx        # useTheme()
-│   ├── SSEContext.tsx          # Single shared EventSource; subscribe(event, handler) pattern
+│   ├── SSEContext.tsx          # Single shared EventSource (authenticated only); subscribe(event, handler) pattern
 │   ├── NotificationsContext.tsx # useNotifications()
 │   ├── ContentPreferencesContext.tsx # useContentPreferences()
 │   └── IgnoredUsersContext.tsx # useIgnoredUsers()
@@ -54,7 +54,8 @@ web/
 - Fetch with `credentials: "include"`; optimistic UI (likes, delete) with rollback on error
 - PascalCase components, camelCase functions/variables; all UI text in Russian with proper declensions
 - Context provider order (outermost first): `ThemeProvider → AuthProvider → SSEProvider → ContentPreferencesProvider → IgnoredUsersProvider → NotificationsProvider`
-- `SSEProvider` must wrap `NotificationsProvider` and any component using `useSSE`/`useSSEContext`
+- `SSEProvider` must wrap `NotificationsProvider` and any component using `useSSE`/`useSSEContext`; `AuthProvider` must stay an ancestor of `SSEProvider` (it consumes `useAuth`)
+- `SSEProvider` consumes `useAuth()` and opens the `EventSource` **only for an authenticated user** — never while auth is `loading`, never for anonymous visitors. It connects on sign-in and tears the connection down on sign-out (effect keyed on the user id); this mirrors the server-side 401 gate on `/api/v1/events`
 - Unused vars prefixed `_`
 
 ## Architecture Notes (Frontend)

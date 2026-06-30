@@ -1,5 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
-import { hashPassword, verifyPassword, requireAuth } from "../../src/auth.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the Prisma client used by getRealtimeUserId's account-active check.
+const findUnique = vi.hoisted(() => vi.fn());
+vi.mock("../../src/db.js", () => ({ prisma: { user: { findUnique } } }));
+
+import { hashPassword, verifyPassword, requireAuth, getRealtimeUserId } from "../../src/auth.js";
 
 describe("hashPassword / verifyPassword", () => {
   it("hashPassword returns a bcrypt hash string", async () => {
@@ -69,5 +74,37 @@ describe("requireAuth", () => {
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("getRealtimeUserId", () => {
+  beforeEach(() => {
+    findUnique.mockReset();
+  });
+
+  it("returns null for an anonymous request (no session user)", async () => {
+    expect(await getRealtimeUserId({ session: null })).toBeNull();
+    expect(await getRealtimeUserId({ session: {} })).toBeNull();
+    expect(await getRealtimeUserId({})).toBeNull();
+    expect(findUnique).not.toHaveBeenCalled(); // short-circuits before DB
+  });
+
+  it("returns the user id for an active (non-banned) account", async () => {
+    findUnique.mockResolvedValue({ is_banned: 0 });
+    const req = { session: { user: { id: "u-active" } } };
+    expect(await getRealtimeUserId(req)).toBe("u-active");
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: "u-active" }, select: { is_banned: true } });
+  });
+
+  it("returns null for a banned account", async () => {
+    findUnique.mockResolvedValue({ is_banned: 1 });
+    const req = { session: { user: { id: "u-banned" } } };
+    expect(await getRealtimeUserId(req)).toBeNull();
+  });
+
+  it("returns null when the account no longer exists (deleted)", async () => {
+    findUnique.mockResolvedValue(null);
+    const req = { session: { user: { id: "u-gone" } } };
+    expect(await getRealtimeUserId(req)).toBeNull();
   });
 });
