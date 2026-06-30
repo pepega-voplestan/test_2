@@ -2,6 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-06-30
+**Updated**: 2026-07-01 (applied /speckit-analyze findings: FR-003, FR-011, FR-012, FR-019 refined; FR-022, FR-023, FR-024 added; GifFavorite entity updated; SC-002 qualified; Assumptions caps specified)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -32,6 +33,12 @@
 ## Notes
 
 - All items pass. Spec is ready for `/speckit-clarify` or `/speckit-plan`.
-- Giphy branding/attribution requirement noted in Assumptions (API ToS compliance).
-- Single-media-per-post constraint explicitly addressed in FR-005 and User Story 1.
-- iOS-specific behaviors (reduced motion, native file picker, keyboard avoidance) covered in FR-017–FR-021 and edge cases.
+- FR-022: anonymous user browse/search behavior now an explicit FR (was Assumptions-only).
+- FR-023: Giphy attribution now an explicit FR (was Assumptions-only).
+- FR-024: upload rate-limiting now an explicit FR.
+- FR-003: category sections with Russian headings now unambiguously required.
+- FR-011/FR-012: Russian-language qualifier removed (covered by FR-015).
+- FR-019: 44 × 44 px tap area explicitly specified.
+- GifFavorite entity: `giphy_still_url` field added to support reduced-motion rendering.
+- SC-002: search caching assumption documented inline.
+- Assumptions: per-user caps specified as 500 favorites / 100 uploads with rationale.

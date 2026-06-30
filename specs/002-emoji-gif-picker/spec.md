@@ -92,7 +92,7 @@ A logged-in user wants to use a GIF not available on Giphy. They tap an upload b
 
 - **FR-001**: The emoji picker panel MUST include a GIF tab alongside the existing emoji content, accessible via a tab control at the top of the picker window.
 - **FR-002**: The GIF tab MUST display a search field; submitting a search query retrieves matching GIFs from the Giphy API.
-- **FR-003**: When no search is active, the GIF tab MUST display trending and/or categorized GIFs so users can browse without typing.
+- **FR-003**: When no search is active, the GIF tab MUST display trending GIFs organized into category sections with Russian-language headings so users can browse without typing.
 - **FR-004**: Users MUST be able to select any displayed GIF to insert it as the media attachment for the current post or comment.
 - **FR-005**: Selecting a GIF MUST enforce the single-media-per-post/comment constraint — it replaces any previously selected image; selecting a GIF while a YouTube embed is set is not permitted.
 - **FR-006**: Authenticated users MUST be able to mark any Giphy GIF as a favorite using a visible control on the GIF thumbnail.
@@ -100,21 +100,24 @@ A logged-in user wants to use a GIF not available on Giphy. They tap an upload b
 - **FR-008**: Users MUST be able to remove a GIF from favorites; the removal MUST take effect immediately with rollback on server error (optimistic UI).
 - **FR-009**: Favoriting a GIF MUST be idempotent — attempting to favorite an already-favorited GIF MUST NOT create a duplicate entry.
 - **FR-010**: Authenticated users MUST be able to upload their own GIF files via an upload control within the GIF picker.
-- **FR-011**: Uploaded GIFs MUST be rejected if they exceed the file size limit that applies to shout media attachments, with an error message in Russian.
-- **FR-012**: Only GIF-format files MUST be accepted for upload; other formats MUST be rejected with a Russian-language error.
+- **FR-011**: Uploaded GIFs MUST be rejected if they exceed the file size limit that applies to shout media attachments (see FR-015).
+- **FR-012**: Only GIF-format files MUST be accepted for upload; other formats MUST be rejected (see FR-015).
 - **FR-013**: Successfully uploaded GIFs MUST appear in a "Мои GIF" section within the GIF picker for reuse in future posts.
 - **FR-014**: Users MUST be able to delete uploaded GIFs from their personal library; deleted entries MUST be soft-deleted and no longer appear in the picker.
 - **FR-015**: All user-visible text in the GIF picker (labels, tabs, empty states, error messages, section headings) MUST be written in Russian with correct grammatical forms.
 - **FR-016**: If the Giphy API is unavailable, the GIF tab MUST display a Russian-language error message; it MUST NOT crash the emoji picker or the composer.
 - **FR-017**: The GIF picker MUST function correctly on iOS Safari (and as a PWA), including file upload via the native iOS photo/file picker.
 - **FR-018**: On devices with system-level reduced-motion settings enabled, GIF thumbnails in the picker grid MUST be displayed as static images rather than auto-animating.
-- **FR-019**: Touch targets for all interactive elements (GIF thumbnails, tab buttons, favorite icons, upload button) MUST meet minimum touch-friendly size requirements on mobile.
+- **FR-019**: Touch targets for all interactive elements (GIF thumbnails, tab buttons, favorite icons, upload button) MUST provide a minimum 44 × 44 px tap area on mobile (per Apple HIG / WCAG 2.5.5).
 - **FR-020**: The GIF picker layout MUST be responsive and usable across desktop, tablet, and mobile screen sizes without horizontal overflow or broken layouts.
 - **FR-021**: The search field and GIF grid MUST remain accessible when the soft keyboard is visible on mobile (the picker must not be fully obscured by the keyboard).
+- **FR-022**: Unauthenticated users MAY browse trending GIFs and search via the GIF tab; the Favorites and My GIFs sections MUST display a Russian-language prompt to log in rather than functional controls.
+- **FR-023**: The GIF tab MUST display Giphy attribution branding ("Powered by GIPHY") as required by the Giphy API Terms of Service; this branding must be visible whenever GIF content is shown.
+- **FR-024**: The personal GIF upload endpoint MUST apply the same rate-limiting behaviour as the existing media upload endpoint, falling back to IP-based limiting for unauthenticated requests.
 
 ### Key Entities
 
-- **GifFavorite**: Represents a user's saved reference to an external GIF. Associates a user with a Giphy GIF identifier and its CDN URL, along with a creation timestamp. A user may not have duplicate favorites for the same GIF ID.
+- **GifFavorite**: Represents a user's saved reference to an external GIF. Associates a user with a Giphy GIF identifier, its animated CDN URL, and a static still URL (used when reduced-motion mode is active), along with a creation timestamp. A user may not have duplicate favorites for the same GIF ID.
 - **UserGif**: Represents a user-uploaded GIF stored in the application's media storage. Tracks the owner, file metadata (size, original filename), upload timestamp, and soft-delete state. Subject to the same storage and access patterns as shout media attachments.
 
 ## Success Criteria *(mandatory)*
@@ -122,7 +125,7 @@ A logged-in user wants to use a GIF not available on Giphy. They tap an upload b
 ### Measurable Outcomes
 
 - **SC-001**: A user can open the GIF tab, search for a term, and insert a GIF into a post in under 15 seconds under normal network conditions.
-- **SC-002**: GIF search results appear within 2 seconds of submitting a search query on a standard mobile connection.
+- **SC-002**: GIF search results appear within 2 seconds of submitting a search query on a standard mobile connection. This target is contingent on Giphy API response times; a short-lived server-side cache for repeat search queries (same term, same pagination) is assumed as part of the implementation.
 - **SC-003**: The Favorites and My GIFs sections load within 1 second of the picker being opened, regardless of the number of saved entries (up to a reasonable cap).
 - **SC-004**: GIF upload completes within the same time envelope as an equivalent-size image upload via the existing shout media upload flow.
 - **SC-005**: The GIF picker renders correctly and is fully operable on iOS 16+ Safari without layout breakage or non-functional controls.
@@ -136,6 +139,6 @@ A logged-in user wants to use a GIF not available on Giphy. They tap an upload b
 - A GIF inserted into a post is treated as that post's media attachment and subject to the same single-media-per-post/comment rule as images. Inserting a GIF replaces a selected image; it cannot coexist with a YouTube embed.
 - Unauthenticated (anonymous) users can browse and search GIFs but cannot save favorites or upload custom GIFs; these sections are either hidden or show a prompt to log in.
 - Uploaded GIFs are stored using the same media infrastructure and subject to the same file-size cap (matching the shout media attachment limit) and access controls as existing shout media. No separate storage quota is introduced.
-- A per-user cap on the number of saved favorites and uploaded GIFs may be enforced to prevent abuse; a reasonable upper bound (e.g., several hundred entries) is assumed sufficient for normal use.
+- Per-user cap is 500 GIF favorites and 100 uploaded personal GIFs. The 5× difference reflects that favorites are zero-storage references (hosted on Giphy's CDN) while uploads consume on-disk storage; the upload cap aligns with the existing single-media-per-post model where volume is bounded naturally.
 - The "Reduce Motion" behavior applies to auto-animation in the picker grid only; once a GIF is inserted into a post and rendered in the feed, feed-level animation behavior follows the existing shout media rendering rules.
 - Attribution requirements for Giphy (e.g., Giphy logo/branding in the picker) are assumed to be required per Giphy's API terms of service and must be included in the UI.
