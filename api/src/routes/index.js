@@ -13,6 +13,7 @@ import ignoredUsersRouter from "./ignored-users.js";
 import pollsRouter from "./polls.js";
 import socialsRouter from "./socials.js";
 import searchRouter from "./search.js";
+import gifsRouter from "./gifs.js";
 
 const steamCache = new Map();
 const STEAM_CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -71,4 +72,5 @@ export function mountRoutes(app) {
   app.use("/api/v1", pollsRouter);
   app.use("/api/v1", socialsRouter);
   app.use("/api/v1", searchRouter);
+  app.use("/api/v1", gifsRouter);
 }
