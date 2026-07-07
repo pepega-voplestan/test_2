@@ -99,6 +99,7 @@ if (!isTest) {
   const uploadLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator: perUserKey, message: { error: "Слишком много загрузок. Подождите немного" } });
   const postLimiter = rateLimit({ windowMs: 10 * 60_000, max: 100, keyGenerator: perUserKey, message: { error: "Слишком много воплей. Подождите немного" } });
   app.use("/api/v1/upload/media", uploadLimiter);
+  app.use("/api/v1/gifs/upload", uploadLimiter);
   app.use("/api/v1/shouts", postLimiter);
 }
 

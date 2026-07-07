@@ -30,6 +30,8 @@ interface GifSelection {
 
 **Backward compatibility**: `onSelectGif` is optional. If not provided, the GIF tab button does not appear. Existing usages of `EmojiPicker` that only pass `onSelect` are unaffected.
 
+**Background scroll lock**: While the popup is open (either tab), `EmojiPicker` calls the shared `useScrollLock(isOpen)` hook (`web/hooks/useScrollLock.ts`) — the same iOS-safe body-scroll lock used by `NotificationDropdown`, `SearchDropdown`, `AuthModal`, and other floating overlays in this app. This prevents the page from scrolling behind the picker on both the emoji and GIF tabs.
+
 ---
 
 ## GifPicker
@@ -50,7 +52,7 @@ interface GifPickerProps {
 | Section | Visible to anon | Description |
 |---------|-----------------|-------------|
 | Поиск | ✅ | Search input + results grid |
-| Популярное | ✅ | Default view: trending GIFs |
+| Библиотека | ✅ | Default view: trending GIFs |
 | Избранное | Auth only | User's saved favorites, optimistic add/remove |
 | Мои GIF | Auth only | User's uploaded GIFs + upload button |
 
@@ -58,7 +60,7 @@ interface GifPickerProps {
 - `<img src={reducedMotion ? gif.still : gif.url}>` with explicit `width` and `height` to prevent layout shifts
 - Click/tap → calls `onSelect(gif)` → picker closes
 - Star/heart icon overlay → toggles favorite (optimistic); hidden for anonymous users
-- Min touch target: 44 × 44 px (per FR-019)
+- Min touch target: 44 × 44 px on coarse-pointer/touch devices (per FR-019, which scopes the requirement to mobile); on fine-pointer/mouse devices the hit box is instead matched to the visible glyph size (~28 × 28 px) to prevent the larger touch target from stealing clicks meant for GIF selection on the thumbnail underneath. Detected via `matchMedia('(pointer: coarse)')`, the same pattern `EmojiPicker.tsx`'s `isTouchDevice()` already uses.
 
 **Attribution footer**: Fixed at bottom of GIF tab — `"Powered by GIPHY"` with Giphy logo SVG (required by Giphy ToS).
 

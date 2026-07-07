@@ -143,3 +143,44 @@ export const CODE_MAX_ATTEMPTS = 5;
 export function generateCode() {
   return String(crypto.randomInt(100000, 999999));
 }
+
+const GIPHY_ID_RE = /^[A-Za-z0-9-]+$/;
+const giphyIdField = z.string().min(1).max(100).regex(GIPHY_ID_RE, { message: "Некорректный ID GIF" });
+const giphyUrlField = z.string().url().refine(
+  (val) => { try { return new URL(val).hostname.endsWith(".giphy.com"); } catch { return false; } },
+  { message: "Некорректный URL GIF" }
+);
+
+export const giphySearchSchema = z.object({
+  q: z.string().min(1).max(100).trim(),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const giphyTrendingSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const gifReferenceSchema = z.object({
+  giphyId: giphyIdField,
+  giphyUrl: giphyUrlField,
+  giphyStill: giphyUrlField,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export const gifFavoriteSchema = z.object({
+  giphyId: giphyIdField,
+  giphyUrl: giphyUrlField,
+  giphyStill: giphyUrlField,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export const giphyIdParamSchema = z.object({
+  giphyId: giphyIdField,
+});
+
+export const GIF_FAVORITES_MAX = 500;
+export const USER_GIFS_MAX = 100;

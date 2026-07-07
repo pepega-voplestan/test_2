@@ -83,7 +83,7 @@ The tab bar replaces the top search area when GIF tab is active. Within the GIF 
 
 **Decision**: New `GifFavorite` Prisma model. Removing a favorite hard-deletes the row (same pattern as `ShoutLike` / `CommentLike` — pure junction record, no user-generated content).
 
-**Rationale**: `GifFavorite` is a junction between a user and an external Giphy ID. The only data is the CDN URL snapshot and a timestamp. There is nothing to preserve on removal — the GIF exists on Giphy's CDN regardless. Soft-delete would add a `is_deleted` field for no benefit.
+**Rationale**: `GifFavorite` is a junction between a user and an external Giphy ID. The data is a CDN URL/still-URL/dimensions snapshot (needed to re-attach the GIF via `/gifs/reference` without re-querying Giphy) plus a timestamp. There is nothing to preserve on removal — the GIF exists on Giphy's CDN regardless. Soft-delete would add a `is_deleted` field for no benefit.
 
 **Idempotency**: `upsert` on `(user_id, giphy_id)` unique constraint — concurrent favorites of the same GIF don't produce duplicates.
 

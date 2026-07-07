@@ -10,11 +10,14 @@ Stores a user's saved reference to a Giphy GIF. Uniqueness on `(user_id, giphy_i
 
 ```prisma
 model GifFavorite {
-  id         String   @id @default(uuid())
-  user_id    String
-  giphy_id   String   // Giphy stable GIF ID (e.g. "xTiN0L7EW5trfOvEk0")
-  giphy_url  String   // Snapshot of fixed_height CDN URL for quick display
-  created_at DateTime @default(now())
+  id          String   @id @default(uuid())
+  user_id     String
+  giphy_id    String   // Giphy stable GIF ID (e.g. "xTiN0L7EW5trfOvEk0")
+  giphy_url   String   // Snapshot of fixed_height CDN URL for quick display
+  giphy_still String   @default("")  // Snapshot of fixed_height_still CDN URL (reduced-motion display)
+  width       Int      @default(0)   // Snapshot of fixed_height width, in px
+  height      Int      @default(0)   // Snapshot of fixed_height height, in px
+  created_at  DateTime @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -26,6 +29,7 @@ model GifFavorite {
 
 **Key design choices**:
 - `giphy_url` is a CDN URL snapshot. Giphy CDN URLs for `fixed_height` are stable but not guaranteed permanent. Stored here to avoid re-fetching Giphy on every picker open. Acceptable staleness risk (Giphy removes very old GIFs rarely).
+- `giphy_still`, `width`, `height` are snapshotted alongside `giphy_url` at favorite-time — a favorited GIF must carry the same data a search/trending result does, since it flows through the same `POST /gifs/reference` call when attached to a post. Without these, attaching a favorited GIF fails `gifReferenceSchema`'s `width`/`height` positive-integer check.
 - Removal is a hard-delete (same pattern as `ShoutLike`). There is no user-generated content to preserve.
 - Per-user cap of 500 enforced at API layer, not via DB constraint.
 
@@ -144,6 +148,8 @@ Media ──< Comment             (unchanged)
 |-------|------|
 | `giphy_id` | Non-empty string, max 100 chars, alphanumeric + hyphens |
 | `giphy_url` | Valid HTTPS URL, must match `*.giphy.com` domain |
+| `giphy_still` | Valid HTTPS URL, must match `*.giphy.com` domain |
+| `width`, `height` | Positive integers |
 | Per-user count | ≤ 500 favorites (checked before insert) |
 
 ### UserGif (upload)

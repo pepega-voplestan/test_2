@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useScrollLock } from '../hooks/useScrollLock';
+import GifPicker, { GifPickerSelection } from './GifPicker';
 
 const EMOJI_GROUPS = [
   { label: 'Часто', emojis: ['😂', '😍', '🔥', '👍', '👎', '❤️', '😢', '😡', '🤔', '🙏', '🎉', '💯', '😭', '🥺', '😤', '🤡', '💀', '☠️'] },
@@ -665,29 +668,37 @@ const EMOJI_KEYWORDS: Record<string, string[]> = {
 // Collect all unique emojis for search
 const ALL_EMOJIS = Array.from(new Set(EMOJI_GROUPS.flatMap(g => g.emojis)));
 
+export type { GifPickerSelection } from './GifPicker';
+
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
+  onSelectGif?: (gif: GifPickerSelection) => void;
   size?: 'sm' | 'md';
 }
 
 const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
 
-const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
+const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onSelectGif, size = 'md' }) => {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [mobileReadOnly, setMobileReadOnly] = useState(false);
+  const [activeTab, setActiveTab] = useState<'emoji' | 'gif'>('emoji');
+  const [reducedMotion, setReducedMotion] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [popupStyle, setPopupStyle] = useState<React.CSSProperties | null>(null);
 
+  useScrollLock(isOpen);
+
   const positionPopup = useCallback(() => {
     const btn = btnRef.current;
     if (!btn) return;
     const rect = btn.getBoundingClientRect();
-    const popupW = 352; // wider for more emojis
-    const popupH = 400;
+    const popupW = Math.min(352, window.innerWidth - 16); // wider for more emojis, clamped to narrow viewports
+    const popupH = activeTab === 'gif' ? 440 : 400;
     const pad = 8;
 
     // Vertical: prefer above the button, fall back to below
@@ -709,16 +720,17 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       left,
       width: popupW,
     });
-  }, []);
+  }, [activeTab]);
 
   // Position before browser paint to avoid first-open jump
   useLayoutEffect(() => {
     if (!isOpen) return;
     positionPopup();
-  }, [isOpen, positionPopup]);
+  }, [isOpen, activeTab, positionPopup]);
 
   useEffect(() => {
     if (!isOpen) return;
+    setReducedMotion(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     // On mobile: make input readOnly to prevent keyboard on tap; on desktop: autofocus
     if (isTouchDevice()) {
       setMobileReadOnly(true);
@@ -734,6 +746,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
         setSearch('');
         setPopupStyle(null);
         setMobileReadOnly(false);
+        setActiveTab('emoji');
       }
     };
     document.addEventListener('mousedown', handler);
@@ -764,7 +777,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
         ref={btnRef}
         type="button"
         onMouseDown={(e) => e.preventDefault()}
-        onClick={() => { setIsOpen(!isOpen); if (isOpen) { setSearch(''); setPopupStyle(null); } }}
+        onClick={() => { setIsOpen(!isOpen); if (isOpen) { setSearch(''); setPopupStyle(null); setActiveTab('emoji'); } }}
         className={`${btnPad} text-th-text-4 hover:text-th-text-2 transition-colors shrink-0`}
         title="Эмодзи"
       >
@@ -776,9 +789,40 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
       {isOpen && (
         <div
           ref={popupRef}
-          style={{ ...(popupStyle || { position: 'fixed', top: -9999, left: -9999, width: 352 }), maxHeight: 400 }}
+          style={{ ...(popupStyle || { position: 'fixed', top: -9999, left: -9999, width: 352 }), maxHeight: activeTab === 'gif' ? 440 : 400 }}
           className="bg-th-card border border-th-border rounded-lg shadow-xl z-[9999] flex flex-col"
         >
+          {/* Tabs */}
+          {onSelectGif && (
+            <div className="flex gap-1 px-2 pt-2 shrink-0">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setActiveTab('emoji')}
+                className={`px-2.5 py-1 min-h-[44px] flex items-center text-xs font-medium rounded-t transition-colors ${activeTab === 'emoji' ? 'text-th-text border-b-2 border-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'}`}
+              >
+                Эмодзи
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setActiveTab('gif')}
+                className={`px-2.5 py-1 min-h-[44px] flex items-center text-xs font-medium rounded-t transition-colors ${activeTab === 'gif' ? 'text-th-text border-b-2 border-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'}`}
+              >
+                GIF
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'gif' && onSelectGif ? (
+            <GifPicker
+              onSelect={(gif) => { onSelectGif(gif); setIsOpen(false); setSearch(''); }}
+              reducedMotion={reducedMotion}
+              isAuthenticated={!!user}
+              mobileReadOnly={mobileReadOnly}
+            />
+          ) : (
+          <>
           {/* Search input */}
           <div className="p-2 pb-1 border-b border-th-border/50">
             <input
@@ -855,6 +899,8 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, size = 'md' }) => {
               ))
             )}
           </div>
+          </>
+          )}
         </div>
       )}
     </div>

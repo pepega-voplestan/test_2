@@ -22,8 +22,9 @@ A logged-in user is composing a shout or comment. They open the emoji picker and
 
 1. **Given** a user has the composer open with no media attached, **When** they open the emoji picker → GIF tab, type a search term, and click a result, **Then** the GIF is set as the post's media attachment and the picker closes.
 2. **Given** a user already has an image attached to their shout, **When** they select a GIF from the GIF tab, **Then** the GIF replaces the existing image attachment (single-media rule enforced).
-3. **Given** no search term is entered, **When** the GIF tab is opened, **Then** trending or featured GIFs are shown by default so the user can browse without typing.
-4. **Given** Giphy is unreachable, **When** the GIF tab is opened, **Then** a user-friendly error message in Russian is displayed and the emoji tab remains fully functional.
+3. **Given** a user already has a GIF attached to their shout, **When** they select a different GIF from the GIF tab, **Then** the newly selected GIF replaces the previously attached one (single-media rule applies to GIF-to-GIF reselection, not just image-to-GIF).
+4. **Given** no search term is entered, **When** the GIF tab is opened, **Then** trending or featured GIFs are shown by default so the user can browse without typing.
+5. **Given** Giphy is unreachable, **When** the GIF tab is opened, **Then** a user-friendly error message in Russian is displayed and the emoji tab remains fully functional.
 
 ---
 
@@ -91,10 +92,10 @@ A logged-in user wants to use a GIF not available on Giphy. They tap an upload b
 ### Functional Requirements
 
 - **FR-001**: The emoji picker panel MUST include a GIF tab alongside the existing emoji content, accessible via a tab control at the top of the picker window.
-- **FR-002**: The GIF tab MUST display a search field; submitting a search query retrieves matching GIFs from the Giphy API.
+- **FR-002**: The GIF tab MUST display a search field; submitting a search query retrieves matching GIFs from the Giphy API. Queries shorter than 3 characters MUST NOT trigger a network request (the field behaves as if empty — trending/browse view remains visible) to avoid noisy, low-signal Giphy API calls while the user is still typing.
 - **FR-003**: When no search is active, the GIF tab MUST display trending GIFs organized into category sections with Russian-language headings so users can browse without typing.
 - **FR-004**: Users MUST be able to select any displayed GIF to insert it as the media attachment for the current post or comment.
-- **FR-005**: Selecting a GIF MUST enforce the single-media-per-post/comment constraint — it replaces any previously selected image; selecting a GIF while a YouTube embed is set is not permitted.
+- **FR-005**: Selecting a GIF MUST enforce the single-media-per-post/comment constraint — it replaces any previously selected image or GIF; selecting a GIF while a YouTube embed is set is not permitted.
 - **FR-006**: Authenticated users MUST be able to mark any Giphy GIF as a favorite using a visible control on the GIF thumbnail.
 - **FR-007**: The GIF picker MUST display a "Избранное" section that lists all GIFs the user has favorited, available without a search query.
 - **FR-008**: Users MUST be able to remove a GIF from favorites; the removal MUST take effect immediately with rollback on server error (optimistic UI).

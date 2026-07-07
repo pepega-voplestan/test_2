@@ -4,10 +4,18 @@ import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import { useScrollLock } from '../hooks/useScrollLock';
-import EmojiPicker from './EmojiPicker';
+import EmojiPicker, { GifPickerSelection } from './EmojiPicker';
 import Lightbox from './Lightbox';
 import MentionInput, { MentionInputHandle, effectiveLength, isIOS } from './MentionInput';
 import PollBlock from './PollBlock';
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }, []);
+  return reduced;
+}
 
 interface ShoutCardProps {
   shout: Shout;
@@ -662,6 +670,7 @@ interface CommentCardProps {
 const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, onDelete, onEdit, onReply }) => {
   const { user, openModal } = useAuth();
   const { isIgnored } = useIgnoredUsers();
+  const reducedMotion = useReducedMotion();
   const [likes, setLikes] = useState(comment.likes);
   const [isLiked, setIsLiked] = useState(
     user && comment.likedBy ? comment.likedBy.includes(user.id) : false
@@ -916,6 +925,29 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             <MediaPlaceholder className="mb-2" />
           )}
 
+          {showMedia && comment.media?.type === 'giphy' && (
+            <div className="mb-2 rounded-lg">
+              <img
+                src={reducedMotion ? comment.media.still : comment.media.url} alt="GIF" loading="lazy"
+                onClick={() => setLightboxOpen(true)}
+                width={comment.media.width || undefined}
+                height={comment.media.height || undefined}
+                className="block cursor-pointer max-h-[200px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
+              />
+            </div>
+          )}
+
+          {!showMedia && comment.media?.type === 'giphy' && (
+            <MediaPlaceholder className="mb-2" />
+          )}
+
+          {lightboxOpen && comment.media?.type === 'giphy' && (
+            <Lightbox
+              src={comment.media.url}
+              onClose={() => setLightboxOpen(false)}
+            />
+          )}
+
           <div className="flex items-center justify-between text-xs font-medium text-th-text-4 select-none">
             {isCommentAuthorIgnored ? (
               <span className="opacity-30 cursor-default" title="Вы игнорируете этого пользователя">Ответить</span>
@@ -979,6 +1011,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const { user, openModal } = useAuth();
   const { prefs } = useContentPreferences();
   const { isIgnored } = useIgnoredUsers();
+  const reducedMotion = useReducedMotion();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -1106,7 +1139,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (stripped) {
       preview = stripped.length > 60 ? stripped.slice(0, 60) + '…' : stripped;
     } else if (media) {
-      preview = media.type === 'image' ? 'Прикрепленное изображение' : 'Прикрепленное видео';
+      preview = media.type === 'image' ? 'Прикрепленное изображение' : media.type === 'giphy' ? 'Прикрепленный GIF' : 'Прикрепленное видео';
     } else {
       preview = '';
     }
@@ -1167,6 +1200,26 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const removeReplyMedia = () => {
     if (replyMediaPreview) URL.revokeObjectURL(replyMediaPreview);
     setReplyMediaId(null); setReplyMediaPreview(null); setReplyMediaIsVideo(false); setReplyError(null);
+  };
+
+  const handleCommentGifSelect = async (gif: GifPickerSelection) => {
+    if (gif.kind === 'mygif') {
+      setReplyMediaId(gif.mediaId); setReplyMediaPreview(gif.url); setReplyMediaIsVideo(false); setReplyError(null);
+      return;
+    }
+    setReplyError(null);
+    try {
+      const res = await fetch('/api/v1/gifs/reference', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ giphyId: gif.giphyId, giphyUrl: gif.url, giphyStill: gif.still, width: gif.width, height: gif.height }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+      setReplyMediaId(data.mediaId); setReplyMediaPreview(gif.url); setReplyMediaIsVideo(false);
+    } catch (err: unknown) {
+      setReplyError(err instanceof Error ? err.message : 'Не удалось прикрепить GIF');
+    }
   };
 
   const submitReply = async () => {
@@ -1328,6 +1381,25 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
               </div>
             )}
           </div>
+      )}
+
+      {shout.media?.type === 'giphy' && (
+        <div className="mb-2 rounded-lg">
+          <img
+            src={reducedMotion ? shout.media.still : shout.media.url} alt="GIF" loading="lazy"
+            onClick={() => setLightboxOpen(true)}
+            width={shout.media.width || undefined}
+            height={shout.media.height || undefined}
+            className="block cursor-pointer max-h-[300px] max-w-full h-auto object-contain hover:opacity-90 transition-opacity rounded-lg"
+          />
+        </div>
+      )}
+
+      {lightboxOpen && shout.media?.type === 'giphy' && (
+        <Lightbox
+          src={shout.media.url}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
     </>
   );
@@ -1670,7 +1742,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       />
                       <div className="flex items-center gap-2 justify-end">
                         <div className="flex items-center gap-1 shrink-0">
-                          <EmojiPicker size="sm" onSelect={insertEmoji} />
+                          <EmojiPicker size="sm" onSelect={insertEmoji} onSelectGif={!replyDetectedYtId ? handleCommentGifSelect : undefined} />
                           <button type="button" onClick={() => replyFileInputRef.current?.click()}
                             disabled={isReplyUploading || !!replyMediaId}
                             className={`p-0.5 transition-colors ${replyMediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}

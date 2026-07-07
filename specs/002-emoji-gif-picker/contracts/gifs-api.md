@@ -20,6 +20,8 @@ Proxy to Giphy search API. Returns a list of GIF objects.
 | `limit` | integer | No | Results per page, 1–50, default 25 |
 | `offset` | integer | No | Pagination offset, default 0 |
 
+The server accepts any 1–100 char query, but the client (`useGifPicker.ts`) does not call this endpoint until `q.trim().length >= 3` (see FR-002), so `q` values shorter than 3 chars are not expected from the picker UI in practice.
+
 **Response 200**:
 ```json
 {
@@ -112,6 +114,9 @@ List authenticated user's saved GIF favorites, ordered by most recently added.
       "id": "uuid",
       "giphyId": "xTiN0L7EW5trfOvEk0",
       "giphyUrl": "https://media.giphy.com/...",
+      "giphyStill": "https://media.giphy.com/...",
+      "width": 480,
+      "height": 270,
       "createdAt": "2026-06-30T12:00:00.000Z"
     }
   ]
@@ -130,11 +135,14 @@ Add a GIF to favorites. Idempotent — adding an already-favorited GIF returns 2
 ```json
 {
   "giphyId": "xTiN0L7EW5trfOvEk0",
-  "giphyUrl": "https://media.giphy.com/media/xTiN0L7EW5trfOvEk0/giphy_s.gif"
+  "giphyUrl": "https://media.giphy.com/media/xTiN0L7EW5trfOvEk0/giphy_s.gif",
+  "giphyStill": "https://media.giphy.com/media/xTiN0L7EW5trfOvEk0/giphy_s_s.gif",
+  "width": 480,
+  "height": 270
 }
 ```
 
-**Validation** (Zod): same as `giphyId` / `giphyUrl` rules in `/gifs/reference`.
+**Validation** (Zod): same as `/gifs/reference` — `giphyId`, `giphyUrl`, `giphyStill`, `width`, `height` are all required so the favorite carries enough data to be re-attached via `/gifs/reference` later without hitting Giphy again.
 
 **Response 200**:
 ```json
