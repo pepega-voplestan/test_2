@@ -44,6 +44,19 @@ export const mediaUpload = multer({
   },
 });
 
+/* ---------- Personal GIF library upload (GIF-only) ---------- */
+
+export const gifOnlyUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MEDIA_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== "image/gif") {
+      return cb(new Error("Допустимый формат: GIF"));
+    }
+    cb(null, true);
+  },
+});
+
 try {
   fs.mkdirSync(MEDIA_DIR, { recursive: true });
   fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true });
@@ -116,6 +129,17 @@ export function buildMedia(mediaObj) {
       embedUrl: `https://www.youtube-nocookie.com/embed/${mediaObj.media_url}`,
       title: meta.title || null,
       channel: meta.channel || null,
+    };
+  }
+  if (mediaObj.media_type === "giphy") {
+    const meta = JSON.parse(mediaObj.media_meta || "{}");
+    return {
+      type: "giphy",
+      giphyId: mediaObj.media_url,
+      url: meta.url,
+      still: meta.still,
+      width: meta.width || 0,
+      height: meta.height || 0,
     };
   }
   return undefined;

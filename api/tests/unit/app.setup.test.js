@@ -113,6 +113,15 @@ describe("app.js — development mode branches", () => {
     expect(res.status).not.toBe(429);
   });
 
+  it("mounts the upload rate limiter on /api/v1/gifs/upload for both auth states (IP fallback when anonymous)", async () => {
+    const anon = await supertest(app).post("/api/v1/gifs/upload");
+    expect(anon.status).not.toBe(429);
+    expect(anon.status).toBe(401);
+
+    const withCookie = await supertest(app).post("/api/v1/gifs/upload").set("Cookie", "connect.sid=fake");
+    expect(withCookie.status).not.toBe(429);
+  });
+
   // ── lines 99-102: Swagger UI at /api/docs ────────────────────────────────
 
   it("mounts Swagger UI at /api/docs", async () => {
