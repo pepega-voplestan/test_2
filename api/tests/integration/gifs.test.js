@@ -213,7 +213,7 @@ describe("GIF routes (/api/v1/gifs)", () => {
 
       await getTestPrisma().gifFavorite.createMany({
         data: Array.from({ length: 500 }, (_, i) => ({
-          user_id: user.id, giphy_id: `bulk-${i}`, giphy_url: `https://media.giphy.com/media/bulk-${i}/giphy.gif`,
+          user_id: user.id, external_id: `bulk-${i}`, url: `https://media.giphy.com/media/bulk-${i}/giphy.gif`,
         })),
       });
 

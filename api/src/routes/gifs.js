@@ -135,9 +135,9 @@ router.get("/gifs/favorites", requireAuth, asyncHandler(async (req, res) => {
   res.json({
     favorites: rows.map((f) => ({
       id: f.id,
-      giphyId: f.giphy_id,
-      giphyUrl: f.giphy_url,
-      giphyStill: f.giphy_still,
+      giphyId: f.external_id,
+      giphyUrl: f.url,
+      giphyStill: f.still,
       width: f.width,
       height: f.height,
       createdAt: f.created_at.toISOString(),
@@ -157,7 +157,7 @@ router.post("/gifs/favorites", requireAuth, asyncHandler(async (req, res) => {
   const { giphyId, giphyUrl, giphyStill, width, height } = parsed.data;
 
   const existing = await prisma.gifFavorite.findUnique({
-    where: { user_id_giphy_id: { user_id: userId, giphy_id: giphyId } },
+    where: { user_id_provider_external_id: { user_id: userId, provider: "giphy", external_id: giphyId } },
   });
   if (existing) return res.json({ ok: true });
 
@@ -167,7 +167,9 @@ router.post("/gifs/favorites", requireAuth, asyncHandler(async (req, res) => {
   }
 
   await prisma.gifFavorite.create({
-    data: { user_id: userId, giphy_id: giphyId, giphy_url: giphyUrl, giphy_still: giphyStill, width, height },
+    data: {
+      user_id: userId, provider: "giphy", external_id: giphyId, url: giphyUrl, still: giphyStill, width, height,
+    },
   });
 
   console.log(`[Gifs] Favorite added for ${userId}: ${giphyId}`);
@@ -183,12 +185,12 @@ router.delete("/gifs/favorites/:giphyId", requireAuth, asyncHandler(async (req, 
   const { giphyId } = parsed.data;
 
   const existing = await prisma.gifFavorite.findUnique({
-    where: { user_id_giphy_id: { user_id: userId, giphy_id: giphyId } },
+    where: { user_id_provider_external_id: { user_id: userId, provider: "giphy", external_id: giphyId } },
   });
   if (!existing) return res.status(404).json({ error: "Не найдено" });
 
   await prisma.gifFavorite.delete({
-    where: { user_id_giphy_id: { user_id: userId, giphy_id: giphyId } },
+    where: { user_id_provider_external_id: { user_id: userId, provider: "giphy", external_id: giphyId } },
   });
 
   console.log(`[Gifs] Favorite removed for ${userId}: ${giphyId}`);

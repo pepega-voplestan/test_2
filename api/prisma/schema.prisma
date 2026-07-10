@@ -78,18 +78,19 @@ model Media {
 }
 
 model GifFavorite {
-  id         String   @id @default(uuid())
-  user_id    String
-  giphy_id   String
-  giphy_url  String
-  giphy_still String  @default("")
-  width      Int      @default(0)
-  height     Int      @default(0)
-  created_at DateTime @default(now())
+  id          String   @id @default(uuid())
+  user_id     String
+  provider    String   @default("giphy")
+  external_id String
+  url         String
+  still       String   @default("")
+  width       Int      @default(0)
+  height      Int      @default(0)
+  created_at  DateTime @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, giphy_id])
+  @@unique([user_id, provider, external_id])
   @@index([user_id, created_at], name: "idx_gif_favorites_user")
   @@map("gif_favorites")
 }
