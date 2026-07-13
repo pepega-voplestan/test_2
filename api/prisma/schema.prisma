@@ -28,7 +28,10 @@ model User {
   ignoredByMe           IgnoredUser[]  @relation("IgnoredByUser")
   ignoredByOthers       IgnoredUser[]  @relation("IgnoredTarget")
   socials               Social[]
+  gifFavorites          GifFavorite[]
+  userGifs              UserGif[]
 
+  @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_users_username_trgm")
   @@map("users")
 }
 
@@ -54,6 +57,7 @@ model Shout {
 
   @@index([parent_id, created_at], name: "idx_shouts_parent_created")
   @@index([created_at], name: "idx_shouts_created")
+  @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_shouts_content_trgm")
   @@map("shouts")
 }
 
@@ -68,8 +72,41 @@ model Media {
   user     User      @relation(fields: [user_id], references: [id])
   shouts   Shout[]
   comments Comment[]
+  userGifs UserGif[]
 
   @@map("media")
+}
+
+model GifFavorite {
+  id          String   @id @default(uuid())
+  user_id     String
+  provider    String
+  external_id String
+  url         String
+  still       String   @default("")
+  width       Int      @default(0)
+  height      Int      @default(0)
+  created_at  DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, provider, external_id])
+  @@index([user_id, created_at], name: "idx_gif_favorites_user")
+  @@map("gif_favorites")
+}
+
+model UserGif {
+  id         String   @id @default(uuid())
+  user_id    String
+  media_id   String
+  is_deleted Int      @default(0)
+  created_at DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  media Media @relation(fields: [media_id], references: [id])
+
+  @@index([user_id, is_deleted, created_at], name: "idx_user_gifs_user_active")
+  @@map("user_gifs")
 }
 
 model ShoutLike {

@@ -41,6 +41,7 @@ services:
       AVATAR_PATH: /data/avatars
       NODE_ENV: ${NODE_ENV}
       RESEND_API_KEY: ${RESEND_API_KEY}
+      GIPHY_API_KEY: ${GIPHY_API_KEY}
       EMAIL_FROM: "Вопли <noreply@vopley.net>"
       ANNOUNCEMENTS_SECRET: ${ANNOUNCEMENTS_SECRET}
       ADMIN_EMAIL: ${ADMIN_EMAIL}

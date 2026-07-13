@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import EmojiPicker from './EmojiPicker';
+import EmojiPicker, { GifPickerSelection } from './EmojiPicker';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
 import PollEditor, { PollPayload, PollEditorHandle } from './PollEditor';
 import { Shout } from '../types';
@@ -193,6 +193,32 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     }
   };
 
+  const handleGifSelect = async (gif: GifPickerSelection) => {
+    if (gif.kind === 'mygif') {
+      setMediaId(gif.mediaId);
+      setMediaPreview(gif.url);
+      setMediaIsVideo(false);
+      setError(null);
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch('/api/v1/gifs/reference', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ giphyId: gif.giphyId, giphyUrl: gif.url, giphyStill: gif.still, width: gif.width, height: gif.height }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+      setMediaId(data.mediaId);
+      setMediaPreview(gif.url);
+      setMediaIsVideo(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Не удалось прикрепить GIF');
+    }
+  };
+
   const removeMedia = () => {
     if (mediaPreview) URL.revokeObjectURL(mediaPreview);
     setMediaId(null);
@@ -295,7 +321,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                         />
                         <div className="flex items-center gap-2 justify-end flex-wrap">
                           <div className="flex items-center gap-1 shrink-0">
-                            <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} />
+                            <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} onSelectGif={!detectedYtId ? handleGifSelect : undefined} />
                             <button
                               type="button"
                               onClick={() => fileInputRef.current?.click()}

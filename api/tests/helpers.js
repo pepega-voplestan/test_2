@@ -86,6 +86,8 @@ const TABLES = [
   "commentLike",
   "shoutLike",
   "comment",
+  "gifFavorite",
+  "userGif",
   "media",
   "shout",
   "verificationCode",
