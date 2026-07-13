@@ -172,6 +172,14 @@ describe("GIF routes (/api/v1/gifs)", () => {
       expect(media.media_url).toBe("abc123");
       expect(JSON.parse(media.media_meta)).toMatchObject({ url: validBody.giphyUrl, still: validBody.giphyStill, width: 200, height: 150 });
     });
+
+    it("accepts width/height of 0 for a Giphy result with missing dimensions", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const res = await agent.post("/api/v1/gifs/reference").send({ ...validBody, width: 0, height: 0 });
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+    });
   });
 
   // ── Favorites CRUD ───────────────────────────────────────────────────────
@@ -200,6 +208,13 @@ describe("GIF routes (/api/v1/gifs)", () => {
       const list = await agent.get("/api/v1/gifs/favorites");
       expect(list.body.favorites).toHaveLength(1);
       expect(list.body.favorites[0]).toMatchObject({ giphyId: "fav1", giphyUrl: body.giphyUrl });
+    });
+
+    it("accepts width/height of 0 for a Giphy result with missing dimensions", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const res = await agent.post("/api/v1/gifs/favorites").send({ giphyId: "no-dims", giphyUrl: "https://media.giphy.com/media/no-dims/giphy.gif", giphyStill: "https://media.giphy.com/media/no-dims/giphy_s.gif", width: 0, height: 0 });
+      expect(res.status).toBe(200);
     });
 
     it("returns 404 when removing a favorite that doesn't exist", async () => {

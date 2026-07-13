@@ -166,16 +166,16 @@ export const gifReferenceSchema = z.object({
   giphyId: giphyIdField,
   giphyUrl: giphyUrlField,
   giphyStill: giphyUrlField,
-  width: z.number().int().positive(),
-  height: z.number().int().positive(),
+  width: z.number().int().nonnegative(),
+  height: z.number().int().nonnegative(),
 });
 
 export const gifFavoriteSchema = z.object({
   giphyId: giphyIdField,
   giphyUrl: giphyUrlField,
   giphyStill: giphyUrlField,
-  width: z.number().int().positive(),
-  height: z.number().int().positive(),
+  width: z.number().int().nonnegative(),
+  height: z.number().int().nonnegative(),
 });
 
 export const giphyIdParamSchema = z.object({
