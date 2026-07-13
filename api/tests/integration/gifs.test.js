@@ -53,13 +53,22 @@ describe("GIF routes (/api/v1/gifs)", () => {
   // ── GET /gifs/search ─────────────────────────────────────────────────────
 
   describe("GET /gifs/search", () => {
+    it("returns 401 when not authenticated", async () => {
+      const res = await (await request()).get("/api/v1/gifs/search?q=cat");
+      expect(res.status).toBe(401);
+    });
+
     it("returns 400 when q is missing", async () => {
-      const res = await (await request()).get("/api/v1/gifs/search");
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const res = await agent.get("/api/v1/gifs/search");
       expect(res.status).toBe(400);
     });
 
     it("returns 503 when GIPHY_API_KEY is not configured", async () => {
-      const res = await (await request()).get("/api/v1/gifs/search?q=cat");
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const res = await agent.get("/api/v1/gifs/search?q=cat");
       expect(res.status).toBe(503);
       expect(res.body).toEqual({ error: "GIF-сервис недоступен" });
     });
@@ -68,7 +77,9 @@ describe("GIF routes (/api/v1/gifs)", () => {
       process.env.GIPHY_API_KEY = "test-key";
       fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(mockGiphyOk([sampleGiphyGif("s1")]));
 
-      const res = await (await request()).get("/api/v1/gifs/search?q=cat&limit=11");
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const res = await agent.get("/api/v1/gifs/search?q=cat&limit=11");
       expect(res.status).toBe(200);
       expect(res.body.gifs).toHaveLength(1);
       expect(res.body.gifs[0]).toMatchObject({
@@ -80,19 +91,20 @@ describe("GIF routes (/api/v1/gifs)", () => {
       });
       expect(res.body.total).toBe(1);
     });
-
-    it("is accessible without authentication", async () => {
-      const res = await (await request()).get("/api/v1/gifs/search?q=cat");
-      // 503 (no key) rather than 401 — proves no auth gate on this route
-      expect(res.status).toBe(503);
-    });
   });
 
   // ── GET /gifs/trending ───────────────────────────────────────────────────
 
   describe("GET /gifs/trending", () => {
-    it("returns 503 when GIPHY_API_KEY is not configured", async () => {
+    it("returns 401 when not authenticated", async () => {
       const res = await (await request()).get("/api/v1/gifs/trending");
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 503 when GIPHY_API_KEY is not configured", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const res = await agent.get("/api/v1/gifs/trending");
       expect(res.status).toBe(503);
       expect(res.body).toEqual({ error: "GIF-сервис недоступен" });
     });
@@ -101,11 +113,13 @@ describe("GIF routes (/api/v1/gifs)", () => {
       process.env.GIPHY_API_KEY = "test-key";
       fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(mockGiphyOk([sampleGiphyGif("t1")]));
 
-      const r1 = await (await request()).get("/api/v1/gifs/trending?limit=13");
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const r1 = await agent.get("/api/v1/gifs/trending?limit=13");
       expect(r1.status).toBe(200);
       expect(r1.body.gifs).toHaveLength(1);
 
-      const r2 = await (await request()).get("/api/v1/gifs/trending?limit=13");
+      const r2 = await agent.get("/api/v1/gifs/trending?limit=13");
       expect(r2.status).toBe(200);
       expect(r2.body).toEqual(r1.body);
 
@@ -213,7 +227,7 @@ describe("GIF routes (/api/v1/gifs)", () => {
 
       await getTestPrisma().gifFavorite.createMany({
         data: Array.from({ length: 500 }, (_, i) => ({
-          user_id: user.id, external_id: `bulk-${i}`, url: `https://media.giphy.com/media/bulk-${i}/giphy.gif`,
+          user_id: user.id, provider: "giphy", external_id: `bulk-${i}`, url: `https://media.giphy.com/media/bulk-${i}/giphy.gif`,
         })),
       });
 

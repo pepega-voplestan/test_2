@@ -2,7 +2,7 @@
 CREATE TABLE "gif_favorites" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
-    "provider" TEXT NOT NULL DEFAULT 'giphy',
+    "provider" TEXT NOT NULL,
     "external_id" TEXT NOT NULL,
     "url" TEXT NOT NULL,
     "still" TEXT NOT NULL DEFAULT '',

@@ -80,7 +80,7 @@ model Media {
 model GifFavorite {
   id          String   @id @default(uuid())
   user_id     String
-  provider    String   @default("giphy")
+  provider    String
   external_id String
   url         String
   still       String   @default("")

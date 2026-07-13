@@ -21,8 +21,21 @@ const GIF_SERVICE_UNAVAILABLE = { error: "GIF-сервис недоступен"
 
 const TRENDING_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const SEARCH_CACHE_TTL = 60 * 1000; // 1 minute
+const CACHE_SWEEP_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const trendingCache = new Map();
 const searchCache = new Map();
+
+function sweepExpiredEntries(cache, ttl) {
+  const now = Date.now();
+  for (const [key, entry] of cache) {
+    if (now - entry.ts >= ttl) cache.delete(key);
+  }
+}
+
+setInterval(() => {
+  sweepExpiredEntries(trendingCache, TRENDING_CACHE_TTL);
+  sweepExpiredEntries(searchCache, SEARCH_CACHE_TTL);
+}, CACHE_SWEEP_INTERVAL).unref();
 
 function mapGiphyGif(g) {
   const fh = g.images?.fixed_height || {};
@@ -52,7 +65,7 @@ async function fetchGiphy(path, params) {
 }
 
 /* GET /gifs/search */
-router.get("/gifs/search", asyncHandler(async (req, res) => {
+router.get("/gifs/search", requireAuth, asyncHandler(async (req, res) => {
   const parsed = giphySearchSchema.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message });
   const { q, limit, offset } = parsed.data;
@@ -79,7 +92,7 @@ router.get("/gifs/search", asyncHandler(async (req, res) => {
 }));
 
 /* GET /gifs/trending */
-router.get("/gifs/trending", asyncHandler(async (req, res) => {
+router.get("/gifs/trending", requireAuth, asyncHandler(async (req, res) => {
   const parsed = giphyTrendingSchema.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message });
   const { limit, offset } = parsed.data;
