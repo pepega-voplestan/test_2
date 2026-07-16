@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { runOriginalDowngrade, toDatetimeString } from "../src/jobs/original-downgrade.js";
+import { runOriginalDowngrade } from "../src/jobs/original-downgrade.js";
 
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 6, 16, 12, 0, 0);
-const dt = (ms: number) => toDatetimeString(new Date(ms));
+const dt = (ms: number) => new Date(ms).toISOString();
 
 /** Build a fake `db` (Prisma-like) over an in-memory media/shout/comment set. */
 function makeDb({ media = [], shouts = [], comments = [] }: {
@@ -84,7 +84,7 @@ describe("runOriginalDowngrade", () => {
     expect(unlinked.some((p) => p.endsWith("/m1/original.jpg"))).toBe(true);
   });
 
-  it("skips an original whose owning content was soft-deleted (FR-008)", async () => {
+  it("cancels conversion for soft-deleted content but finalizes the asset so it isn't re-scanned (FR-008)", async () => {
     const media = [pending("m2", 25)];
     const { db, updates } = makeDb({ media, shouts: [{ media_id: "m2", is_deleted: 1 }] });
     const unlinked: string[] = [];
@@ -92,9 +92,13 @@ describe("runOriginalDowngrade", () => {
 
     const res = await runOriginalDowngrade({ db, fileSystem, mediaDir: "/media", windowHours: 24, now: NOW });
 
-    expect(res).toMatchObject({ scanned: 1, converted: 0, skipped: 1 });
-    expect(updates["m2"]).toBeUndefined();
-    expect(unlinked).toHaveLength(0);
+    // Counted as skipped (owning content gone), but reaches a terminal state:
+    // converted flag set, orig dropped, and the original file reclaimed.
+    expect(res).toMatchObject({ scanned: 1, converted: 0, skipped: 1, failed: 0 });
+    const newMeta = JSON.parse(updates["m2"]);
+    expect(newMeta.converted).toBe(true);
+    expect(newMeta.orig).toBeUndefined();
+    expect(unlinked.some((p) => p.endsWith("/m2/original.jpg"))).toBe(true);
   });
 
   it("does not convert an original still inside its window", async () => {

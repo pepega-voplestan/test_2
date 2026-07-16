@@ -22,6 +22,11 @@ const ORIENTATION_TRANSFORMS: Record<number, string> = {
   8: 'rotate(270deg)',
 };
 
+// Orientations 5–8 rotate the image 90°/270°, swapping its visual width/height.
+// The <img> is sized before the transform, so its max box must be swapped
+// (max-w:90vh / max-h:90vw) or the rotated image overflows the 90vw×90vh viewport.
+const ORIENTATION_SWAPS_AXES = new Set([5, 6, 7, 8]);
+
 const DISMISS_THRESHOLD = 120; // px of drag needed to dismiss
 const VELOCITY_THRESHOLD = 0.5; // px/ms — fast flick dismisses even if threshold not met
 const MIN_ZOOM = 1;
@@ -29,6 +34,15 @@ const MAX_ZOOM = 5;
 
 const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, orientation }) => {
   const orientationTransform = orientation ? ORIENTATION_TRANSFORMS[orientation] : undefined;
+  const imgStyle: React.CSSProperties | undefined = orientationTransform
+    ? {
+        transform: orientationTransform,
+        // Swap the fit box for 90°/270° rotations so the image stays within the viewport.
+        ...(orientation && ORIENTATION_SWAPS_AXES.has(orientation)
+          ? { maxWidth: '90vh', maxHeight: '90vw' }
+          : {}),
+      }
+    : undefined;
   const overlayRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLDivElement>(null);
 
@@ -331,7 +345,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
           alt={alt}
           className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
           draggable={false}
-          style={orientationTransform ? { transform: orientationTransform } : undefined}
+          style={imgStyle}
         />
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}

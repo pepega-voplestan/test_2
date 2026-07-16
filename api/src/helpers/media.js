@@ -76,9 +76,11 @@ try {
 /* ---------- Size-limit message (Russian, MB) ---------- */
 
 // Russian error message for an oversized upload, reflecting the configured limit.
+// Shows up to one decimal so the stated limit never overstates what multer enforces.
 export function oversizedMessage(maxBytes = ORIGINAL_QUALITY_MAX_BYTES) {
-  const mb = Math.round(maxBytes / (1024 * 1024));
-  return `Файл слишком большой (макс. ${mb} МБ)`;
+  const mb = maxBytes / (1024 * 1024);
+  const shown = Number.isInteger(mb) ? String(mb) : mb.toFixed(1);
+  return `Файл слишком большой (макс. ${shown} МБ)`;
 }
 
 /* ---------- Lossless privacy-metadata stripping ---------- */

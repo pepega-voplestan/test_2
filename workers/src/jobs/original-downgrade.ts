@@ -7,12 +7,6 @@ import { redisConnection } from "../redis.js";
 const WINDOW_HOURS = Number(process.env.ORIGINAL_QUALITY_WINDOW_HOURS) || 24;
 const MEDIA_DIR = process.env.MEDIA_PATH || "/media";
 
-// created_at is stored/compared as a "YYYY-MM-DD HH:MM:SS" string (matches the
-// convention used by notification-cleanup and the Prisma client's typing).
-export function toDatetimeString(date: Date): string {
-  return date.toISOString().replace("T", " ").slice(0, 19);
-}
-
 interface MediaMeta {
   orig?: string;
   converted?: boolean;
@@ -61,7 +55,11 @@ export async function runOriginalDowngrade(deps: Partial<DowngradeDeps> = {}): P
   } = deps;
 
   const windowMs = windowHours * 60 * 60 * 1000;
-  const cutoff = toDatetimeString(new Date(now - windowMs));
+  // Full ISO-8601 (RFC3339) cutoff: valid whether the generated Prisma client
+  // types created_at as String (SQLite-era) or DateTime (which validates ISO and
+  // rejects a space-separated "YYYY-MM-DD HH:MM:SS"); Postgres casts it to the
+  // timestamp column either way.
+  const cutoff = new Date(now - windowMs).toISOString();
 
   // Coarse DB prefilter: only image media old enough to possibly be due.
   const candidates = await db.media.findMany({
@@ -86,15 +84,14 @@ export async function runOriginalDowngrade(deps: Partial<DowngradeDeps> = {}): P
 
     result.scanned++;
 
-    // FR-008: skip if the owning shout/comment was removed before the deadline.
+    // FR-008: if the owning shout/comment was removed before the deadline, cancel
+    // the pending conversion — but still finalize the asset (mark converted + reclaim
+    // the original) so it reaches a terminal state and isn't re-scanned every sweep.
     const [liveShout, liveComment] = await Promise.all([
       db.shout.findFirst({ where: { media_id: m.id, is_deleted: 0 }, select: { id: true } }),
       db.comment.findFirst({ where: { media_id: m.id, is_deleted: 0 }, select: { id: true } }),
     ]);
-    if (!liveShout && !liveComment) {
-      result.skipped++;
-      continue;
-    }
+    const orphaned = !liveShout && !liveComment;
 
     try {
       const dir = path.join(mediaDir, m.media_url);
@@ -124,7 +121,8 @@ export async function runOriginalDowngrade(deps: Partial<DowngradeDeps> = {}): P
         /* already gone — still converted */
       }
 
-      result.converted++;
+      if (orphaned) result.skipped++;
+      else result.converted++;
     } catch (e) {
       result.failed++;
       // Leave converted=false and the original intact; the next sweep retries (FR-009).
