@@ -6,8 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint src",
-    "test": "vitest run"
+    "lint": "eslint src"
   },
   "dependencies": {
     "@bull-board/api": "^6.0.0",
@@ -26,7 +25,6 @@
     "prisma": "^6.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^3.0.0"
+    "typescript-eslint": "^8.0.0"
   }
 }
