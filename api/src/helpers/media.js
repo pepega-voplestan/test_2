@@ -27,7 +27,16 @@ export const avatarUpload = multer({
 
 export const MEDIA_DIR = process.env.MEDIA_PATH;
 export const MEDIA_TMP_DIR = path.join(MEDIA_DIR, ".tmp");
-export const MEDIA_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+// Max size for original-quality JPG/PNG uploads (env-configurable — FR-011).
+// Also used as the media upload multer limit. Default 10 MB.
+export const ORIGINAL_QUALITY_MAX_BYTES = Number(process.env.ORIGINAL_QUALITY_MAX_BYTES) || 10 * 1024 * 1024;
+// Hours an original-quality image is retained/served before automatic WebP downgrade.
+export const ORIGINAL_QUALITY_WINDOW_HOURS = Number(process.env.ORIGINAL_QUALITY_WINDOW_HOURS) || 24;
+// Formats eligible for the original-quality path (JPG/PNG only).
+export const ORIGINAL_QUALITY_FORMATS = new Set(["jpeg", "png"]);
+
+export const MEDIA_MAX_BYTES = ORIGINAL_QUALITY_MAX_BYTES;
 export const MEDIA_MAX_DIM = 4096;
 export const MEDIA_MAX_PIXELS = 16_000_000; // 16 MP
 export const MEDIA_VARIANTS = [320, 960, 1600];
@@ -62,6 +71,77 @@ try {
   fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true });
 } catch (e) {
   console.error("[Media] Could not create media directories:", e.message);
+}
+
+/* ---------- Size-limit message (Russian, MB) ---------- */
+
+// Russian error message for an oversized upload, reflecting the configured limit.
+export function oversizedMessage(maxBytes = ORIGINAL_QUALITY_MAX_BYTES) {
+  const mb = Math.round(maxBytes / (1024 * 1024));
+  return `Файл слишком большой (макс. ${mb} МБ)`;
+}
+
+/* ---------- Lossless privacy-metadata stripping ---------- */
+
+/**
+ * Remove privacy-sensitive metadata from a JPEG at the marker level WITHOUT
+ * re-encoding the image. Drops APP1 (EXIF/GPS + XMP) and APP13 (IPTC/Photoshop)
+ * segments; the entropy-coded scan (SOS…EOI) is copied byte-for-byte, so pixel
+ * data stays lossless. Returns the input unchanged if it is not a JPEG.
+ */
+export function stripJpegMetadata(buf) {
+  if (buf.length < 2 || buf[0] !== 0xff || buf[1] !== 0xd8) return buf; // not a JPEG (SOI)
+  const out = [buf.subarray(0, 2)]; // SOI
+  let i = 2;
+  while (i + 1 < buf.length) {
+    if (buf[i] !== 0xff) { out.push(buf.subarray(i)); break; } // desync — copy remainder
+    let marker = buf[i + 1];
+    while (marker === 0xff && i + 2 < buf.length) { i++; marker = buf[i + 1]; } // skip fill bytes
+    if (marker === 0xda || marker === 0xd9) { out.push(buf.subarray(i)); break; } // SOS/EOI — copy scan+tail
+    if (marker >= 0xd0 && marker <= 0xd7) { out.push(buf.subarray(i, i + 2)); i += 2; continue; } // RSTn — no length
+    if (i + 4 > buf.length) { out.push(buf.subarray(i)); break; }
+    const len = buf.readUInt16BE(i + 2); // length field includes its own 2 bytes
+    const segEnd = i + 2 + len;
+    if (segEnd > buf.length) { out.push(buf.subarray(i)); break; }
+    const isPrivacy = marker === 0xe1 || marker === 0xed; // APP1 (EXIF/XMP), APP13 (IPTC)
+    if (!isPrivacy) out.push(buf.subarray(i, segEnd));
+    i = segEnd;
+  }
+  return Buffer.concat(out);
+}
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PNG_STRIP_CHUNKS = new Set(["eXIf", "tEXt", "iTXt", "zTXt", "tIME"]);
+
+/**
+ * Remove privacy/identity ancillary chunks from a PNG (eXIf, tEXt, iTXt, zTXt,
+ * tIME) while preserving all critical chunks (IHDR/PLTE/IDAT/IEND). Lossless by
+ * construction. Returns the input unchanged if it is not a PNG.
+ */
+export function stripPngMetadata(buf) {
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_SIGNATURE)) return buf;
+  const out = [buf.subarray(0, 8)];
+  let i = 8;
+  while (i + 8 <= buf.length) {
+    const len = buf.readUInt32BE(i);
+    const type = buf.toString("latin1", i + 4, i + 8);
+    const chunkEnd = i + 12 + len; // length(4) + type(4) + data(len) + crc(4)
+    if (chunkEnd > buf.length) { out.push(buf.subarray(i)); break; }
+    if (!PNG_STRIP_CHUNKS.has(type)) out.push(buf.subarray(i, chunkEnd));
+    i = chunkEnd;
+    if (type === "IEND") break;
+  }
+  return Buffer.concat(out);
+}
+
+/**
+ * Strip privacy metadata from a JPG/PNG buffer by sharp format name, losslessly.
+ * Unknown formats are returned unchanged.
+ */
+export function stripImageMetadata(buf, format) {
+  if (format === "jpeg") return stripJpegMetadata(buf);
+  if (format === "png") return stripPngMetadata(buf);
+  return buf;
 }
 
 /* ---------- YouTube helpers ---------- */
@@ -101,13 +181,21 @@ export function buildMedia(mediaObj) {
   if (!mediaObj) return undefined;
   if (mediaObj.media_type === "image") {
     const meta = JSON.parse(mediaObj.media_meta || "{}");
+    // During the original-quality window (orig present, not yet downgraded) the
+    // full-size view serves the lossless original; otherwise the WebP variant.
+    const pendingOriginal = Boolean(meta.orig) && meta.converted !== true;
     return {
       type: "image",
       url: `/media/${mediaObj.media_url}/960.webp`,
       thumb: `/media/${mediaObj.media_url}/320.webp`,
-      full: `/media/${mediaObj.media_url}/1600.webp`,
+      full: pendingOriginal
+        ? `/media/${mediaObj.media_url}/${meta.orig}`
+        : `/media/${mediaObj.media_url}/1600.webp`,
       width: meta.w || 0,
       height: meta.h || 0,
+      // EXIF orientation only matters while serving the metadata-stripped original;
+      // the WebP variants are already auto-rotated upright.
+      ...(pendingOriginal && meta.orientation ? { orientation: meta.orientation } : {}),
       ...(meta.animated && { animated: true, gif: `/media/${mediaObj.media_url}/original.gif` }),
     };
   }

@@ -5,14 +5,30 @@ interface LightboxProps {
   src: string;
   alt?: string;
   onClose: () => void;
+  /** EXIF orientation (1–8) of the source image. Applied as a CSS transform so a
+   *  metadata-stripped original (served during the original-quality window)
+   *  renders upright. Omit / 1 = no transform. */
+  orientation?: number;
 }
+
+// EXIF orientation (1–8) → CSS transform that renders the image upright.
+const ORIENTATION_TRANSFORMS: Record<number, string> = {
+  2: 'scaleX(-1)',
+  3: 'rotate(180deg)',
+  4: 'scaleY(-1)',
+  5: 'rotate(90deg) scaleX(-1)',
+  6: 'rotate(90deg)',
+  7: 'rotate(270deg) scaleX(-1)',
+  8: 'rotate(270deg)',
+};
 
 const DISMISS_THRESHOLD = 120; // px of drag needed to dismiss
 const VELOCITY_THRESHOLD = 0.5; // px/ms — fast flick dismisses even if threshold not met
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 
-const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose }) => {
+const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, orientation }) => {
+  const orientationTransform = orientation ? ORIENTATION_TRANSFORMS[orientation] : undefined;
   const overlayRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLDivElement>(null);
 
@@ -315,6 +331,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
           alt={alt}
           className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
           draggable={false}
+          style={orientationTransform ? { transform: orientationTransform } : undefined}
         />
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}

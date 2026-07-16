@@ -10,3 +10,13 @@ export const dbBackupQueue = new Queue("db-backup", {
   connection: redisConnection,
   defaultJobOptions: { removeOnComplete: 20, removeOnFail: 20 },
 });
+
+export const originalDowngradeQueue = new Queue("original-downgrade", {
+  connection: redisConnection,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 30000 },
+  },
+});
