@@ -53,7 +53,7 @@ To validate without waiting 24h, temporarily set `ORIGINAL_QUALITY_WINDOW_HOURS=
 backdate `media_meta.uploaded_at`) so the sweep treats the asset as due.
 
 1. Upload an original-quality JPG (Scenario 1).
-2. Wait for the `original-downgrade` sweep tick (≤5 min) — or trigger the job from Bull
+2. Wait for the `original-downgrade` sweep tick (hourly) — or trigger the job from Bull
    Board (`WORKERS_PORT`/`/workers`).
 3. **Expected**:
    - `media_meta`: `converted: true`, `orig` key removed.

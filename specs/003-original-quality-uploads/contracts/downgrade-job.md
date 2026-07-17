@@ -8,8 +8,8 @@ New background job in `workers/`, following the `notification-cleanup` pattern
 - **Queue**: `originalDowngradeQueue = new Queue("original-downgrade", { connection,
   defaultJobOptions: { removeOnComplete: 100, removeOnFail: 50, attempts: 3, backoff: {
   type: "exponential", delay: 30000 } } })` in `queues.ts`.
-- **Schedule**: `upsertJobScheduler("original-downgrade-sweep", { pattern: "*/5 * * * *" },
-  { name: "run", data: {} })` in `scheduler.ts` (every 5 minutes; upsert = safe on every
+- **Schedule**: `upsertJobScheduler("original-downgrade-sweep", { pattern: "0 * * * *" },
+  { name: "run", data: {} })` in `scheduler.ts` (hourly; upsert = safe on every
   startup).
 - **Worker**: `createOriginalDowngradeWorker()` started in `index.ts` and added to the
   Bull Board adapters list.
@@ -60,5 +60,5 @@ by normal media/content cleanup, out of scope here.)
 
 ## Timing (SC-002)
 
-A 5-minute cadence means an eligible image is converted within ≤5 min of its deadline in
-the common case, comfortably inside the 15-minute target for ≥99% of images.
+An hourly cadence means an eligible image is converted within ≤1 hour of its deadline,
+inside the 1-hour target for ≥99% of images.

@@ -35,7 +35,7 @@ content is simply skipped).
 
 **Project Type**: Web application (API + web front end + background workers)
 
-**Performance Goals**: Conversion of ≥99% of eligible images within 15 min of their 24-hour deadline (SC-002); no user-facing latency added to upload beyond writing one extra file
+**Performance Goals**: Conversion of ≥99% of eligible images within 1 hour of their 24-hour deadline (SC-002; sweep runs hourly); no user-facing latency added to upload beyond writing one extra file
 
 **Constraints**: Original must be lossless (no re-encode of pixel data) while privacy metadata (GPS, camera identifiers) is stripped; single-media-per-post/comment invariant preserved; image reference URLs must survive the transition (FR-006); env-configurable size limit (FR-011)
 

@@ -15,11 +15,12 @@ export async function registerScheduledJobs(): Promise<void> {
     { name: "run", data: {} }
   );
 
-  // Original-quality downgrade sweep — every 5 minutes (well within the 15-min
-  // SLA of the 24-hour deadline; see SC-002).
+  // Original-quality downgrade sweep — runs hourly. An image may therefore stay
+  // at original quality up to ~1h past its 24-hour deadline before the sweep
+  // reclaims it.
   await originalDowngradeQueue.upsertJobScheduler(
     "original-downgrade-sweep",
-    { pattern: "*/5 * * * *" },
+    { pattern: "0 * * * *" },
     { name: "run", data: {} }
   );
 

@@ -37,7 +37,7 @@ JPEGs are orientation-1 after modern camera apps; document this limitation in qu
 
 ## R2. Deferred 24-hour downgrade mechanism
 
-**Decision**: A **repeatable BullMQ sweep** (every 5 minutes) driven by database state,
+**Decision**: A **repeatable BullMQ sweep** (hourly) driven by database state,
 mirroring the existing `notification-cleanup` job — not a per-upload delayed job.
 - On upload, the API only writes disk + DB state (`media_meta.orig`, `uploaded_at`,
   `converted:false`). It does **not** enqueue anything.
@@ -55,7 +55,7 @@ mirroring the existing `notification-cleanup` job — not a per-upload delayed j
   the sweep skips it (FR-008) — no job to cancel, no orphaned work.
 - Avoids adding BullMQ as an API dependency (API currently uses `redis` for sessions
   only, not `bullmq`).
-- A 5-minute cadence comfortably meets SC-002 (99% converted within 15 min of deadline).
+- An hourly cadence meets SC-002 (99% converted within 1 hour of deadline).
 
 **Alternatives considered**:
 - *Per-upload BullMQ delayed job (`delay: 24h`, `jobId: mediaId`)*: precise timing and
