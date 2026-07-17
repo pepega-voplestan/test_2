@@ -92,7 +92,7 @@ workers under `workers/` test setup.
 
 - [X] T017 [US2] Add `originalDowngradeQueue = new Queue("original-downgrade", ...)` with `attempts:3` + exponential backoff to `workers/src/queues.ts`
 - [X] T018 [US2] Create `workers/src/jobs/original-downgrade.ts` — `createOriginalDowngradeWorker()`: select due+undeleted assets, ensure/regenerate `1600.webp`, confirm it on disk, flip `media_meta` (`converted:true`, drop `orig`) via Prisma + mirror `meta.json`, then `unlink` the original; log scanned/converted/skipped/failed (per [contracts/downgrade-job.md](./contracts/downgrade-job.md))
-- [X] T019 [US2] Register the repeatable sweep in `workers/src/scheduler.ts` via `upsertJobScheduler("original-downgrade-sweep", { pattern: "*/5 * * * *" }, { name: "run", data: {} })`
+- [X] T019 [US2] Register the repeatable sweep in `workers/src/scheduler.ts` via `upsertJobScheduler("original-downgrade-sweep", { pattern: "0 * * * *" }, { name: "run", data: {} })`
 - [X] T020 [US2] Wire the worker into `workers/src/index.ts`: start `createOriginalDowngradeWorker()` and add `originalDowngradeQueue` to the Bull Board adapters list
 - [X] T030 [US2] Mount the media volume (read-write) and set `MEDIA_PATH: /media` on the `worker` service in `docker-compose.yml`, `docker-compose.dev.yml`, and `docker-compose.local.yml` so the worker can unlink originals (note: the "conversion" reuses the WebP variants already generated at upload — no `sharp` in workers)
 

@@ -104,7 +104,7 @@ When a user tries to attach a picture larger than the allowed size limit, the sy
 ### Measurable Outcomes
 
 - **SC-001**: A JPG or PNG uploaded within the size limit is served at original quality — visually indistinguishable from the source file — in the full-size opened view for the full 24 hours after upload.
-- **SC-002**: At least 99% of eligible images are converted to compressed WebP within 15 minutes of their 24-hour deadline.
+- **SC-002**: At least 99% of eligible images are converted to compressed WebP within 1 hour of their 24-hour deadline (the sweep runs hourly).
 - **SC-003**: 100% of uploads exceeding the size limit are rejected with a clear Russian message, and no oversized or partial file is stored.
 - **SC-004**: After conversion completes, long-term storage per image returns to the compressed baseline — no original full-size file older than roughly 24 hours (plus the conversion window) remains stored.
 - **SC-005**: Zero images are lost as a result of the conversion process, including across conversion failures and server restarts.
