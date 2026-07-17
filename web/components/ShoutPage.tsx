@@ -86,10 +86,15 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
   }
 
   function handleDelete() {
-    // Mark as deleted in-place so comments remain visible
-    setShout((prev) =>
-      prev ? { ...prev, isDeleted: true, content: '', media: undefined, user: null } : prev
-    );
+    // Zero comments: shout is fully removed, show the not-found state.
+    // Otherwise mark as deleted in-place so comments remain visible.
+    setShout((prev) => {
+      if (prev && (prev.comments || []).length === 0) {
+        setError('Запись не найдена');
+        return null;
+      }
+      return prev ? { ...prev, isDeleted: true, content: '', media: undefined, user: null } : prev;
+    });
   }
 
   const sseListeners = useMemo(() => ({
@@ -99,6 +104,13 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
         setShout((prev) =>
           prev ? { ...prev, isDeleted: true, content: '', media: undefined, user: null } : prev
         );
+      }
+    },
+    remove_shout: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      if (data.shoutId === shoutId) {
+        setError('Запись не найдена');
+        setShout(null);
       }
     },
     new_comment: (data: Record<string, unknown>) => {

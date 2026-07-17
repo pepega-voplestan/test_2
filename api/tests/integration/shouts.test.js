@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { request, authenticatedAgent, cleanDb, disconnectDb, getTestPrisma } from "../helpers.js";
-import { createUser, createShout, createMedia } from "../fixtures/index.js";
+import { createUser, createShout, createMedia, createComment } from "../fixtures/index.js";
 
 describe("Shouts routes", () => {
   beforeEach(async () => {
@@ -45,9 +45,10 @@ describe("Shouts routes", () => {
       expect(Array.isArray(s.comments)).toBe(true);
     });
 
-    it("returns soft-deleted shouts with isDeleted: true and masked content", async () => {
+    it("returns soft-deleted shouts with comments as isDeleted: true and masked content", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
-      await createShout({ userId: user.id, content: "Deleted shout", is_deleted: 1 });
+      const deletedShout = await createShout({ userId: user.id, content: "Deleted shout", is_deleted: 1 });
+      await createComment({ shoutId: deletedShout.id, userId: user.id });
       await createShout({ userId: user.id, content: "Visible shout" });
 
       const res = await (await request()).get("/api/v1/shouts");
@@ -59,6 +60,17 @@ describe("Shouts routes", () => {
       expect(deleted.content).toBe("");
       expect(deleted.user).toBeNull();
       expect(visible.content).toBe("Visible shout");
+    });
+
+    it("excludes soft-deleted shouts with zero comments entirely", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      await createShout({ userId: user.id, content: "Deleted shout", is_deleted: 1 });
+      await createShout({ userId: user.id, content: "Visible shout" });
+
+      const res = await (await request()).get("/api/v1/shouts");
+      expect(res.status).toBe(200);
+      expect(res.body.shouts).toHaveLength(1);
+      expect(res.body.shouts[0].content).toBe("Visible shout");
     });
 
     it("returns hasMore: true when results exceed limit and provides nextCursor", async () => {
@@ -129,15 +141,24 @@ describe("Shouts routes", () => {
       });
     });
 
-    it("returns shout with isDeleted: true and masked fields when soft-deleted", async () => {
+    it("returns shout with isDeleted: true and masked fields when soft-deleted with comments", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       const shout = await createShout({ userId: user.id, content: "Secret", is_deleted: 1 });
+      await createComment({ shoutId: shout.id, userId: user.id });
 
       const res = await (await request()).get(`/api/v1/shouts/${shout.id}`);
       expect(res.status).toBe(200);
       expect(res.body.shout.isDeleted).toBe(true);
       expect(res.body.shout.content).toBe("");
       expect(res.body.shout.user).toBeNull();
+    });
+
+    it("returns 404 for a soft-deleted shout with zero comments", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id, content: "Secret", is_deleted: 1 });
+
+      const res = await (await request()).get(`/api/v1/shouts/${shout.id}`);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -190,6 +211,48 @@ describe("Shouts routes", () => {
 
       const updated = await getTestPrisma().shout.findUnique({ where: { id: shout.id } });
       expect(updated.is_deleted).toBe(1);
+    });
+
+    it("broadcasts remove_shout and fully hides a zero-comment shout on delete", async () => {
+      const { broadcast } = await import("../../src/sse.js");
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent.delete(`/api/v1/shouts/${shout.id}`);
+      expect(res.status).toBe(200);
+      expect(broadcast).toHaveBeenCalledWith("remove_shout", { shoutId: shout.id, userId: user.id });
+      expect(broadcast).not.toHaveBeenCalledWith("delete_shout", expect.anything());
+
+      const feedRes = await (await request()).get("/api/v1/shouts");
+      expect(feedRes.body.shouts.find((s) => s.id === shout.id)).toBeUndefined();
+
+      const singleRes = await (await request()).get(`/api/v1/shouts/${shout.id}`);
+      expect(singleRes.status).toBe(404);
+    });
+
+    it("broadcasts delete_shout and keeps a has-comments shout as a placeholder on delete", async () => {
+      const { broadcast } = await import("../../src/sse.js");
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id });
+      await createComment({ shoutId: shout.id, userId: user.id });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent.delete(`/api/v1/shouts/${shout.id}`);
+      expect(res.status).toBe(200);
+      expect(broadcast).toHaveBeenCalledWith("delete_shout", { shoutId: shout.id, userId: user.id });
+      expect(broadcast).not.toHaveBeenCalledWith("remove_shout", expect.anything());
+
+      const feedRes = await (await request()).get("/api/v1/shouts");
+      const feedShout = feedRes.body.shouts.find((s) => s.id === shout.id);
+      expect(feedShout).toBeDefined();
+      expect(feedShout.isDeleted).toBe(true);
+      expect(feedShout.content).toBe("");
+      expect(feedShout.user).toBeNull();
+
+      const singleRes = await (await request()).get(`/api/v1/shouts/${shout.id}`);
+      expect(singleRes.status).toBe(200);
+      expect(singleRes.body.shout.isDeleted).toBe(true);
     });
   });
 

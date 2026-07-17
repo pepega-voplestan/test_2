@@ -184,9 +184,15 @@ const ShoutFeed: React.FC = () => {
   }, []);
 
   const removeShout = useCallback((shoutId: string) => {
-    setShouts(prev => prev.map(s =>
-      s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
-    ));
+    setShouts(prev => {
+      const target = prev.find(s => s.id === shoutId);
+      if (target && (target.comments || []).length === 0) {
+        return prev.filter(s => s.id !== shoutId);
+      }
+      return prev.map(s =>
+        s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
+      );
+    });
   }, []);
 
   const editShout = useCallback((shoutId: string, newContent: string) => {
@@ -247,6 +253,11 @@ const ShoutFeed: React.FC = () => {
       setShouts(prev => prev.map(s =>
         s.id === shoutId ? { ...s, isDeleted: true, content: '', media: undefined, user: null } : s
       ));
+    },
+    remove_shout: (data: Record<string, unknown>) => {
+      if (data.userId === userIdRef.current) return;
+      const shoutId = data.shoutId as string;
+      setShouts(prev => prev.filter(s => s.id !== shoutId));
     },
     pin_shout: (data: Record<string, unknown>) => {
       if (activeTabRef.current !== 'new') return;
