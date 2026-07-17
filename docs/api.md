@@ -51,7 +51,7 @@ All prefixed `/api/v1/`. Auth = session cookie required. Full spec at `/api/docs
 | GET | `/search` | — | `q`, `type=shouts\|users`, `userId?`, `limit`, `offset`; NSFW/politics filtered by session prefs (guests default both off); frontend hides from unauthenticated users |
 | PUT | `/shouts/:id` | Yes | Edit shout content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
 | PUT | `/comments/:id` | Yes | Edit comment content (author only, within 60s of creation; `EDIT_WINDOW_MS`) |
-| POST | `/upload/media` | Yes | ≤10MB JPG/PNG/WebP/GIF/MP4; images generate 320/960/1600px WebP |
+| POST | `/upload/media` | Yes | ≤`ORIGINAL_QUALITY_MAX_BYTES` (10MB) JPG/PNG/WebP/GIF/MP4; images generate 320/960/1600px WebP. JPG/PNG also keep a lossless, metadata-stripped `original.<ext>` served at full size for 24h (see Original-Quality Uploads) |
 | POST | `/upload/avatar` | Yes | ≤2MB; generates 64/128/256px square WebP |
 | GET | `/notifications` | Yes | Cursor-paginated (14-day window, default 20, max 50); `cursor` = ISO timestamp |
 | PATCH | `/notifications/read-batch` | Yes | Mark batch as read (max 50 ids) |
@@ -146,7 +146,8 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - Indices: `(shout_id, created_at)`, `(user_id)`
 
 **Media** (`media`)
-- `id`, `user_id`→users, `media_type` (image|youtube), `media_url` (relative path or video ID), `media_meta` (JSON: `{w, h, size, mime, animated}`), `created_at`
+- `id`, `user_id`→users, `media_type` (image|youtube), `media_url` (relative path or video ID), `media_meta` (JSON), `created_at`
+- `media_meta` JSON: `{w, h, size, mime, animated}`. Original-quality JPG/PNG additionally carry `{orig: "original.<ext>", uploaded_at, converted, orientation?}` until downgraded (see Original-Quality Uploads).
 
 **ShoutLike** (`shout_likes`) — composite PK `(shout_id, user_id)`, cascade deletes
 
@@ -196,7 +197,9 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 | `POSTGRES_DB` | — | PostgreSQL database name |
 | `SESSION_SECRET` | `"dev-secret"` | Session cookie signing |
 | `NODE_ENV` | `development` | Enables secure cookie in production |
-| `MEDIA_PATH` | `/media` | Uploaded media directory |
+| `MEDIA_PATH` | `/media` | Uploaded media directory (mounted read-write in api + worker) |
+| `ORIGINAL_QUALITY_MAX_BYTES` | `10485760` (10MB) | Max size for original-quality JPG/PNG uploads; also the media upload limit |
+| `ORIGINAL_QUALITY_WINDOW_HOURS` | `24` | Hours a JPG/PNG is served losslessly before auto-downgrade to WebP |
 | `AVATAR_PATH` | `/data/avatars` | Uploaded avatar directory (separate from media) |
 | `RESEND_API_KEY` | — | Resend SMTP key (falls back to console log if unset) |
 | `EMAIL_FROM` | — | Sender address (e.g. `"Вопли <noreply@vopley.net>"`) |
@@ -219,6 +222,7 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - Rate limits: 20/min auth endpoints; 5/min forgot-password/send-code and email-change; 100/10min upload + shout-create (user falls back to IP)
 - Sharp: auto-rotate, strip EXIF, generate WebP variants, atomic tmp→permanent move
 - Animated GIFs: preserve `original.gif` + WebP thumbnail from first frame; `animated: true` in media DTO
+- Original-Quality Uploads: JPG/PNG within the size limit also keep a lossless `original.<ext>` whose privacy metadata (EXIF/GPS/IPTC/XMP for JPEG; text/eXIf chunks for PNG) is stripped **losslessly** via a marker/chunk walk in `helpers/media.js` (`stripJpegMetadata`/`stripPngMetadata`) — NOT via Sharp (which re-encodes). `buildMedia()` serves `original.<ext>` as `full` (opened/lightbox view) while `media_meta.orig` is present and `converted !== true`, plus `orientation` so the stripped original renders upright; `thumb`/`url` (320/960 WebP) are unchanged, and `full` reverts to `1600.webp` after downgrade. Oversized (Russian message from `oversizedMessage()`) and corrupt uploads are rejected and store nothing (tmp dir discarded). A background sweep performs the 24h downgrade — see [Infrastructure](infra.md).
 - Char limit: 400 effective chars; each newline costs 40 (`effectiveCharCount` helper)
 - Edit window: 60s after creation (`EDIT_WINDOW_MS` in `helpers/validation.js`); enforced by backend timestamp check, mirrored on frontend with countdown
 - Error responses: `{ error: "message" }`; graceful SIGTERM/SIGINT → Prisma disconnect

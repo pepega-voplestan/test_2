@@ -9,6 +9,7 @@ import {
   AVATAR_DIR, AVATAR_SIZES, AVATAR_MIN_DIM, avatarUpload,
   MEDIA_DIR, MEDIA_TMP_DIR, MEDIA_MAX_DIM, MEDIA_MAX_PIXELS,
   MEDIA_VARIANTS, MEDIA_ALLOWED_MIME, mediaUpload,
+  ORIGINAL_QUALITY_FORMATS, stripImageMetadata, oversizedMessage,
 } from "../helpers/media.js";
 
 const router = Router();
@@ -31,7 +32,7 @@ router.post("/upload/media", requireAuth, (req, res) => {
   mediaUpload.single("file")(req, res, async (multerErr) => {
     if (multerErr) {
       const msg = multerErr.code === "LIMIT_FILE_SIZE"
-        ? "Файл слишком большой (макс. 10 МБ)"
+        ? oversizedMessage()
         : multerErr.message || "Ошибка загрузки";
       console.log(`[Media] Upload rejected: ${msg}`);
       return res.status(400).json({ error: msg });
@@ -45,6 +46,9 @@ router.post("/upload/media", requireAuth, (req, res) => {
     const banCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
     if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
     console.log(`[Media] Processing upload for ${userId}, ${req.file.size} bytes, ${req.file.mimetype}`);
+
+    // Track the tmp dir so a mid-processing failure never leaves a partial/corrupt file.
+    let cleanupDir = null;
 
     try {
       const isVideo = req.file.mimetype === "video/mp4";
@@ -84,7 +88,13 @@ router.post("/upload/media", requireAuth, (req, res) => {
       }
 
       const image = sharp(req.file.buffer);
-      const meta = await image.metadata();
+      let meta;
+      try {
+        meta = await image.metadata();
+      } catch {
+        // Corrupt/undecodable image — reject before storing anything.
+        return res.status(400).json({ error: "Не удалось обработать изображение. Файл может быть повреждён" });
+      }
 
       // Validate via sharp metadata (magic bytes check — sharp rejects invalid images)
       if (!MEDIA_ALLOWED_MIME.has(`image/${meta.format === "jpeg" ? "jpeg" : meta.format}`)) {
@@ -108,6 +118,7 @@ router.post("/upload/media", requireAuth, (req, res) => {
       const mediaId = crypto.randomUUID();
       const tmpDir = path.join(MEDIA_TMP_DIR, mediaId);
       fs.mkdirSync(tmpDir, { recursive: true });
+      cleanupDir = tmpDir;
 
       const urls = {};
 
@@ -134,8 +145,31 @@ router.post("/upload/media", requireAuth, (req, res) => {
         }
       }
 
+      // Original-quality path (JPG/PNG only): keep a lossless, metadata-stripped
+      // copy of the original for the first 24h. The full-size view serves it until
+      // the scheduled downgrade reclaims it (see workers/original-downgrade).
+      let origFile = null;
+      let orientation;
+      if (!isAnimatedGif && ORIGINAL_QUALITY_FORMATS.has(meta.format)) {
+        const ext = meta.format === "jpeg" ? "jpg" : "png";
+        const stripped = stripImageMetadata(req.file.buffer, meta.format);
+        fs.writeFileSync(path.join(tmpDir, `original.${ext}`), stripped);
+        origFile = `original.${ext}`;
+        // Preserve orientation so the full-size view can render the stripped
+        // original upright (WebP variants are already auto-rotated).
+        if (meta.orientation && meta.orientation !== 1) orientation = meta.orientation;
+      }
+
       // Write meta.json as on-disk backup
-      const metaJson = JSON.stringify({ w: meta.width, h: meta.height, size: req.file.size, mime: req.file.mimetype, animated: isAnimatedGif });
+      const metaJson = JSON.stringify({
+        w: meta.width,
+        h: meta.height,
+        size: req.file.size,
+        mime: req.file.mimetype,
+        animated: isAnimatedGif,
+        ...(origFile && { orig: origFile, uploaded_at: new Date().toISOString(), converted: false }),
+        ...(orientation && { orientation }),
+      });
       fs.writeFileSync(path.join(tmpDir, "meta.json"), metaJson);
 
       // Atomic move: tmp → permanent
@@ -160,11 +194,15 @@ router.post("/upload/media", requireAuth, (req, res) => {
         urls: {
           thumb: urls[320],
           medium: urls[960],
-          full: urls[1600],
+          full: origFile ? `/media/${mediaId}/${origFile}` : urls[1600],
           ...(isAnimatedGif && { gif: urls.gif }),
         },
       });
     } catch (err) {
+      // Discard any partially-written tmp dir so nothing corrupt is persisted (FR-003).
+      if (cleanupDir) {
+        try { fs.rmSync(cleanupDir, { recursive: true, force: true }); } catch { /* best effort */ }
+      }
       console.error("[Media] Processing error:", err);
       res.status(500).json({ error: "Ошибка обработки файла" });
     }

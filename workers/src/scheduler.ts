@@ -1,4 +1,4 @@
-import { notificationCleanupQueue, dbBackupQueue } from "./queues.js";
+import { notificationCleanupQueue, dbBackupQueue, originalDowngradeQueue } from "./queues.js";
 
 export async function registerScheduledJobs(): Promise<void> {
   // Notification cleanup — runs daily at 00:00 UTC
@@ -12,6 +12,14 @@ export async function registerScheduledJobs(): Promise<void> {
   await dbBackupQueue.upsertJobScheduler(
     "daily-db-backup",
     { pattern: "0 2 * * *" },
+    { name: "run", data: {} }
+  );
+
+  // Original-quality downgrade sweep — every 5 minutes (well within the 15-min
+  // SLA of the 24-hour deadline; see SC-002).
+  await originalDowngradeQueue.upsertJobScheduler(
+    "original-downgrade-sweep",
+    { pattern: "*/5 * * * *" },
     { name: "run", data: {} }
   );
 

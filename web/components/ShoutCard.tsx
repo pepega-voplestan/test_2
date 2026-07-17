@@ -880,6 +880,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
           {lightboxOpen && comment.media?.type === 'image' && (
             <Lightbox
               src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full}
+              orientation={comment.media.orientation}
               onClose={() => setLightboxOpen(false)}
             />
           )}
@@ -1346,6 +1347,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
       {lightboxOpen && shout.media?.type === 'image' && (
         <Lightbox
           src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
+          orientation={shout.media.orientation}
           onClose={() => setLightboxOpen(false)}
         />
       )}

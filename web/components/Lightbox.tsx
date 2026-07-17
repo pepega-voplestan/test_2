@@ -5,14 +5,44 @@ interface LightboxProps {
   src: string;
   alt?: string;
   onClose: () => void;
+  /** EXIF orientation (1–8) of the source image. Applied as a CSS transform so a
+   *  metadata-stripped original (served during the original-quality window)
+   *  renders upright. Omit / 1 = no transform. */
+  orientation?: number;
 }
+
+// EXIF orientation (1–8) → CSS transform that renders the image upright.
+const ORIENTATION_TRANSFORMS: Record<number, string> = {
+  2: 'scaleX(-1)',
+  3: 'rotate(180deg)',
+  4: 'scaleY(-1)',
+  5: 'rotate(90deg) scaleX(-1)',
+  6: 'rotate(90deg)',
+  7: 'rotate(270deg) scaleX(-1)',
+  8: 'rotate(270deg)',
+};
+
+// Orientations 5–8 rotate the image 90°/270°, swapping its visual width/height.
+// The <img> is sized before the transform, so its max box must be swapped
+// (max-w:90vh / max-h:90vw) or the rotated image overflows the 90vw×90vh viewport.
+const ORIENTATION_SWAPS_AXES = new Set([5, 6, 7, 8]);
 
 const DISMISS_THRESHOLD = 120; // px of drag needed to dismiss
 const VELOCITY_THRESHOLD = 0.5; // px/ms — fast flick dismisses even if threshold not met
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 
-const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose }) => {
+const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, orientation }) => {
+  const orientationTransform = orientation ? ORIENTATION_TRANSFORMS[orientation] : undefined;
+  const imgStyle: React.CSSProperties | undefined = orientationTransform
+    ? {
+        transform: orientationTransform,
+        // Swap the fit box for 90°/270° rotations so the image stays within the viewport.
+        ...(orientation && ORIENTATION_SWAPS_AXES.has(orientation)
+          ? { maxWidth: '90vh', maxHeight: '90vw' }
+          : {}),
+      }
+    : undefined;
   const overlayRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLDivElement>(null);
 
@@ -315,6 +345,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose })
           alt={alt}
           className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
           draggable={false}
+          style={imgStyle}
         />
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}

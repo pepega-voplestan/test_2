@@ -30,13 +30,19 @@ workers/src/
 ├── db.ts, redis.ts, queues.ts, scheduler.ts
 └── jobs/
     ├── notification-cleanup.ts
-    └── db-backup.ts
+    ├── db-backup.ts
+    └── original-downgrade.ts
 ```
 
 | Job | Schedule | Action |
 |-----|----------|--------|
 | `notification-cleanup` | 00:00 UTC daily | Hard-delete notifications older than 14 days |
 | `db-backup` | 02:00 UTC daily | PostgreSQL dump backup, keep last 7 |
+| `original-downgrade` | every 5 min | Downgrade original-quality JPG/PNG past their 24h window |
+
+### Original-quality downgrade sweep
+
+`original-downgrade` finds `media` rows (`media_type=image`) whose `media_meta.orig` is set and `converted !== true`, whose `uploaded_at` is older than `ORIGINAL_QUALITY_WINDOW_HOURS` (24h), and whose owning shout/comment is **not** soft-deleted (`is_deleted=0`). For each, it flips `media_meta.converted=true`, removes the `orig` key, and `unlink`s the `original.<ext>` file to reclaim storage — the 320/960/1600 WebP variants already exist from upload, so **no image processing (no Sharp) runs in the worker**. The DB flag is flipped before the unlink, so a crash can only leave a harmless stray file (skipped next run), never a missing image; the original is never removed unless `1600.webp` is confirmed present. State lives in Postgres, so the sweep is restart-safe and cancellation is implicit (soft-deleted content is skipped). The `worker` container mounts the media volume read-write (`MEDIA_PATH=/media`) in all three compose files.
 
 Jobs registered idempotently via `upsertJobScheduler` (safe on restart). Dev container uses `tsx watch` with source mount for hot-reload.
 
@@ -62,4 +68,4 @@ Makefile shortcuts: `make backup`, `make backup-upload`, `make restore`.
 - Legacy inline media columns on `shouts` table (`media_type`, `media_url`, `media_meta`) — to be removed
 - Planned notification types `shout_like`/`comment_like` not yet implemented
 - `components/` directory has no test files (contexts + hooks are covered)
-- `workers/` has no test suite
+- `workers/` has a Vitest suite for `original-downgrade` (`workers/tests/`, run via `npm test` in `workers/`); other jobs are untested. Not yet wired into the root `make test` targets.
