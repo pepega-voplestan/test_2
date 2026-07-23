@@ -10,7 +10,7 @@ interface SSEContextType {
 const SSEContext = createContext<SSEContextType | null>(null);
 
 const ALL_EVENTS = [
-  "new_shout", "delete_shout",
+  "new_shout", "delete_shout", "remove_shout",
   "new_comment", "delete_comment",
   "shout_like", "comment_like",
   "notification",

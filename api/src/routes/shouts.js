@@ -62,6 +62,7 @@ router.get("/shouts", asyncHandler(async (req, res) => {
       where: {
         parent_id: null,
         is_pinned: 0,
+        NOT: { AND: [{ is_deleted: 1 }, { comments: { none: { is_deleted: 0 } } }] },
         ...(cursor ? { created_at: { lt: cursor } } : {}),
       },
       include: {
@@ -92,7 +93,11 @@ router.get("/shouts", asyncHandler(async (req, res) => {
 router.get("/shouts/:id", asyncHandler(async (req, res) => {
   const currentUserId = req.session?.user?.id ?? null;
   const raw = await prisma.shout.findFirst({
-    where: { id: req.params.id, parent_id: null },
+    where: {
+      id: req.params.id,
+      parent_id: null,
+      NOT: { AND: [{ is_deleted: 1 }, { comments: { none: { is_deleted: 0 } } }] },
+    },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
       media: true,
@@ -146,10 +151,17 @@ router.delete("/shouts/:id", requireAuth, asyncHandler(async (req, res) => {
   if (shout.user_id !== userId) return res.status(403).json({ error: "Можно удалять только свои записи" });
 
   // Soft-delete the shout only — comments remain accessible
-  await prisma.shout.update({ where: { id: shoutId }, data: { is_deleted: 1 } });
+  const [, commentCount] = await prisma.$transaction([
+    prisma.shout.update({ where: { id: shoutId }, data: { is_deleted: 1 } }),
+    prisma.comment.count({ where: { shout_id: shoutId, is_deleted: 0 } }),
+  ]);
 
   console.log(`[Shouts] Soft-deleted shout ${shoutId} by ${userId}`);
-  broadcast("delete_shout", { shoutId, userId });
+  if (commentCount === 0) {
+    broadcast("remove_shout", { shoutId, userId });
+  } else {
+    broadcast("delete_shout", { shoutId, userId });
+  }
   res.json({ ok: true });
 }));
 
