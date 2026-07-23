@@ -57,6 +57,22 @@ describe("Upload routes", () => {
       expect(res.status).toBe(400);
     });
 
+    it("returns 403 and discards the file when the user is media-restricted", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+      const imgBuf = await makeJpeg(400, 300);
+
+      const res = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", imgBuf, { filename: "photo.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Вам запрещено прикреплять медиафайлы");
+
+      const rows = await getTestPrisma().media.findMany({ where: { user_id: user.id } });
+      expect(rows).toHaveLength(0);
+    });
+
     it("returns 400 for a disallowed MIME type", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       const agent = await authenticatedAgent(user);
@@ -277,6 +293,18 @@ describe("Upload routes", () => {
         .attach("avatar", smallBuf, { filename: "small.jpg", contentType: "image/jpeg" });
 
       expect(res.status).toBe(400);
+    });
+
+    it("succeeds for a media-restricted user (avatar upload is out of scope for the restriction)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+      const imgBuf = await makeJpeg(300, 300);
+
+      const res = await agent
+        .post("/api/v1/upload/avatar")
+        .attach("avatar", imgBuf, { filename: "avatar.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(200);
     });
 
     it("returns 200 and updates user avatar for a valid upload", async () => {

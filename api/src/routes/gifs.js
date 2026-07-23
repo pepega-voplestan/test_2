@@ -120,8 +120,8 @@ router.post("/gifs/reference", requireAuth, asyncHandler(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message });
 
   const userId = req.session.user.id;
-  const banCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
-  if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+  const authCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
+  if (authCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
 
   const { giphyId, giphyUrl, giphyStill, width, height } = parsed.data;
   const media = await prisma.media.create({
@@ -248,8 +248,9 @@ router.post("/gifs/upload", requireAuth, (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Файл не выбран" });
 
     const userId = req.session.user.id;
-    const banCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
-    if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+    const authCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true, is_media_allowed: true } });
+    if (authCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+    if (!authCheck?.is_media_allowed) return res.status(403).json({ error: "Вам запрещено прикреплять медиафайлы" });
 
     try {
       const activeCount = await prisma.userGif.count({ where: { user_id: userId, is_deleted: 0 } });

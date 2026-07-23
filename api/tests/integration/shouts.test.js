@@ -336,6 +336,61 @@ describe("Shouts routes", () => {
       expect(res.body.shout.media.type).toBe("image");
     });
 
+    it("allows a media-restricted user to attach an existing image mediaId (reuse of already-stored media, not a new upload)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
+      const media = await createMedia({ userId: user.id });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "With image", mediaId: media.id });
+      expect(res.status).toBe(200);
+      expect(res.body.shout.media).toBeDefined();
+      expect(res.body.shout.media.type).toBe("image");
+    });
+
+    it("allows a media-restricted user to attach a giphy-referenced mediaId (not physically stored on our server)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
+      const media = await createMedia({ userId: user.id, mediaType: "giphy", mediaUrl: "abc123", mediaMeta: JSON.stringify({ url: "https://media.giphy.com/media/abc123/giphy.gif", still: "https://media.giphy.com/media/abc123/giphy_s.gif", width: 200, height: 150 }) });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "With gif", mediaId: media.id });
+      expect(res.status).toBe(200);
+      expect(res.body.shout.media).toBeDefined();
+      expect(res.body.shout.media.type).toBe("giphy");
+    });
+
+    it("allows a media-restricted user to submit youtubeUrl (not physically stored on our server)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "Check this out", youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+      expect(res.status).toBe(200);
+      expect(res.body.shout.media).toBeDefined();
+      expect(res.body.shout.media.type).toBe("youtube");
+    });
+
+    it("allows a text-only submission from a media-restricted user", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "Just text, no media" });
+      expect(res.status).toBe(200);
+      expect(res.body.shout.content).toBe("Just text, no media");
+      expect(res.body.shout.media).toBeUndefined();
+    });
+
+    it("still auto-converts a YouTube link in content for a media-restricted user", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+      expect(res.status).toBe(200);
+      expect(res.body.shout.media).toBeDefined();
+      expect(res.body.shout.media.type).toBe("youtube");
+
+      const row = await getTestPrisma().shout.findUnique({ where: { id: res.body.id } });
+      expect(row.media_id).toBeTruthy();
+    });
+
     it("sets visibilityTag on the shout", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       const agent = await authenticatedAgent(user);

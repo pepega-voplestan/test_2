@@ -204,6 +204,14 @@ describe("admin action handlers", () => {
       expect(mockPrisma.comment.updateMany).not.toHaveBeenCalled();
     });
 
+    it("does not touch content when only is_media_allowed changes (is_banned unchanged)", async () => {
+      const request = { method: "post", params: { _prevIsBanned: "0" } };
+      const response = { record: { params: { id: "u1", is_banned: "0", is_media_allowed: "false" } } };
+      await editAfter(response, request, {});
+      expect(mockPrisma.shout.updateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.comment.updateMany).not.toHaveBeenCalled();
+    });
+
     it("returns response unchanged on non-POST", async () => {
       const request = { method: "get", params: {} };
       const response = { record: null };

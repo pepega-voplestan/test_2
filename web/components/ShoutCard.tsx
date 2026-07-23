@@ -1166,6 +1166,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   };
 
   const uploadReplyFile = async (file: File) => {
+    if (user?.mediaAllowed === false) { setReplyError('Вам запрещено прикреплять медиафайлы'); return; }
     if (file.size > MEDIA_MAX_MB * 1024 * 1024) { setReplyError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`); return; }
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4'].includes(file.type)) { setReplyError('Допустимые форматы: JPG, PNG, WebP, GIF, MP4'); return; }
     setReplyError(null);
@@ -1204,6 +1205,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   };
 
   const handleCommentGifSelect = async (gif: GifPickerSelection) => {
+    if (user?.mediaAllowed === false) { setReplyError('Вам запрещено прикреплять медиафайлы'); return; }
     if (gif.kind === 'mygif') {
       setReplyMediaId(gif.mediaId); setReplyMediaPreview(gif.url); setReplyMediaIsVideo(false); setReplyError(null);
       return;
@@ -1744,11 +1746,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                       />
                       <div className="flex items-center gap-2 justify-end">
                         <div className="flex items-center gap-1 shrink-0">
-                          <EmojiPicker size="sm" onSelect={insertEmoji} onSelectGif={!replyDetectedYtId ? handleCommentGifSelect : undefined} />
+                          <EmojiPicker size="sm" onSelect={insertEmoji} onSelectGif={user?.mediaAllowed !== false && !replyDetectedYtId ? handleCommentGifSelect : undefined} />
                           <button type="button" onClick={() => replyFileInputRef.current?.click()}
-                            disabled={isReplyUploading || !!replyMediaId}
+                            disabled={isReplyUploading || !!replyMediaId || user?.mediaAllowed === false}
                             className={`p-0.5 transition-colors ${replyMediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
-                            title={replyMediaId ? 'Изображение прикреплено' : 'Прикрепить изображение'}>
+                            title={user?.mediaAllowed === false ? 'Вам запрещено прикреплять медиафайлы' : replyMediaId ? 'Изображение прикреплено' : 'Прикрепить изображение'}>
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                             </svg>

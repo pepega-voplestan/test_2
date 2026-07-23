@@ -820,6 +820,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onSelectGif, size =
               reducedMotion={reducedMotion}
               isAuthenticated={!!user}
               mobileReadOnly={mobileReadOnly}
+              uploadAllowed={user?.mediaAllowed !== false}
             />
           ) : (
           <>

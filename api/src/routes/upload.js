@@ -43,8 +43,9 @@ router.post("/upload/media", requireAuth, (req, res) => {
     }
 
     const userId = req.session.user.id;
-    const banCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true } });
-    if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+    const authCheck = await prisma.user.findUnique({ where: { id: userId }, select: { is_banned: true, is_media_allowed: true } });
+    if (authCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+    if (!authCheck?.is_media_allowed) return res.status(403).json({ error: "Вам запрещено прикреплять медиафайлы" });
     console.log(`[Media] Processing upload for ${userId}, ${req.file.size} bytes, ${req.file.mimetype}`);
 
     // Track the tmp dir so a mid-processing failure never leaves a partial/corrupt file.

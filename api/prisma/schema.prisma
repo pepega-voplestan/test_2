@@ -13,10 +13,11 @@ model User {
   password_hash String
   avatar        String
   email         String? @unique
-  is_banned     Int    @default(0)
-  show_nsfw     Int    @default(0)
-  show_politics Int    @default(0)
-  created_at    DateTime @default(now())
+  is_banned        Int     @default(0)
+  is_media_allowed Boolean @default(true)
+  show_nsfw        Int     @default(0)
+  show_politics    Int     @default(0)
+  created_at       DateTime @default(now())
 
   shouts                Shout[]
   media                 Media[]

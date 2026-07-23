@@ -167,8 +167,8 @@ router.delete("/shouts/:id", requireAuth, asyncHandler(async (req, res) => {
 
 /* new shout */
 router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
-  const banCheck = await prisma.user.findUnique({ where: { id: req.session.user.id }, select: { is_banned: true } });
-  if (banCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
+  const authCheck = await prisma.user.findUnique({ where: { id: req.session.user.id }, select: { is_banned: true } });
+  if (authCheck?.is_banned) return res.status(403).json({ error: "Вы забанены!" });
 
   const parsed = shoutSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -198,6 +198,10 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
   let finalMediaId = null;
 
   if (mediaId) {
+    // Attaching an already-existing Media row is never gated by is_media_allowed —
+    // only *creating* new physically-stored media is (upload.js, gifs.js's
+    // personal-upload route). A restricted user may still reuse media they (or,
+    // per existing behavior, anyone) uploaded before the restriction was applied.
     const mediaRow = await prisma.media.findUnique({
       where: { id: mediaId },
       select: { id: true },
@@ -223,7 +227,8 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
       },
     });
   } else if (content) {
-    // Auto-detect YouTube URL in content
+    // Auto-detect YouTube URL in content — unaffected by is_media_allowed,
+    // since YouTube is a reference, not media physically stored on our server.
     const videoId = extractYouTubeId(content);
     if (videoId) {
       const ytMeta = await fetchYouTubeMeta(videoId);

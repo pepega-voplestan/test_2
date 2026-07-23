@@ -97,6 +97,11 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
   // Shared file upload logic
   const uploadFile = async (file: File) => {
+    if (user?.mediaAllowed === false) {
+      setError('Вам запрещено прикреплять медиафайлы');
+      return;
+    }
+
     if (file.size > MEDIA_MAX_MB * 1024 * 1024) {
       setError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`);
       return;
@@ -195,6 +200,8 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
   const handleGifSelect = async (gif: GifPickerSelection) => {
     if (gif.kind === 'mygif') {
+      // Reusing an already-uploaded personal GIF isn't gated by mediaAllowed —
+      // only uploading a *new* one is (see GifPicker's uploadAllowed prop).
       setMediaId(gif.mediaId);
       setMediaPreview(gif.url);
       setMediaIsVideo(false);
@@ -325,9 +332,9 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             <button
                               type="button"
                               onClick={() => fileInputRef.current?.click()}
-                              disabled={isUploading || !!mediaId}
+                              disabled={isUploading || !!mediaId || user?.mediaAllowed === false}
                               className={`p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
-                              title={mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение (или перетащите)'}
+                              title={user?.mediaAllowed === false ? 'Вам запрещено прикреплять медиафайлы' : mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение (или перетащите)'}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
