@@ -6,6 +6,7 @@ export type User = {
   avatar: string;
   showNsfw?: boolean;
   showPolitics?: boolean;
+  mediaAllowed?: boolean;
 };
 
 type AuthContextType = {

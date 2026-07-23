@@ -159,6 +159,18 @@ describe("GIF routes (/api/v1/gifs)", () => {
       expect(res.status).toBe(403);
     });
 
+    it("allows a media-restricted user to create a giphy reference (not physically stored on our server)", async () => {
+      const user = await createUser({ username: "restricted1", email: "restricted1@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+      const res = await agent.post("/api/v1/gifs/reference").send(validBody);
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.mediaId).toBeTruthy();
+
+      const media = await getTestPrisma().media.findUnique({ where: { id: res.body.mediaId } });
+      expect(media.media_type).toBe("giphy");
+    });
+
     it("creates a giphy Media record and returns mediaId", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       const agent = await authenticatedAgent(user);
@@ -287,6 +299,40 @@ describe("GIF routes (/api/v1/gifs)", () => {
       // Underlying Media record survives the soft-delete
       const mediaAfter = await getTestPrisma().media.findUnique({ where: { id: up.body.mediaId } });
       expect(mediaAfter).not.toBeNull();
+    });
+
+    it("returns 403 and creates no Media/UserGif record for a media-restricted user", async () => {
+      const user = await createUser({ username: "restricted2", email: "restricted2@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+      const buf = await makeGif();
+
+      const res = await agent.post("/api/v1/gifs/upload").attach("file", buf, { filename: "t.gif", contentType: "image/gif" });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Вам запрещено прикреплять медиафайлы");
+
+      const media = await getTestPrisma().media.findMany({ where: { user_id: user.id } });
+      expect(media).toHaveLength(0);
+      const userGifs = await getTestPrisma().userGif.findMany({ where: { user_id: user.id } });
+      expect(userGifs).toHaveLength(0);
+    });
+
+    it("leaves search/trending/favorites/my unaffected for a media-restricted user", async () => {
+      process.env.GIPHY_API_KEY = "test-key";
+      fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(mockGiphyOk([sampleGiphyGif("r1")]));
+
+      const user = await createUser({ username: "restricted3", email: "restricted3@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(user);
+
+      expect((await agent.get("/api/v1/gifs/search").query({ q: "cat" })).status).toBe(200);
+      expect((await agent.get("/api/v1/gifs/trending")).status).toBe(200);
+      expect((await agent.get("/api/v1/gifs/favorites")).status).toBe(200);
+      expect((await agent.get("/api/v1/gifs/my")).status).toBe(200);
+      const fav = await agent.post("/api/v1/gifs/favorites").send({
+        giphyId: "fav1", giphyUrl: "https://media.giphy.com/media/fav1/giphy.gif",
+        giphyStill: "https://media.giphy.com/media/fav1/giphy_s.gif", width: 200, height: 150,
+      });
+      expect(fav.status).toBe(200);
+      expect((await agent.delete("/api/v1/gifs/favorites/fav1")).status).toBe(200);
     });
 
     it("rejects a non-GIF file", async () => {

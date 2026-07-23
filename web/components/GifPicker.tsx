@@ -10,6 +10,10 @@ interface GifPickerProps {
   reducedMotion: boolean;
   isAuthenticated: boolean;
   mobileReadOnly: boolean;
+  /** Gates only *uploading a new* personal GIF (physically stored media). Reusing an
+   *  already-uploaded personal GIF, and Giphy search-and-attach (kind 'giphy'), are
+   *  never gated — only creating new physically-stored media respects is_media_allowed. */
+  uploadAllowed: boolean;
 }
 
 type Section = 'main' | 'favorites' | 'my';
@@ -39,7 +43,7 @@ const SkeletonGrid: React.FC = () => (
   </div>
 );
 
-const GifPicker: React.FC<GifPickerProps> = ({ onSelect, reducedMotion, isAuthenticated, mobileReadOnly: initialMobileReadOnly }) => {
+const GifPicker: React.FC<GifPickerProps> = ({ onSelect, reducedMotion, isAuthenticated, mobileReadOnly: initialMobileReadOnly, uploadAllowed }) => {
   const gp = useGifPicker(isAuthenticated);
   const [section, setSection] = useState<Section>('main');
   const [mobileReadOnly, setMobileReadOnly] = useState(initialMobileReadOnly);
@@ -234,7 +238,8 @@ const GifPicker: React.FC<GifPickerProps> = ({ onSelect, reducedMotion, isAuthen
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={handleUploadClick}
-                  disabled={gp.isUploading}
+                  disabled={gp.isUploading || !uploadAllowed}
+                  title={uploadAllowed ? undefined : 'Вам запрещено прикреплять медиафайлы'}
                   className="min-w-[44px] min-h-[44px] px-3 flex items-center justify-center gap-1.5 text-xs text-th-text-2 bg-th-elevated hover:bg-th-elevated/70 rounded transition-colors disabled:opacity-50"
                 >
                   {gp.isUploading ? (

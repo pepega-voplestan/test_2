@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import supertest from "supertest";
 import { request, getApp, authenticatedAgent, cleanDb, disconnectDb, getTestPrisma } from "../helpers.js";
-import { createUser, createShout, createComment } from "../fixtures/index.js";
+import { createUser, createShout, createComment, createMedia } from "../fixtures/index.js";
 
 describe("Comments routes", () => {
   beforeEach(async () => {
@@ -90,6 +90,93 @@ describe("Comments routes", () => {
       expect(comment.user_id).toBe(commenter.id);
       expect(comment.shout_id).toBe(shout.id);
       expect(comment.is_deleted).toBe(0);
+    });
+
+    it("allows a media-restricted user to attach an existing image mediaId (reuse of already-stored media, not a new upload)", async () => {
+      const author = await createUser({ username: "author", email: "author@test.local" });
+      const shout = await createShout({ userId: author.id });
+      const commenter = await createUser({ username: "commenter", email: "c@test.local", is_media_allowed: false });
+      const media = await createMedia({ userId: commenter.id });
+      const agent = await authenticatedAgent(commenter);
+
+      const res = await agent
+        .post(`/api/v1/shouts/${shout.id}/replies`)
+        .send({ content: "With image", mediaId: media.id });
+      expect(res.status).toBe(200);
+
+      const prisma = getTestPrisma();
+      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
+      expect(comment.media_id).toBe(media.id);
+    });
+
+    it("allows a media-restricted user to attach a giphy-referenced mediaId (not physically stored on our server)", async () => {
+      const author = await createUser({ username: "author", email: "author@test.local" });
+      const shout = await createShout({ userId: author.id });
+      const commenter = await createUser({ username: "commenter", email: "c@test.local", is_media_allowed: false });
+      const media = await createMedia({ userId: commenter.id, mediaType: "giphy", mediaUrl: "abc123", mediaMeta: JSON.stringify({ url: "https://media.giphy.com/media/abc123/giphy.gif", still: "https://media.giphy.com/media/abc123/giphy_s.gif", width: 200, height: 150 }) });
+      const agent = await authenticatedAgent(commenter);
+
+      const res = await agent
+        .post(`/api/v1/shouts/${shout.id}/replies`)
+        .send({ content: "With gif", mediaId: media.id });
+      expect(res.status).toBe(200);
+
+      const prisma = getTestPrisma();
+      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
+      expect(comment.media_id).toBe(media.id);
+    });
+
+    it("allows a media-restricted user to submit youtubeUrl (not physically stored on our server)", async () => {
+      const author = await createUser({ username: "author", email: "author@test.local" });
+      const shout = await createShout({ userId: author.id });
+      const commenter = await createUser({ username: "commenter", email: "c@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(commenter);
+
+      const res = await agent
+        .post(`/api/v1/shouts/${shout.id}/replies`)
+        .send({ content: "Check this out", youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+      expect(res.status).toBe(200);
+
+      const prisma = getTestPrisma();
+      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
+      expect(comment.media_id).toBeTruthy();
+      const media = await prisma.media.findUnique({ where: { id: comment.media_id } });
+      expect(media.media_type).toBe("youtube");
+    });
+
+    it("allows a text-only reply from a media-restricted user", async () => {
+      const author = await createUser({ username: "author", email: "author@test.local" });
+      const shout = await createShout({ userId: author.id });
+      const commenter = await createUser({ username: "commenter", email: "c@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(commenter);
+
+      const res = await agent
+        .post(`/api/v1/shouts/${shout.id}/replies`)
+        .send({ content: "Just text, no media" });
+      expect(res.status).toBe(200);
+
+      const prisma = getTestPrisma();
+      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
+      expect(comment.content).toBe("Just text, no media");
+      expect(comment.media_id).toBeNull();
+    });
+
+    it("still auto-converts a YouTube link in content for a media-restricted user", async () => {
+      const author = await createUser({ username: "author", email: "author@test.local" });
+      const shout = await createShout({ userId: author.id });
+      const commenter = await createUser({ username: "commenter", email: "c@test.local", is_media_allowed: false });
+      const agent = await authenticatedAgent(commenter);
+
+      const res = await agent
+        .post(`/api/v1/shouts/${shout.id}/replies`)
+        .send({ content: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+      expect(res.status).toBe(200);
+
+      const prisma = getTestPrisma();
+      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
+      expect(comment.media_id).toBeTruthy();
+      const media = await prisma.media.findUnique({ where: { id: comment.media_id } });
+      expect(media.media_type).toBe("youtube");
     });
 
     it("creates a reply notification for the shout author when commenter is different", async () => {

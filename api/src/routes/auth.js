@@ -167,7 +167,7 @@ router.post("/auth/register/verify", asyncHandler(async (req, res) => {
     data: { id: userId, username, password_hash, avatar, email },
   });
 
-  req.session.user = { id: userId, name: username, avatar, showNsfw: false, showPolitics: false };
+  req.session.user = { id: userId, name: username, avatar, showNsfw: false, showPolitics: false, mediaAllowed: true };
   console.log(`[Auth] Registered new user: ${username} (${userId})`);
   res.json({ ok: true, user: req.session.user });
 }));
@@ -181,7 +181,7 @@ router.post("/auth/login", asyncHandler(async (req, res) => {
 
   const user = await prisma.user.findFirst({
     where: { OR: [{ username: login }, { email: login }] },
-    select: { id: true, username: true, password_hash: true, avatar: true, is_banned: true, show_nsfw: true, show_politics: true },
+    select: { id: true, username: true, password_hash: true, avatar: true, is_banned: true, show_nsfw: true, show_politics: true, is_media_allowed: true },
   });
 
   if (!user) {
@@ -205,6 +205,7 @@ router.post("/auth/login", asyncHandler(async (req, res) => {
     avatar: user.avatar,
     showNsfw: !!user.show_nsfw,
     showPolitics: !!user.show_politics,
+    mediaAllowed: !!user.is_media_allowed,
   };
 
   console.log(`[Auth] Login success: ${user.username} (${user.id})`);
@@ -334,7 +335,7 @@ router.post("/auth/forgot-password/reset", asyncHandler(async (req, res) => {
   const { userId } = JSON.parse(record.payload);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, username: true, avatar: true, is_banned: true, show_nsfw: true, show_politics: true },
+    select: { id: true, username: true, avatar: true, is_banned: true, show_nsfw: true, show_politics: true, is_media_allowed: true },
   });
   if (!user) {
     return res.status(400).json({ error: "Пользователь не найден" });
@@ -350,7 +351,7 @@ router.post("/auth/forgot-password/reset", asyncHandler(async (req, res) => {
   });
 
   // Auto-login
-  req.session.user = { id: user.id, name: user.username, avatar: user.avatar, showNsfw: !!user.show_nsfw, showPolitics: !!user.show_politics };
+  req.session.user = { id: user.id, name: user.username, avatar: user.avatar, showNsfw: !!user.show_nsfw, showPolitics: !!user.show_politics, mediaAllowed: !!user.is_media_allowed };
   console.log(`[Auth] Password reset and auto-login: ${user.username} (${user.id})`);
   res.json({ ok: true, user: req.session.user });
 }));

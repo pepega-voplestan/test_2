@@ -30,6 +30,7 @@ export async function createUser(overrides = {}) {
       avatar: overrides.avatar || `https://api.dicebear.com/7.x/thumbs/svg?seed=${encodeURIComponent(username)}`,
       email: overrides.email || `${username}@test.local`,
       is_banned: overrides.is_banned ?? 0,
+      is_media_allowed: overrides.is_media_allowed ?? true,
       created_at: overrides.created_at || now(),
     },
   });
