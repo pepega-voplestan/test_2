@@ -53,6 +53,8 @@ export const shoutSchema = z.object({
     { message: `Текст слишком длинный (макс. ${SHOUT_MAX_LENGTH} символов)` }
   ),
   mediaId: z.string().uuid().optional(),
+  // Ordered gallery, max 5 (feature 006). Equivalent to `mediaId` when length 1.
+  mediaIds: z.array(z.string().uuid()).min(1).max(5).optional(),
   youtubeUrl: z.string().max(500).optional(),
   visibilityTag: z.enum(["", "spoiler", "nsfw", "politics"]).optional(),
   poll: pollSchema.optional(),
@@ -64,6 +66,8 @@ export const commentSchema = z.object({
     { message: `Текст слишком длинный (макс. ${COMMENT_MAX_LENGTH} символов)` }
   ),
   mediaId: z.string().uuid().optional(),
+  // Ordered gallery, max 5 (feature 006). Equivalent to `mediaId` when length 1.
+  mediaIds: z.array(z.string().uuid()).min(1).max(5).optional(),
   youtubeUrl: z.string().max(500).optional(),
   replyToId: z.string().uuid().nullable().optional(),
 });

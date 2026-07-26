@@ -331,4 +331,91 @@ describe("Upload routes", () => {
       expect(row.avatar).toContain("/api/v1/avatars/");
     });
   });
+
+  // ── Multi-file upload for galleries (feature 006, Stage 1) ────────────────
+  //
+  // There is deliberately NO batch endpoint: a gallery is built by calling this
+  // same per-file endpoint N times (research D2). These tests pin the properties
+  // that decision relies on.
+
+  describe("POST /api/v1/upload/media — multi-file (gallery) usage", () => {
+    // T021 — FR-008: rate limiting applies in BOTH auth states (constitution MUST)
+    it("requires authentication for every file in a batch (unauthenticated state)", async () => {
+      const imgBuf = await makeJpeg();
+      const anon = await request();
+
+      for (let i = 0; i < 3; i++) {
+        const res = await anon
+          .post("/api/v1/upload/media")
+          .attach("file", imgBuf, { filename: `p${i}.jpg`, contentType: "image/jpeg" });
+        expect(res.status).toBe(401);
+      }
+      // Nothing stored: an unauthenticated caller can never build a gallery.
+      expect(await getTestPrisma().media.count()).toBe(0);
+    });
+
+    it("accepts 5 sequential uploads by one authenticated user (authenticated state)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const imgBuf = await makeJpeg();
+
+      const ids = [];
+      for (let i = 0; i < 5; i++) {
+        const res = await agent
+          .post("/api/v1/upload/media")
+          .attach("file", imgBuf, { filename: `p${i}.jpg`, contentType: "image/jpeg" });
+        expect(res.status).toBe(200);
+        ids.push(res.body.mediaId);
+      }
+
+      // Each file is an independent Media row — this is what lets a partial
+      // failure keep the successes (FR-034).
+      expect(new Set(ids).size).toBe(5);
+      expect(await getTestPrisma().media.count()).toBe(5);
+    });
+
+    it("fails only the offending file in a mixed batch, keeping successes (FR-034)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const imgBuf = await makeJpeg();
+
+      const ok1 = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", imgBuf, { filename: "good1.jpg", contentType: "image/jpeg" });
+      const bad = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", Buffer.from("not an image"), { filename: "bad.txt", contentType: "text/plain" });
+      const ok2 = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", imgBuf, { filename: "good2.jpg", contentType: "image/jpeg" });
+
+      expect(ok1.status).toBe(200);
+      expect(bad.status).toBe(400);
+      expect(ok2.status).toBe(200);
+      // The bad file did not roll back the good ones.
+      expect(await getTestPrisma().media.count()).toBe(2);
+    });
+
+    // T022 — FR-009 (as reworded): restriction bites at upload time
+    it("blocks every file of a multi-file attempt for a restricted user (FR-009)", async () => {
+      const user = await createUser({
+        username: "restricted",
+        email: "restricted@test.local",
+        is_media_allowed: false,
+      });
+      const agent = await authenticatedAgent(user);
+      const imgBuf = await makeJpeg();
+
+      for (let i = 0; i < 3; i++) {
+        const res = await agent
+          .post("/api/v1/upload/media")
+          .attach("file", imgBuf, { filename: `p${i}.jpg`, contentType: "image/jpeg" });
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe("Вам запрещено прикреплять медиафайлы");
+      }
+
+      // No media stored at all, so no gallery can be formed downstream.
+      expect(await getTestPrisma().media.count()).toBe(0);
+    });
+  });
 });

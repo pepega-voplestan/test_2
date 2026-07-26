@@ -387,8 +387,8 @@ describe("Shouts routes", () => {
       expect(res.body.shout.media).toBeDefined();
       expect(res.body.shout.media.type).toBe("youtube");
 
-      const row = await getTestPrisma().shout.findUnique({ where: { id: res.body.id } });
-      expect(row.media_id).toBeTruthy();
+      const row = await getTestPrisma().shoutMedia.findFirst({ where: { shout_id: res.body.id, position: 0 } });
+      expect(row).toBeTruthy();
     });
 
     it("sets visibilityTag on the shout", async () => {
@@ -431,6 +431,170 @@ describe("Shouts routes", () => {
       });
       expect(notification).not.toBeNull();
       expect(notification.actor_id).toBe(author.id);
+    });
+  });
+
+  // ── Multi-media galleries (feature 006, Stage 1) ───────────────────────────
+
+  describe("POST /api/v1/shouts — galleries", () => {
+    /** Create `n` image media rows owned by `userId`, returning their ids in order. */
+    async function makeImages(userId, n) {
+      const ids = [];
+      for (let i = 0; i < n; i++) {
+        const m = await createMedia({ userId, mediaUrl: `uploads/test/img${i}.webp` });
+        ids.push(m.id);
+      }
+      return ids;
+    }
+
+    // T015 — creation rules R1–R6
+    it("accepts a gallery of 5 images", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const ids = await makeImages(user.id, 5);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "five", mediaIds: ids });
+      expect(res.status).toBe(200);
+
+      const rows = await getTestPrisma().shoutMedia.findMany({
+        where: { shout_id: res.body.shout.id },
+        orderBy: { position: "asc" },
+      });
+      expect(rows.map((r) => r.media_id)).toEqual(ids);
+      expect(rows.map((r) => r.position)).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    it("rejects a gallery of 6 images (R2)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const ids = await makeImages(user.id, 6);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "six", mediaIds: ids });
+      expect(res.status).toBe(400);
+      // Must name the attachment limit, NOT the character limit — a Zod `too_big`
+      // on mediaIds previously borrowed the "Максимум 1000 символов" message.
+      expect(res.body.error).toBe("Можно прикрепить не более 5 файлов");
+      expect(await getTestPrisma().shoutMedia.count()).toBe(0);
+    });
+
+    it("rejects mediaId and mediaIds sent together (R1)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [a, b] = await makeImages(user.id, 2);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "both", mediaId: a, mediaIds: [b] });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects a gallery combined with youtubeUrl (R3)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const ids = await makeImages(user.id, 2);
+
+      const res = await agent.post("/api/v1/shouts").send({
+        content: "mix",
+        mediaIds: ids,
+        youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects an unknown media id (R4)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [real] = await makeImages(user.id, 1);
+
+      const res = await agent.post("/api/v1/shouts").send({
+        content: "ghost",
+        mediaIds: [real, "11111111-2222-3333-4444-555555555555"],
+      });
+      expect(res.status).toBe(400);
+      expect(await getTestPrisma().shoutMedia.count()).toBe(0);
+    });
+
+    it("rejects non-image media in a gallery (R5)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [img] = await makeImages(user.id, 1);
+      const vid = await createMedia({ userId: user.id, mediaType: "video", mediaUrl: "uploads/test/v.mp4" });
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "vid", mediaIds: [img, vid.id] });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects duplicate media ids (R6)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [a] = await makeImages(user.id, 1);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "dup", mediaIds: [a, a] });
+      expect(res.status).toBe(400);
+    });
+
+    it("treats a legacy single mediaId as a one-item gallery", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [only] = await makeImages(user.id, 1);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "one", mediaId: only });
+      expect(res.status).toBe(200);
+
+      const rows = await getTestPrisma().shoutMedia.findMany({ where: { shout_id: res.body.shout.id } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].position).toBe(0);
+      expect(rows[0].media_id).toBe(only);
+    });
+
+    // T020 — create-response / SSE DTO shape
+    it("returns gallery in the create response when 2+ items (G1)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const ids = await makeImages(user.id, 3);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "g", mediaIds: ids });
+      expect(res.body.shout.gallery).toHaveLength(3);
+      expect(res.body.shout.gallery[0]).toEqual(res.body.shout.media);
+    });
+
+    it("omits gallery from the create response for a single item (FR-016)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [only] = await makeImages(user.id, 1);
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "one", mediaId: only });
+      expect(res.body.shout.gallery).toBeUndefined();
+      expect(res.body.shout.media).toBeDefined();
+    });
+
+    // T039 — visibility_tag applies to the whole gallery
+    it("keeps a spoiler tag when a gallery is attached (FR-030)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const ids = await makeImages(user.id, 2);
+
+      const res = await agent.post("/api/v1/shouts").send({
+        content: "spoiler gallery",
+        mediaIds: ids,
+        visibilityTag: "spoiler",
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.shout.visibilityTag).toBe("spoiler");
+    });
+
+    // T040 — immutability
+    it("does not accept mediaIds on edit (FR-029)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const ids = await makeImages(user.id, 2);
+      const created = await agent.post("/api/v1/shouts").send({ content: "orig", mediaIds: ids });
+      const shoutId = created.body.shout.id;
+
+      const extra = await createMedia({ userId: user.id, mediaUrl: "uploads/test/extra.webp" });
+      await agent.put(`/api/v1/shouts/${shoutId}`).send({ content: "edited", mediaIds: [extra.id] });
+
+      const rows = await getTestPrisma().shoutMedia.findMany({ where: { shout_id: shoutId } });
+      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.media_id).sort()).toEqual([...ids].sort());
     });
   });
 });

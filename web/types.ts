@@ -24,6 +24,19 @@ export type ShoutMedia =
   | { type: 'youtube'; videoId: string; embedUrl: string; title?: string | null; channel?: string | null }
   | { type: 'giphy'; giphyId: string; url: string; still: string; width: number; height: number };
 
+/**
+ * One item of a multi-media gallery (feature 006).
+ *
+ * Deliberately NOT named `ShoutMedia` — that name is already the Prisma
+ * join-row model (shout_id/media_id/position) on the backend, and colliding
+ * would make the two easy to confuse. A gallery item is the *wire* shape
+ * produced by `buildMedia()`, identical to the single `media` field.
+ *
+ * Galleries only ever contain images/GIFs (invariant I4), so this narrows
+ * ShoutMedia to its image variant.
+ */
+export type GalleryItem = Extract<ShoutMedia, { type: 'image' }>;
+
 export interface CommentQuote {
   text: string;
   deleted: boolean;
@@ -40,6 +53,8 @@ export interface Comment {
   likes: number;
   likedBy?: string[];
   media?: ShoutMedia;
+  /** Ordered gallery; present only when 2+ items are attached (contract G3). */
+  gallery?: GalleryItem[];
   replyToId?: string | null;
   quote?: CommentQuote | null;
 }
@@ -91,6 +106,8 @@ export interface Shout {
   likes: number;
   likedBy?: string[];
   media?: ShoutMedia;
+  /** Ordered gallery; present only when 2+ items are attached (contract G3). */
+  gallery?: GalleryItem[];
   comments?: Comment[];
   visibilityTag?: '' | 'spoiler' | 'nsfw' | 'politics';
   poll?: Poll;

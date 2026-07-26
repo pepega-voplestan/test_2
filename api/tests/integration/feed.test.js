@@ -22,7 +22,6 @@ describe("enrichFeed", () => {
       where: { id: { in: ids } },
       include: {
         user: { select: { username: true, avatar: true, is_banned: true } },
-        media: true,
       },
     });
   }
@@ -194,9 +193,8 @@ describe("enrichFeed", () => {
     const user = await createUser({ username: "alice", email: "alice@test.local" });
     const media = await createMedia({ userId: user.id });
     const shout = await createShout({ userId: user.id });
-    await getTestPrisma().shout.update({
-      where: { id: shout.id },
-      data: { media_id: media.id },
+    await getTestPrisma().shoutMedia.create({
+      data: { shout_id: shout.id, media_id: media.id, position: 0 },
     });
 
     const rows = await fetchRaw([shout.id]);
@@ -231,5 +229,90 @@ describe("enrichFeed", () => {
     expect(dtos[0].content).toBe("First");
     expect(dtos[1].content).toBe("Second");
     expect(dtos[2].content).toBe("Third");
+  });
+
+  // ── Gallery DTO contract (feature 006, Stage 1) ────────────────────────────
+
+  describe("galleries", () => {
+    /** Attach an ordered list of media directly — the only storage for a post's attachments. */
+    async function attachGallery(shoutId, mediaIds) {
+      const prisma = getTestPrisma();
+      await prisma.shoutMedia.createMany({
+        data: mediaIds.map((media_id, position) => ({ shout_id: shoutId, media_id, position })),
+      });
+    }
+
+    async function makeImages(userId, n) {
+      const ids = [];
+      for (let i = 0; i < n; i++) {
+        const m = await createMedia({ userId, mediaUrl: `uploads/test/f-img${i}.webp` });
+        ids.push(m.id);
+      }
+      return ids;
+    }
+
+    // T018 — G1/G2/G3
+    it("emits gallery when 2+ items, with gallery[0] deep-equal to media (G1)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id, content: "gal" });
+      const ids = await makeImages(user.id, 3);
+      await attachGallery(shout.id, ids);
+
+      const dtos = await enrichFeed(await fetchRaw([shout.id]), null);
+      expect(dtos[0].gallery).toHaveLength(3);
+      expect(dtos[0].gallery[0]).toEqual(dtos[0].media);
+    });
+
+    it("preserves gallery order across repeated calls (G2)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id, content: "gal" });
+      const ids = await makeImages(user.id, 4);
+      await attachGallery(shout.id, ids);
+
+      const first = await enrichFeed(await fetchRaw([shout.id]), null);
+      const second = await enrichFeed(await fetchRaw([shout.id]), null);
+      const urls = (d) => d[0].gallery.map((g) => g.url);
+      expect(urls(first)).toEqual(urls(second));
+      expect(urls(first)).toHaveLength(4);
+    });
+
+    // T019 — regression guard, FR-016 / FR-032 / SC-006
+    it("omits gallery entirely for a single-media shout (FR-016)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const media = await createMedia({ userId: user.id });
+      const shout = await createShout({ userId: user.id, content: "one" });
+      await attachGallery(shout.id, [media.id]);
+
+      const dtos = await enrichFeed(await fetchRaw([shout.id]), null);
+      expect(dtos[0].gallery).toBeUndefined();
+      expect(dtos[0].media).toBeDefined();
+      expect(dtos[0].media.type).toBe("image");
+    });
+
+    it("suppresses gallery for a soft-deleted shout (G6)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id, content: "gone", is_deleted: 1 });
+      const ids = await makeImages(user.id, 2);
+      await attachGallery(shout.id, ids);
+
+      const dtos = await enrichFeed(await fetchRaw([shout.id]), null);
+      expect(dtos[0].gallery).toBeUndefined();
+      expect(dtos[0].media).toBeUndefined();
+    });
+
+    it("emits galleries on comments too (FR-031)", async () => {
+      const prisma = getTestPrisma();
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id, content: "host" });
+      const comment = await createComment({ shoutId: shout.id, userId: user.id, content: "c" });
+      const ids = await makeImages(user.id, 2);
+      await prisma.commentMedia.createMany({
+        data: ids.map((media_id, position) => ({ comment_id: comment.id, media_id, position })),
+      });
+
+      const dtos = await enrichFeed(await fetchRaw([shout.id]), null);
+      expect(dtos[0].comments[0].gallery).toHaveLength(2);
+      expect(dtos[0].comments[0].gallery[0]).toEqual(dtos[0].comments[0].media);
+    });
   });
 });

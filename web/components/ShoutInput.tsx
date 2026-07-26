@@ -4,6 +4,7 @@ import EmojiPicker, { GifPickerSelection } from './EmojiPicker';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
 import PollEditor, { PollPayload, PollEditorHandle } from './PollEditor';
 import { Shout } from '../types';
+import { useMediaAttachments } from '../hooks/useMediaAttachments';
 
 interface ShoutInputProps {
   onShoutCreated: (shout: Shout) => void;
@@ -11,7 +12,7 @@ interface ShoutInputProps {
 
 const SHOUT_MAX_LENGTH = 1000;
 const NEWLINE_CHAR_COST = 40;
-const MEDIA_MAX_MB = 10;
+// MEDIA_MAX_MB now lives in useMediaAttachments — single source for both composers.
 
 const YT_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]{11})/,
@@ -35,11 +36,11 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Media state
-  const [mediaId, setMediaId] = useState<string | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [mediaIsVideo, setMediaIsVideo] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  // Media state — shared with the reply composer in ShoutCard via this hook so
+  // both behave identically (FR-031, research D9).
+  const media = useMediaAttachments({ mediaAllowed: user?.mediaAllowed, logPrefix: 'ShoutInput' });
+  const { items: mediaItems, isUploading } = media;
+  const mediaId = mediaItems.length > 0 ? mediaItems[0].mediaId : null;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionInputRef = useRef<MentionInputHandle>(null);
 
@@ -82,6 +83,12 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const charCount = effectiveLength(content, NEWLINE_CHAR_COST);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = !!mediaId || !!detectedYtId;
+
+  // FR-035 — TEMPORARY, Stages 1–2 only. Mixed image+GIF galleries ship in
+  // Stage 3; until then images and GIFs are strictly mutually exclusive.
+  // REMOVE THIS GATE IN STAGE 3 (task T061) together with its twin in ShoutCard.
+  const gifPickerBlocked = media.hasImages || media.hasVideo || media.isFull;
+  const imageAttachBlocked = media.hasGif || media.hasVideo || media.isFull;
   const hasPoll = !!pollPayload && pollPayload.options.length > 0;
   const canSubmit = (content.trim() || hasMedia) && (!hasPoll || content.trim()) && !isOverLimit && !isSubmitting && !isUploading;
 
@@ -95,69 +102,14 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     setDetectedYtId(id);
   }, [content, mediaId]);
 
-  // Shared file upload logic
-  const uploadFile = async (file: File) => {
-    if (user?.mediaAllowed === false) {
-      setError('Вам запрещено прикреплять медиафайлы');
-      return;
-    }
-
-    if (file.size > MEDIA_MAX_MB * 1024 * 1024) {
-      setError(`Файл слишком большой (макс. ${MEDIA_MAX_MB} МБ)`);
-      return;
-    }
-
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4'].includes(file.type)) {
-      setError('Допустимые форматы: JPG, PNG, WebP, GIF, MP4');
-      return;
-    }
-
-    setError(null);
-    setIsUploading(true);
-    const isVideo = file.type === 'video/mp4';
-    setMediaIsVideo(isVideo);
-
-    const localUrl = URL.createObjectURL(file);
-    setMediaPreview(localUrl);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch('/api/v1/upload/media', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Ошибка ${res.status}`);
-      }
-
-      const data = await res.json();
-      setMediaId(data.mediaId);
-      if (!isVideo) {
-        setMediaPreview(data.urls.thumb);
-        URL.revokeObjectURL(localUrl);
-      }
-      console.log('[ShoutInput] Media uploaded:', data.mediaId);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Ошибка загрузки';
-      console.error('[ShoutInput] Upload error:', msg);
-      setError(msg);
-      setMediaPreview(null);
-      URL.revokeObjectURL(localUrl);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
+  // Upload orchestration lives in useMediaAttachments — capacity gate (FR-033),
+  // per-file error reporting (FR-034) and the video rule (FR-028) are all there.
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const list = Array.from(files);
     e.target.value = '';
-    await uploadFile(file);
+    await media.addFiles(list);
   };
 
   // Drag-and-drop handlers
@@ -190,11 +142,12 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     dragCounterRef.current = 0;
     setIsDragging(false);
 
-    if (mediaId || isUploading) return;
+    if (isUploading) return;
 
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      await uploadFile(file);
+    // Multi-file drop (FR-005). The hook enforces the 5-item cap.
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      await media.addFiles(files);
     }
   };
 
@@ -202,13 +155,10 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     if (gif.kind === 'mygif') {
       // Reusing an already-uploaded personal GIF isn't gated by mediaAllowed —
       // only uploading a *new* one is (see GifPicker's uploadAllowed prop).
-      setMediaId(gif.mediaId);
-      setMediaPreview(gif.url);
-      setMediaIsVideo(false);
-      setError(null);
+      media.addExisting({ mediaId: gif.mediaId, previewUrl: gif.url, isGif: true });
       return;
     }
-    setError(null);
+    media.setError(null);
     try {
       const res = await fetch('/api/v1/gifs/reference', {
         method: 'POST',
@@ -218,20 +168,16 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
-      setMediaId(data.mediaId);
-      setMediaPreview(gif.url);
-      setMediaIsVideo(false);
+      media.addExisting({ mediaId: data.mediaId, previewUrl: gif.url, isGif: true });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось прикрепить GIF');
+      media.setError(err instanceof Error ? err.message : 'Не удалось прикрепить GIF');
     }
   };
 
+  // Stage 1 is append-only: the only way to change a selection is to clear it
+  // entirely. Per-item removal arrives in Stage 3 (FR-024).
   const removeMedia = () => {
-    if (mediaPreview) URL.revokeObjectURL(mediaPreview);
-    setMediaId(null);
-    setMediaPreview(null);
-    setMediaIsVideo(false);
-    setError(null);
+    media.clear();
     // NSFW and СПОЙЛЕР only make sense with media — clear them
     if (activeTag === 'nsfw' || activeTag === 'spoiler') setActiveTag(null);
   };
@@ -250,7 +196,10 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
     try {
       const body: Record<string, unknown> = { content: content.trim() };
-      if (mediaId) {
+      if (mediaItems.length > 1) {
+        // Gallery — order of the pending list is the published order (FR-006).
+        body.mediaIds = media.mediaIds;
+      } else if (mediaId) {
         body.mediaId = mediaId;
       } else if (detectedYtId) {
         const ytMatch = content.match(/https?:\/\/[^\s]+/);
@@ -273,8 +222,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
       console.log('[ShoutInput] Shout created successfully');
       mentionInputRef.current?.clear(); // also calls onContentChange('') → setContent('')
-      setMediaId(null);
-      setMediaPreview(null);
+      media.clear();
       setDetectedYtId(null);
       setError(null);
       setActiveTag(null);
@@ -322,19 +270,19 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                             onContentChange={(text) => { setContent(text); setError(null); }}
                             onSubmit={submitShout}
                             onImagePaste={async (file) => {
-                              if (!mediaId && !isUploading) await uploadFile(file);
+                              if (!isUploading) await media.addFiles([file]);
                             }}
                             size="md"
                         />
                         <div className="flex items-center gap-2 justify-end flex-wrap">
                           <div className="flex items-center gap-1 shrink-0">
-                            <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} onSelectGif={!detectedYtId ? handleGifSelect : undefined} />
+                            <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} onSelectGif={!detectedYtId && !gifPickerBlocked ? handleGifSelect : undefined} />
                             <button
                               type="button"
                               onClick={() => fileInputRef.current?.click()}
-                              disabled={isUploading || !!mediaId || user?.mediaAllowed === false}
+                              disabled={isUploading || imageAttachBlocked || user?.mediaAllowed === false}
                               className={`p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
-                              title={user?.mediaAllowed === false ? 'Вам запрещено прикреплять медиафайлы' : mediaId ? 'Изображение прикреплено' : 'Прикрепить изображение (или перетащите)'}
+                              title={user?.mediaAllowed === false ? 'Вам запрещено прикреплять медиафайлы' : media.isFull ? 'Достигнут лимит в 5 файлов' : media.hasGif ? 'GIF нельзя совмещать с изображениями' : 'Прикрепить изображения (или перетащите)'}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
@@ -408,6 +356,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                           <input
                             ref={fileInputRef}
                             type="file"
+                            multiple
                             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4"
                             className="hidden"
                             onChange={handleFileSelect}
@@ -437,13 +386,17 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
             </div>
 
             {/* Media preview */}
-            {mediaPreview && (
+            {mediaItems.length > 0 && (
               <div className="mt-3 relative inline-block">
-                {mediaIsVideo ? (
-                  <video src={mediaPreview} className="max-h-40 rounded-lg border border-th-border" muted preload="metadata" />
-                ) : (
-                  <img src={mediaPreview} alt="preview" className="max-h-40 rounded-lg border border-th-border" />
-                )}
+                <div className="flex gap-2 flex-wrap">
+                  {mediaItems.map((it) => (
+                    it.isVideo ? (
+                      <video key={it.mediaId} src={it.previewUrl} className="max-h-40 rounded-lg border border-th-border" muted preload="metadata" />
+                    ) : (
+                      <img key={it.mediaId} src={it.previewUrl} alt="preview" className="max-h-40 rounded-lg border border-th-border" />
+                    )
+                  ))}
+                </div>
                 {isUploading && (
                   <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
                     <div className="w-6 h-6 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" />
@@ -485,9 +438,16 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
             )}
         </div>
       </form>
-      {error && (
+      {(error || media.error) && (
         <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-          {error}
+          {error || media.error}
+        </div>
+      )}
+      {media.failures.length > 0 && (
+        <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          {media.failures.map((f) => (
+            <div key={f.name}>{f.name}: {f.message}</div>
+          ))}
         </div>
       )}
     </div>

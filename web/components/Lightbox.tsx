@@ -134,16 +134,34 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
     }
   }, [applyZoomTransform]);
 
-  // Block the ghost click that fires after pointerUp when the overlay unmounts
+  // Block the ghost click that fires after pointerUp when the overlay unmounts.
+  //
+  // The trap must not outlive that one ghost click. Closing unmounts the overlay
+  // synchronously, so the ghost click often never gets dispatched at all and the
+  // trap is left armed — swallowing the user's next real click instead. That
+  // showed up as "closing by clicking the backdrop, then clicking another
+  // gallery tile, sometimes needs two clicks".
+  //
+  // A new interaction always opens with `pointerdown`; the ghost click never has
+  // one, because its pointerdown happened before this was armed. So pointerdown
+  // is an exact signal that the trap has missed its target and must stand down.
+  // The timeout is only a last-resort backstop for pointer-less activation.
   const blockNextClick = useCallback(() => {
+    let timer = 0;
+    const disarm = () => {
+      document.removeEventListener('click', blocker, true);
+      document.removeEventListener('pointerdown', disarm, true);
+      clearTimeout(timer);
+    };
     const blocker = (e: Event) => {
       e.stopPropagation();
       e.stopImmediatePropagation();
       e.preventDefault();
-      document.removeEventListener('click', blocker, true);
+      disarm();
     };
     document.addEventListener('click', blocker, true);
-    setTimeout(() => document.removeEventListener('click', blocker, true), 400);
+    document.addEventListener('pointerdown', disarm, true);
+    timer = window.setTimeout(disarm, 400);
   }, []);
 
   // Mouse wheel zoom (desktop)
