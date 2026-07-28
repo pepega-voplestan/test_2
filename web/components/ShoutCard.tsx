@@ -576,6 +576,26 @@ function renderContent(text: string) {
 }
 
 function renderInline(text: string, keyPrefix: string) {
+  // Split out Unicode "combining strikethrough" runs (e.g. h̶e̶l̶l̶o̶, built from
+  // U+0336 COMBINING LONG STROKE OVERLAY) and render them with our own CSS
+  // strikethrough instead of leaving the combining mark's position up to
+  // whichever font the browser substitutes — that varies enough between
+  // fonts to sit far too low.
+  const strikeParts = text.split(/((?:[^\u0336]\u0336+)+)/);
+  return strikeParts.map((strikePart, pi) => {
+    if (strikePart.includes('\u0336')) {
+      const plain = strikePart.replace(/\u0336/g, '');
+      return (
+        <span key={`${keyPrefix}-strike-${pi}`} className="strike-mid">
+          {renderMentionsAndUrls(plain, `${keyPrefix}-s${pi}`)}
+        </span>
+      );
+    }
+    return renderMentionsAndUrls(strikePart, `${keyPrefix}-p${pi}`);
+  });
+}
+
+function renderMentionsAndUrls(text: string, keyPrefix: string) {
   // Split on mention tokens @[name:id], bare @words (legacy), and URLs, keeping the delimiters.
   // Structured mentions must come first so @[name:id] is never partially matched by @word.
   const parts = text.split(/((?:@\[[^\]]+:[^\]]+\])|(?:@[a-zA-Z0-9_-]+)|(?:https?:\/\/[^\s]+))/);
