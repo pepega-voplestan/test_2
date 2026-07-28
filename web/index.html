@@ -108,16 +108,16 @@
       /* Strikethrough drawn at a fixed vertical center instead of relying on
          the browser's native line-through, whose position comes from the
          active font's own strikeout metrics and varies noticeably between
-         platforms (e.g. Segoe UI vs. San Francisco vs. Roboto). Uses a
-         background line + box-decoration-break instead of an ::after box so
-         it still draws correctly across wrapped lines in shout text. */
+         platforms (e.g. Segoe UI vs. San Francisco vs. Roboto). Implemented
+         as a native underline shifted up via text-underline-offset (a real,
+         tunable CSS property — there's no equivalent offset control for
+         line-through) so it renders as a normal text decoration: correctly
+         follows wrapped lines, no custom box/positioning math involved. */
       .strike-mid {
-        background-image: linear-gradient(currentColor, currentColor);
-        background-repeat: no-repeat;
-        background-size: 100% 0.08em;
-        background-position: 0 50%;
-        -webkit-box-decoration-break: clone;
-        box-decoration-break: clone;
+        text-decoration-line: underline;
+        text-decoration-thickness: 0.08em;
+        text-underline-offset: -0.4em;
+        text-decoration-skip-ink: none;
       }
     </style>
 </head>
