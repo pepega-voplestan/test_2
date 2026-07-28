@@ -1,5 +1,5 @@
 import { prisma } from "../db.js";
-import { buildMedia } from "./media.js";
+import { buildMedia, buildGallery } from "./media.js";
 import { utcTimestamp, resolveQuoteText } from "./common.js";
 
 
@@ -12,7 +12,6 @@ export async function enrichFeed(topShouts, currentUserId) {
         where: { shout_id: { in: topIds }, is_deleted: 0 },
         include: {
           user: { select: { username: true, avatar: true, is_banned: true } },
-          media: true,
         },
         orderBy: { created_at: "asc" },
       })
@@ -106,14 +105,23 @@ export async function enrichFeed(topShouts, currentUserId) {
   const quotedComments = replyToIds.length
     ? await prisma.comment.findMany({
         where: { id: { in: replyToIds } },
-        select: { id: true, content: true, is_deleted: true, user: { select: { id: true, username: true } }, media: { select: { media_type: true } } },
+        select: {
+          id: true,
+          content: true,
+          is_deleted: true,
+          user: { select: { id: true, username: true } },
+          galleryItems: {
+            where: { position: 0 },
+            select: { media: { select: { media_type: true } } },
+          },
+        },
       })
     : [];
   const quoteMap = new Map();
   for (const qc of quotedComments) {
     quoteMap.set(qc.id, qc.is_deleted > 0
       ? { text: "Комментарий удалён", deleted: true, author: null }
-      : { ...resolveQuoteText(qc.content, qc.media), deleted: false, author: { id: qc.user.id, name: qc.user.username } }
+      : { ...resolveQuoteText(qc.content, qc.galleryItems[0]?.media), deleted: false, author: { id: qc.user.id, name: qc.user.username } }
     );
   }
 
@@ -124,8 +132,39 @@ export async function enrichFeed(topShouts, currentUserId) {
     commentsByShout.get(c.shout_id).push(c);
   }
 
+  // Batch-load galleries for the whole page (feature 006). One query per parent
+  // type regardless of page size — never per-shout, which would be an N+1.
+  const galleryByShout = new Map();
+  if (topIds.length) {
+    const rows = await prisma.shoutMedia.findMany({
+      where: { shout_id: { in: topIds } },
+      include: { media: true },
+      orderBy: { position: "asc" },
+    });
+    for (const r of rows) {
+      if (!galleryByShout.has(r.shout_id)) galleryByShout.set(r.shout_id, []);
+      galleryByShout.get(r.shout_id).push(r);
+    }
+  }
+
+  const galleryByComment = new Map();
+  if (commentIds.length) {
+    const rows = await prisma.commentMedia.findMany({
+      where: { comment_id: { in: commentIds } },
+      include: { media: true },
+      orderBy: { position: "asc" },
+    });
+    for (const r of rows) {
+      if (!galleryByComment.has(r.comment_id)) galleryByComment.set(r.comment_id, []);
+      galleryByComment.get(r.comment_id).push(r);
+    }
+  }
+
   function mapComment(row) {
-    const media = buildMedia(row.media);
+    const items = galleryByComment.get(row.id);
+    const media = buildMedia(items?.[0]?.media);
+    // Omitted entirely for 0/1 items, so single-media payloads stay byte-identical.
+    const gallery = buildGallery(items);
     return {
       id: row.id,
       shoutId: row.shout_id,
@@ -142,12 +181,16 @@ export async function enrichFeed(topShouts, currentUserId) {
       replyToId: row.reply_to ?? null,
       quote: row.reply_to ? (quoteMap.get(row.reply_to) ?? null) : null,
       ...(media ? { media } : {}),
+      ...(gallery ? { gallery } : {}),
     };
   }
 
   function mapShout(row, children) {
     const isDeleted = !!row.is_deleted;
-    const media = isDeleted ? undefined : buildMedia(row.media);
+    const items = galleryByShout.get(row.id);
+    const media = isDeleted ? undefined : buildMedia(items?.[0]?.media);
+    // Suppressed for soft-deleted shouts alongside `media` (contract G6).
+    const gallery = isDeleted ? undefined : buildGallery(items);
     const poll = pollsByShout.get(row.id);
     const pollDto = poll && !isDeleted
       ? {
@@ -173,6 +216,7 @@ export async function enrichFeed(topShouts, currentUserId) {
       likes: shoutLikesCount.get(row.id) || 0,
       likedBy: currentUserId && shoutLikedSet.has(row.id) ? [currentUserId] : [],
       ...(media ? { media } : {}),
+      ...(gallery ? { gallery } : {}),
       ...(pollDto ? { poll: pollDto } : {}),
       comments: children,
       visibilityTag: row.visibility_tag || "",

@@ -5,11 +5,17 @@ const HOUR = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 6, 16, 12, 0, 0);
 const dt = (ms: number) => new Date(ms).toISOString();
 
-/** Build a fake `db` (Prisma-like) over an in-memory media/shout/comment set. */
-function makeDb({ media = [], shouts = [], comments = [] }: {
+/**
+ * Build a fake `db` (Prisma-like) over an in-memory media set, plus the
+ * shout_media/comment_media rows that record what's attached to a (possibly
+ * deleted) parent. A single video/YouTube attachment and a multi-item gallery
+ * are the same shape here — one row vs several — matching production (feature
+ * 006): there is no separate shout/comment media_id to fake anymore.
+ */
+function makeDb({ media = [], shoutGalleryRows = [], commentGalleryRows = [] }: {
   media?: any[];
-  shouts?: any[];
-  comments?: any[];
+  shoutGalleryRows?: { media_id: string; is_deleted: number }[];
+  commentGalleryRows?: { media_id: string; is_deleted: number }[];
 }) {
   const updates: Record<string, string> = {};
   return {
@@ -29,14 +35,14 @@ function makeDb({ media = [], shouts = [], comments = [] }: {
           return row;
         }),
       },
-      shout: {
+      shoutMedia: {
         findFirst: vi.fn(async ({ where }: any) =>
-          shouts.find((s) => s.media_id === where.media_id && s.is_deleted === where.is_deleted) ?? null
+          shoutGalleryRows.find((r) => r.media_id === where.media_id && r.is_deleted === where.shout.is_deleted) ?? null
         ),
       },
-      comment: {
+      commentMedia: {
         findFirst: vi.fn(async ({ where }: any) =>
-          comments.find((c) => c.media_id === where.media_id && c.is_deleted === where.is_deleted) ?? null
+          commentGalleryRows.find((r) => r.media_id === where.media_id && r.is_deleted === where.comment.is_deleted) ?? null
         ),
       },
     },
@@ -71,7 +77,7 @@ const pending = (id: string, ageHours: number, extra: Record<string, unknown> = 
 describe("runOriginalDowngrade", () => {
   it("converts a due, live original: flips flag, drops orig, unlinks file (FR-005/006/007)", async () => {
     const media = [pending("m1", 25)];
-    const { db, updates } = makeDb({ media, shouts: [{ media_id: "m1", is_deleted: 0 }] });
+    const { db, updates } = makeDb({ media, shoutGalleryRows: [{ media_id: "m1", is_deleted: 0 }] });
     const unlinked: string[] = [];
     const fileSystem = makeFs(["m1"], unlinked);
 
@@ -86,7 +92,7 @@ describe("runOriginalDowngrade", () => {
 
   it("cancels conversion for soft-deleted content but finalizes the asset so it isn't re-scanned (FR-008)", async () => {
     const media = [pending("m2", 25)];
-    const { db, updates } = makeDb({ media, shouts: [{ media_id: "m2", is_deleted: 1 }] });
+    const { db, updates } = makeDb({ media, shoutGalleryRows: [{ media_id: "m2", is_deleted: 1 }] });
     const unlinked: string[] = [];
     const fileSystem = makeFs(["m2"], unlinked);
 
@@ -103,7 +109,7 @@ describe("runOriginalDowngrade", () => {
 
   it("does not convert an original still inside its window", async () => {
     const media = [pending("m3", 1)]; // 1h old, well within 24h
-    const { db } = makeDb({ media, shouts: [{ media_id: "m3", is_deleted: 0 }] });
+    const { db } = makeDb({ media, shoutGalleryRows: [{ media_id: "m3", is_deleted: 0 }] });
     const fileSystem = makeFs(["m3"]);
 
     const res = await runOriginalDowngrade({ db, fileSystem, mediaDir: "/media", windowHours: 24, now: NOW });
@@ -114,7 +120,7 @@ describe("runOriginalDowngrade", () => {
 
   it("retains the original and reports failure when 1600.webp is missing (FR-009)", async () => {
     const media = [pending("m4", 25)];
-    const { db, updates } = makeDb({ media, shouts: [{ media_id: "m4", is_deleted: 0 }] });
+    const { db, updates } = makeDb({ media, shoutGalleryRows: [{ media_id: "m4", is_deleted: 0 }] });
     const unlinked: string[] = [];
     const fileSystem = makeFs([], unlinked); // webp NOT present
 
@@ -133,7 +139,7 @@ describe("runOriginalDowngrade", () => {
       created_at: dt(NOW - 48 * HOUR),
       media_meta: JSON.stringify({ w: 4000, h: 3000, converted: true }),
     };
-    const { db } = makeDb({ media: [converted], shouts: [{ media_id: "m5", is_deleted: 0 }] });
+    const { db } = makeDb({ media: [converted], shoutGalleryRows: [{ media_id: "m5", is_deleted: 0 }] });
     const fileSystem = makeFs(["m5"]);
 
     const res = await runOriginalDowngrade({ db, fileSystem, mediaDir: "/media", windowHours: 24, now: NOW });
@@ -142,7 +148,7 @@ describe("runOriginalDowngrade", () => {
 
   it("converts when the owning content is a live comment (not a shout)", async () => {
     const media = [pending("m6", 30)];
-    const { db, updates } = makeDb({ media, comments: [{ media_id: "m6", is_deleted: 0 }] });
+    const { db, updates } = makeDb({ media, commentGalleryRows: [{ media_id: "m6", is_deleted: 0 }] });
     const fileSystem = makeFs(["m6"]);
 
     const res = await runOriginalDowngrade({ db, fileSystem, mediaDir: "/media", windowHours: 24, now: NOW });

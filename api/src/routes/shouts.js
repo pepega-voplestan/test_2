@@ -6,8 +6,9 @@ import { broadcast, broadcastToUser } from "../sse.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { asyncHandler, utcTimestamp } from "../helpers/common.js";
 import { shoutSchema, editContentSchema, SHOUT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
-import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
+import { extractYouTubeId, fetchYouTubeMeta, buildMedia, buildGallery } from "../helpers/media.js";
 import { enrichFeed } from "../helpers/feed.js";
+import { attachMedia, resolveMediaIds, isMultiItemEligible, attachmentLimitMessage } from "../helpers/attachments.js";
 
 const router = Router();
 
@@ -34,7 +35,6 @@ router.get("/shouts", asyncHandler(async (req, res) => {
       },
       include: {
         user: { select: { username: true, avatar: true, is_banned: true } },
-        media: true,
       },
       orderBy,
       take: limit + 1,
@@ -51,7 +51,6 @@ router.get("/shouts", asyncHandler(async (req, res) => {
         where: { parent_id: null, is_deleted: 0, is_pinned: 1 },
         include: {
           user: { select: { username: true, avatar: true, is_banned: true } },
-          media: true,
         },
         orderBy: { created_at: "desc" },
       });
@@ -67,7 +66,6 @@ router.get("/shouts", asyncHandler(async (req, res) => {
       },
       include: {
         user: { select: { username: true, avatar: true, is_banned: true } },
-        media: true,
       },
       orderBy: { created_at: "desc" },
       take: limit + 1,
@@ -100,7 +98,6 @@ router.get("/shouts/:id", asyncHandler(async (req, res) => {
     },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
-      media: true,
     },
   });
   if (!raw) return res.status(404).json({ error: "Запись не найдена" });
@@ -173,15 +170,28 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
   const parsed = shoutSchema.safeParse(req.body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
+    // Check the gallery cap before the length check: a too_big on `mediaIds` is
+    // about attachment count, not characters, and must not borrow that message.
+    if (issue?.path?.[0] === "mediaIds") {
+      return res.status(400).json({ error: attachmentLimitMessage() });
+    }
     if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${SHOUT_MAX_LENGTH} символов` });
     return res.status(400).json({ error: "Некорректные данные" });
   }
 
-  const { content, mediaId, youtubeUrl, visibilityTag: rawTag, poll: pollData } = parsed.data;
+  const { content, mediaId, mediaIds, youtubeUrl, visibilityTag: rawTag, poll: pollData } = parsed.data;
   const visibilityTag = rawTag || "";
 
+  // R1: the two attachment shapes are mutually exclusive (contract shout-comment-create.md)
+  if (mediaId && mediaIds) {
+    return res.status(400).json({ error: "Некорректный запрос" });
+  }
+
+  // `mediaId` is equivalent to a one-item gallery. Null when neither is present.
+  const galleryIds = resolveMediaIds({ mediaId, mediaIds });
+
   // Must have content or media
-  if (!content.trim() && !mediaId && !youtubeUrl) {
+  if (!content.trim() && !galleryIds && !youtubeUrl) {
     return res.status(400).json({ error: "Нужен текст или медиа" });
   }
 
@@ -190,26 +200,40 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Опрос должен содержать текст" });
   }
 
-  // Cannot have both image and YouTube
-  if (mediaId && youtubeUrl) {
+  // R3: cannot have both a gallery and YouTube
+  if (galleryIds && youtubeUrl) {
     return res.status(400).json({ error: "Можно прикрепить или изображение, или видео" });
   }
 
   let finalMediaId = null;
+  let attachedIds = null;
 
-  if (mediaId) {
+  if (galleryIds) {
+    // R6: no duplicates within one gallery
+    if (new Set(galleryIds).size !== galleryIds.length) {
+      return res.status(400).json({ error: "Нельзя прикрепить один файл дважды" });
+    }
+
+    // R4/R5: every id must exist and be gallery-eligible.
     // Attaching an already-existing Media row is never gated by is_media_allowed —
     // only *creating* new physically-stored media is (upload.js, gifs.js's
     // personal-upload route). A restricted user may still reuse media they (or,
     // per existing behavior, anyone) uploaded before the restriction was applied.
-    const mediaRow = await prisma.media.findUnique({
-      where: { id: mediaId },
-      select: { id: true },
+    const rows = await prisma.media.findMany({
+      where: { id: { in: galleryIds } },
+      select: { id: true, media_type: true },
     });
-    if (!mediaRow) {
+    if (rows.length !== galleryIds.length) {
       return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
     }
-    finalMediaId = mediaId;
+    // A single non-gallery attachment (video / giphy / youtube reuse) keeps working
+    // exactly as before; only multi-item galleries are restricted to images.
+    if (galleryIds.length > 1 && !rows.every((r) => isMultiItemEligible(r.media_type))) {
+      return res.status(400).json({ error: "В галерею можно добавить только изображения" });
+    }
+
+    attachedIds = galleryIds;
+    finalMediaId = galleryIds[0];
   } else if (youtubeUrl) {
     const videoId = extractYouTubeId(youtubeUrl);
     if (!videoId) {
@@ -226,6 +250,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
         media_meta: JSON.stringify(ytMeta),
       },
     });
+    attachedIds = [finalMediaId];
   } else if (content) {
     // Auto-detect YouTube URL in content — unaffected by is_media_allowed,
     // since YouTube is a reference, not media physically stored on our server.
@@ -242,6 +267,7 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
           media_meta: JSON.stringify(ytMeta),
         },
       });
+      attachedIds = [finalMediaId];
     }
   }
 
@@ -249,18 +275,30 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
   const effectiveTag = ((visibilityTag === "nsfw" || visibilityTag === "spoiler") && !finalMediaId) ? "" : visibilityTag;
 
   const id = crypto.randomUUID();
-  const shout = await prisma.shout.create({
-    data: {
-      id,
-      user_id: req.session.user.id,
-      parent_id: null,
-      content,
-      media_id: finalMediaId,
-      visibility_tag: effectiveTag,
-    },
+  // The attachment list is written in the same transaction as the shout, so a
+  // failure can never leave a parent with a half-written list. Every case —
+  // gallery, video, YouTube — goes through the same call; there is no
+  // separate single-attachment write path.
+  await prisma.$transaction(async (tx) => {
+    await tx.shout.create({
+      data: {
+        id,
+        user_id: req.session.user.id,
+        parent_id: null,
+        content,
+        visibility_tag: effectiveTag,
+      },
+    });
+    if (attachedIds) {
+      await attachMedia(tx, "shout", id, attachedIds);
+    }
+  });
+
+  const shout = await prisma.shout.findUnique({
+    where: { id },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
-      media: true,
+      galleryItems: { include: { media: true }, orderBy: { position: "asc" } },
     },
   });
 
@@ -313,7 +351,10 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     visibilityTag: shout.visibility_tag || "",
     isDeleted: false,
     isPinned: false,
-    ...(shout.media ? { media: buildMedia(shout.media) } : {}),
+    ...(shout.galleryItems[0] ? { media: buildMedia(shout.galleryItems[0].media) } : {}),
+    // Emitted here too, not just from enrichFeed — this DTO is what goes out over
+    // SSE, so without it a live-appended shout would show no gallery (research D10).
+    ...(buildGallery(shout.galleryItems) ? { gallery: buildGallery(shout.galleryItems) } : {}),
     ...(pollDto ? { poll: pollDto } : {}),
   };
 

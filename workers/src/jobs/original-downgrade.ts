@@ -24,7 +24,7 @@ export interface DowngradeResult {
 
 // Injectable dependencies — real ones by default, fakes in tests (no DB/Redis needed).
 export interface DowngradeDeps {
-  db: Pick<typeof prisma, "media" | "shout" | "comment">;
+  db: Pick<typeof prisma, "media" | "shoutMedia" | "commentMedia">;
   fileSystem: Pick<typeof fs, "existsSync" | "statSync" | "writeFileSync" | "unlinkSync">;
   mediaDir: string;
   windowHours: number;
@@ -87,11 +87,22 @@ export async function runOriginalDowngrade(deps: Partial<DowngradeDeps> = {}): P
     // FR-008: if the owning shout/comment was removed before the deadline, cancel
     // the pending conversion — but still finalize the asset (mark converted + reclaim
     // the original) so it reaches a terminal state and isn't re-scanned every sweep.
-    const [liveShout, liveComment] = await Promise.all([
-      db.shout.findFirst({ where: { media_id: m.id, is_deleted: 0 }, select: { id: true } }),
-      db.comment.findFirst({ where: { media_id: m.id, is_deleted: 0 }, select: { id: true } }),
+    //
+    // shout_media/comment_media is the only place a post's attached media is
+    // recorded (feature 006) — a single video/YouTube attachment is a one-row
+    // list there just like a five-photo gallery, so checking these two tables
+    // covers every attachment shape; there is no separate column to also check.
+    const [liveShoutGallery, liveCommentGallery] = await Promise.all([
+      db.shoutMedia.findFirst({
+        where: { media_id: m.id, shout: { is_deleted: 0 } },
+        select: { shout_id: true },
+      }),
+      db.commentMedia.findFirst({
+        where: { media_id: m.id, comment: { is_deleted: 0 } },
+        select: { comment_id: true },
+      }),
     ]);
-    const orphaned = !liveShout && !liveComment;
+    const orphaned = !liveShoutGallery && !liveCommentGallery;
 
     try {
       const dir = path.join(mediaDir, m.media_url);
