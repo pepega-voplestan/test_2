@@ -379,7 +379,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({ onFocusChange }) => {
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <a
                       href={`/profile/${s.user.id}`}
-                      className={`text-sm font-bold hover:underline ${s.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}
+                      className={`text-sm font-bold hover:underline ${s.user.isBanned ? 'text-th-text-4 strike-mid' : 'text-th-text-2'}`}
                       onClick={e => { e.stopPropagation(); navigateTo(`/profile/${s.user.id}`); handleClose(); e.preventDefault(); }}
                       style={{ WebkitTapHighlightColor: 'transparent' }}
                     >

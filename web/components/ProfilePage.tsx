@@ -492,7 +492,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
             )}
           </div>
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className={`text-2xl font-bold ${profile.isBanned ? 'text-th-text-4 line-through' : 'text-th-text'} truncate`}>
+            <h1 className={`text-2xl font-bold ${profile.isBanned ? 'text-th-text-4 strike-mid' : 'text-th-text'} truncate`}>
               {profile.name}
             </h1>
             {profile.isBanned && (
