@@ -104,6 +104,25 @@
       .backdrop-blur-sm {
         -webkit-backdrop-filter: blur(4px);
       }
+
+      /* Strikethrough drawn at a fixed vertical center instead of relying on
+         the browser's native line-through, whose position comes from the
+         active font's own strikeout metrics and varies noticeably between
+         platforms (e.g. Segoe UI vs. San Francisco vs. Roboto). */
+      .strike-mid {
+        position: relative;
+      }
+      .strike-mid::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 0.08em;
+        background: currentColor;
+        transform: translateY(-50%);
+        pointer-events: none;
+      }
     </style>
 </head>
   <body>

@@ -801,7 +801,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
         </a>
         <div className="flex-1 min-w-0">
           <div className={`flex items-center gap-2${comment.quote ? ' mb-1' : ''}`}>
-            <a href={`/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+            <a href={`/profile/${comment.user.id}`} className={`font-bold text-sm hover:underline ${comment.user.isBanned ? 'text-th-text-4 strike-mid' : 'text-th-text-2'}`}>
               {comment.user.name}
             </a>
             {comment.quote && <span className="text-xs text-th-text-4">{formatTimestamp(comment.timestamp)}</span>}
@@ -1523,7 +1523,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     {shout.user && (
-                      <a href={`/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 line-through' : 'text-th-text-2'}`}>
+                      <a href={`/profile/${shout.user.id}`} className={`font-bold text-sm hover:underline ${shout.user.isBanned ? 'text-th-text-4 strike-mid' : 'text-th-text-2'}`}>
                         {shout.user.name}
                       </a>
                     )}
