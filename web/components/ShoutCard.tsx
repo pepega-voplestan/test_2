@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Shout, Comment, CommentQuote, ShoutMedia } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
@@ -341,13 +341,14 @@ const SteamEmbedCard: React.FC<{ appId: string; slug?: string }> = ({ appId, slu
 const EmbedCard: React.FC<{ embed: EmbedInfo }> = ({ embed }) => {
   const [imgError, setImgError] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const setVideoVolume = useCallback((el: HTMLVideoElement | null) => { if (el) el.volume = 0.3; }, []);
 
   if (embed.type === 'imgur-direct') {
     if (imgError) return null;
     if (embed.url.endsWith('.mp4')) {
       return (
         <div className="mb-2 rounded-lg overflow-hidden max-w-full">
-          <video src={embed.url} controls loop className="max-h-[300px] max-w-full rounded-lg" ref={el => { if (el) el.volume = 0.3; }} />
+          <video src={embed.url} controls loop className="max-h-[300px] max-w-full rounded-lg" ref={setVideoVolume} />
         </div>
       );
     }
@@ -680,6 +681,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [ignoreRevealed, setIgnoreRevealed] = useState(false);
+  const setVideoVolume = useCallback((el: HTMLVideoElement | null) => { if (el) el.volume = 0.3; }, []);
   const isOwner = user && user.id === comment.user.id;
   const isCommentAuthorIgnored = isIgnored(comment.user.id);
   const isCommentIgnored = isCommentAuthorIgnored && !ignoreRevealed;
@@ -887,7 +889,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {showMedia && comment.media?.type === 'video' && (
             <div className="mb-2 rounded-lg overflow-hidden">
-              <video src={comment.media.url} controls loop className="max-h-[200px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={el => { if (el) el.volume = 0.3; }} />
+              <video src={comment.media.url} controls loop className="max-h-[200px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={setVideoVolume} />
             </div>
           )}
 
@@ -1020,6 +1022,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [ytLoaded, setYtLoaded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const setVideoVolume = useCallback((el: HTMLVideoElement | null) => { if (el) el.volume = 0.3; }, []);
 
   const [replyMediaId, setReplyMediaId] = useState<string | null>(null);
   const [replyMediaPreview, setReplyMediaPreview] = useState<string | null>(null);
@@ -1356,7 +1359,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
       {shout.media?.type === 'video' && (
         <div className="mb-2 rounded-lg overflow-hidden">
-          <video src={shout.media.url} controls loop className="max-h-[300px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={el => { if (el) el.volume = 0.3; }} />
+          <video src={shout.media.url} controls loop className="max-h-[300px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={setVideoVolume} />
         </div>
       )}
 
