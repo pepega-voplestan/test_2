@@ -26,8 +26,18 @@ export const MAX_ATTACHMENTS = 5;
  */
 const MULTI_ITEM_ELIGIBLE_TYPES = new Set(["image"]);
 
-export function isMultiItemEligible(mediaType) {
-  return MULTI_ITEM_ELIGIBLE_TYPES.has(mediaType);
+/**
+ * Galleries are images-only (feature 006, 2026-07-31 revision) — GIFs are
+ * permanently excluded from any 2+-item gallery. `media_type` alone catches a
+ * Giphy-picker GIF (`media_type: "giphy"`), but a directly uploaded animated
+ * GIF file is stored as `media_type: "image"` with its animated-ness only in
+ * `media_meta` (see routes/upload.js), so that check must also be parsed here
+ * or an uploaded GIF silently passes as an eligible "image" (research D19).
+ */
+export function isMultiItemEligible(mediaType, mediaMeta) {
+  if (!MULTI_ITEM_ELIGIBLE_TYPES.has(mediaType)) return false;
+  const meta = JSON.parse(mediaMeta || "{}");
+  return !meta.animated;
 }
 
 /**

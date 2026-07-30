@@ -32,8 +32,11 @@ export type ShoutMedia =
  * would make the two easy to confuse. A gallery item is the *wire* shape
  * produced by `buildMedia()`, identical to the single `media` field.
  *
- * Galleries only ever contain images/GIFs (invariant I4), so this narrows
- * ShoutMedia to its image variant.
+ * Galleries only ever contain static images (invariant I4, revised 2026-07-31
+ * — GIFs are permanently excluded from any 2+-item gallery), so this narrows
+ * ShoutMedia to its image variant. The variant's own `animated`/`gif` fields
+ * remain in the type (a single, non-gallery attachment can still be a GIF),
+ * but a `GalleryItem[]` gallery array never has them set.
  */
 export type GalleryItem = Extract<ShoutMedia, { type: 'image' }>;
 

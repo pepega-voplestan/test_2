@@ -87,9 +87,17 @@ code and a test.
   *Owner*: `gallery.js` writes the full set in one transaction; it never patches
   a single row.
 - **I3 — Size bound**: `1 ≤ n ≤ 5`. Enforced by Zod before any write (FR-002).
-- **I4 — Type bound**: gallery items MUST be `media_type = "image"` (which
-  includes GIFs, stored as images with `animated` meta). `youtube` and `video`
-  MUST NOT appear in a gallery (FR-027, FR-028).
+- **I4 — Type bound**: gallery items MUST be `media_type = "image"` **and**
+  `media_meta.animated` MUST NOT be `true`. `youtube`, `video`, and
+  `media_type = "giphy"` MUST NOT appear in a gallery (FR-027, FR-028, FR-035).
+  *(Revised 2026-07-31 — previously read "media_type = 'image' (which includes
+  GIFs, stored as images with animated meta)," i.e. explicitly permitted
+  animated GIFs into a gallery. Reversed: galleries are images-only, and an
+  uploaded animated GIF file — `media_type: "image"` with `animated: true`
+  buried in `media_meta` — no longer qualifies just because its `media_type`
+  matches. See `research.md` D19 for why this needed an actual code change,
+  not just a doc correction: the eligibility check previously only inspected
+  `media_type`, so uploaded animated GIFs passed it undetected.)*
 - **I5 — Exclusivity**: a shout/comment MUST NOT have both a gallery of n > 1 and
   a `youtube` media. Structurally guaranteed by I1 + I4: a YouTube `media_id`
   cannot be the position-0 item of an image gallery.

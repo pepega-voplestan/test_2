@@ -38,6 +38,26 @@ a production deployment stage.
 > D14–D17). **Phase 1c (T081–T097)** carries this work. **T052 and T057 are
 > superseded** — per-item removal moved out of Stage 3 into Phase 1c — and Phase 5
 > is retitled/narrowed to reordering only.
+>
+> **Revised again 2026-07-31** — the largest revision so far. Published-gallery
+> display replaces the adaptive grid with a Reddit-style single-item carousel
+> (looping navigation, edge-anchored arrows, position indicator, fixed
+> 1:1-square letterboxed frame), and GIFs are permanently excluded from
+> multi-item galleries, reversing Stage 3's planned mixed-media work.
+> **Phase 1d (T098–T112)** carries this work. **Phase 4 (US2, T041–T051) is
+> retired in full** — Stage 2 is dropped, since the carousel already delivers
+> its looping-navigation value inline. **Phase 5 is narrowed again**: T055,
+> T056, T061, T062, T063 (all GIF-mixing) are superseded/retired; only
+> reordering remains. Planning also turned up two corrections: (1) `research.md`
+> D1's "retained `media_id` mirror" / `helpers/gallery.js` never actually
+> shipped — the real code uses join-tables-only and `helpers/attachments.js`;
+> earlier tasks below (T006, T083 area) that name `gallery.js` are historical
+> and left as shipped, per explicit scope decision to fix only what this
+> revision touches. (2) GIF exclusion turned out to be **half-enforced**
+> already, not fully: Giphy-picker GIFs were always server-blocked from
+> multi-item galleries, but uploaded animated GIF files were not — Phase 1d
+> includes a real, small server-side fix for that gap (research D19), not just
+> a doc correction.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -62,9 +82,9 @@ installs.
 
 | Stage | Phases | Gate before next stage |
 |---|---|---|
-| **Stage 1** | Phase 1 + **Phase 1b** + **Phase 1c** + Phase 2 + Phase 3 (US1) | Deployed; constitution amended; single-media regression verified; every attached image visible inline and openable; pending items individually removable/previewable; upload deferred to submit and atomic |
-| **Stage 2** | Phase 4 (US2) | Deployed; Lightbox zoom/pan regressions verified |
-| **Stage 3** | Phase 5 (US3, reorder + GIF mixing only) + Phase 6 | Deployed; mixed galleries verified |
+| **Stage 1** | Phase 1 + **Phase 1b** + **Phase 1c** + **Phase 1d** + Phase 2 + Phase 3 (US1) | Deployed; constitution amended (twice — see Phase 1); single-media regression verified; carousel verified (looping, fixed frame, arrows, indicator); pending items individually removable/previewable; upload deferred to submit and atomic; GIF exclusion verified for both GIF sources, server + client |
+| ~~Stage 2~~ | ~~Phase 4 (US2)~~ — **RETIRED 2026-07-31** | N/A — dropped; the Phase 1d carousel already delivers looping navigation inline |
+| **Stage 3** | Phase 5 (US3, reorder only) + Phase 6 | Deployed; reorder verified end-to-end |
 
 Parallelism marked `[P]` below is **within** a phase only.
 
@@ -199,7 +219,74 @@ Repeat for the comment composer.
 **Checkpoint**: pending items are individually removable and individually
 previewable; no upload occurs before submit; a failing submit posts nothing and
 offers a retry that never re-uploads already-succeeded files. **Re-deploy Stage
-1 and validate before starting Phase 4.**
+1 and validate before starting Phase 1d.**
+
+---
+
+## Phase 1d: Stage 1 revision — published-gallery carousel & permanent GIF exclusion (US1, P1) — **Stage 1**
+
+**Why**: Further production feedback on the deployed Stage 1 build. Per
+Clarifications Session 2026-07-31: the adaptive grid is retired in favor of a
+Reddit-style single-item-at-a-time carousel with looping navigation,
+edge-anchored arrows, and a position indicator, inside a fixed 1:1-square
+letterboxed frame. Separately, GIFs are permanently excluded from any 2+-item
+gallery, reversing Stage 3's planned mixed-media work — this closes a real gap
+discovered during planning: Giphy-picker GIFs were already server-blocked from
+multi-item galleries, but uploaded animated GIF files were not (research D19).
+
+**Ordering**: numbered 1d for the same reason Phases 1b/1c are lettered — part
+of **Stage 1**, not a later stage, and its prerequisites (Phase 2's schema/DTO,
+Phase 3's create routes, Phase 1b's `GalleryGrid`/Lightbox wiring, Phase 1c's
+hook rework) are already complete and deployed, so this is the next Stage 1
+work and can be picked up immediately. It retires Phase 4 (US2/Stage 2)
+outright and further narrows Phase 5 (see Notes there).
+
+**Scope boundary**: `GalleryGrid.tsx` is deleted, not extended — replaced
+one-for-one by `GalleryCarousel.tsx` at both call sites. The GIF-exclusion fix
+touches the create routes' eligibility check and the composer's picker-gate
+condition; it does **not** touch `useMediaAttachments.ts`'s upload
+orchestration (Phase 1c) or the schema (no migration — see `research.md` D19).
+`Lightbox.tsx` is untouched — Stage 2 (which would have modified it) is
+retired, not merely deferred.
+
+**Independent Test**: Post 2-, 3-, 4- and 5-image galleries; confirm each opens
+on its first image in a fixed-square carousel frame, that forward/backward
+navigation loops at both ends, that the frame never changes size across
+images of different ratios, and that a comment carousel is visibly shorter
+than the same gallery in a shout. Separately: attempt to attach a second GIF
+(either an uploaded file or from "Мои GIF"/Giphy search) once one is already
+attached, in both composers, and confirm the picker is unavailable; then
+attempt the equivalent server-side request directly and confirm it is
+rejected too.
+
+### Tests for Phase 1d
+
+> Write first and confirm they FAIL before implementing.
+
+- [X] T098 [P] [US1] Paging and looping in `web/tests/unit/GalleryCarousel.test.tsx` — opens on index 0; forward/backward navigation wraps at both boundaries (`(i + 1) % length`, `(i - 1 + length) % length`) (FR-012, FR-043)
+- [X] T099 [P] [US1] Fixed frame in `web/tests/unit/GalleryCarousel.test.tsx` — the frame is a 1:1 square sized to the required `maxHeight` prop, identical regardless of any item's own width/height, unlike the retired grid's clamped-ratio container (FR-014)
+- [X] T100 [P] [US1] Letterbox rendering in `web/tests/unit/GalleryCarousel.test.tsx` — each image renders via `object-contain` with `bg-th-page` filling any leftover space, never cropped or stretched (FR-014, mirrors research D18 and the existing `PendingMediaStrip` convention)
+- [X] T101 [P] [US1] Arrow and indicator visibility in `web/tests/unit/GalleryCarousel.test.tsx` — both present only when `gallery.length > 1` (FR-042, FR-044)
+- [X] T102 [P] [US1] Tile activation in `web/tests/unit/GalleryCarousel.test.tsx` — activating the currently-displayed item invokes the open handler with `currentIndex`, and the frame is keyboard-activatable with an accessible name (FR-036)
+- [X] T103 [P] [US1] Extended R5 in `api/tests/integration/shouts.test.js` and `comments.test.js` — a `mediaIds` array with 2+ items where one item is an uploaded animated GIF file (`media_type: "image"`, `media_meta.animated: true`) is rejected, in addition to the pre-existing Giphy-picker-type (`media_type: "giphy"`) rejection (research D19)
+- [X] T104 [P] [US1] Client GIF-picker gate in `web/tests/unit/useMediaAttachments.test.ts` or composer parity tests — `gifPickerBlocked`/`replyGifBlocked` become true once one GIF is already attached (either source), not only when an image is attached (research D19)
+- [X] T105 [P] [US1] Update `web/tests/unit/composerParity.test.tsx` — assertions reference `GalleryCarousel` instead of `GalleryGrid`; the GIF-gate assertion covers the `hasGif` condition
+
+### Implementation for Phase 1d
+
+- [X] T106 [US1] Create `web/components/GalleryCarousel.tsx` per `contracts/gallery-carousel.md` — fixed 1:1-square frame bounded by the required `maxHeight` prop; `useState<number>` current index starting at 0; forward/backward handlers with modulo looping arithmetic (FR-043); arrow controls anchored to the frame's own edges (FR-042); position indicator (FR-044); every item rendered via `object-contain` with `bg-th-page` letterbox fill (FR-014); no `animated`/`gif`/`staticOnly` branching, since galleries are images-only (research D18)
+- [X] T107 [US1] Delete `web/components/GalleryGrid.tsx` (its CSS Grid templates and `containerRatio()` clamping, research D11/D12) and `web/tests/unit/GalleryGrid.test.tsx`; confirm no remaining references anywhere in `web/`
+- [X] T108 [US1] Replace the `GalleryGrid` call sites in `web/components/ShoutCard.tsx` (shout body, comment body) with `GalleryCarousel`, passing the existing `maxHeight` 300/200 and preserving spoiler/NSFW behaviour (FR-015, FR-031)
+- [X] T109 [US1] Extend the multi-item eligibility check used in `api/src/routes/shouts.js` / `comments.js` (backing `isMultiItemEligible()` in the attachment-persistence helper) to also parse each candidate media's `media_meta` and reject any row with `animated: true` when the gallery has 2+ items — closes the uploaded-GIF gap; the existing Giphy-picker (`media_type: "giphy"`) rejection is unchanged (FR-035, research D19)
+- [X] T110 [US1] Fix `gifPickerBlocked` in `web/components/ShoutInput.tsx` and `replyGifBlocked` in `web/components/ShoutCard.tsx` to also include `hasGif` in their blocking condition (`hasImages || hasVideo || isFull` → `hasImages || hasVideo || isFull || hasGif`), so the GIF picker closes once one GIF — either source — is already attached (FR-035, research D19)
+- [X] T111 [US1] Correct the stale "Deliberately NOT enforced server-side" note in `contracts/shout-comment-create.md`'s R5 to describe the now-complete eligibility check (both GIF sources)
+- [X] T112 [US1] Follow-up constitution/`CLAUDE.md` correction: revise the "up to 5 images/GIFs" wording (from the original T002/T003 amendment) to describe an images-only gallery — amend `.specify/memory/constitution.md` directly (same as T002) and update `CLAUDE.md` **by invoking the `/docs` skill only** (same as T003, direct edits prohibited)
+
+**Checkpoint**: the carousel replaces the grid in production; GIF exclusion is
+enforced for both GIF sources, server-side and client-side; the second
+constitution/`CLAUDE.md` correction has landed. **Re-deploy Stage 1 and
+validate before starting Phase 5** (Phase 4/Stage 2 is retired — there is
+nothing to deploy between Stage 1 and Stage 3 anymore).
 
 ---
 
@@ -271,57 +358,55 @@ hook. Every user story depends on this phase.
 
 ---
 
-## Phase 4: User Story 2 - Navigate between gallery items (Priority: P2) — **Stage 2**
+## ~~Phase 4: User Story 2 - Navigate between gallery items (Priority: P2)~~ — RETIRED 2026-07-31 — **Stage 2 dropped**
 
-**Goal**: Readers cycle the whole gallery with looping, edge-anchored controls.
+*Retired in full, never started (all tasks below were still `[ ]`).* Stage 2's
+entire value — looping navigation, edge-anchored arrows, a position indicator
+— is now delivered by Phase 1d's `GalleryCarousel.tsx`, inline in the
+shout/comment body, before a reader ever opens anything fullscreen. Building a
+second, fullscreen-specific navigation layer on top would duplicate that
+capability for no real benefit (see `research.md` D20). `Lightbox.tsx`
+therefore never gains an `items`/`startIndex` prop — it keeps its existing
+single-`src` signature permanently. Kept here, not deleted, so historical
+references retain a stable target (see `spec.md`'s retired User Story 2).
 
-**Scope reduced 2026-07-26**: Stage 1 already opens any item full size (T077), so
-this stage no longer unlocks viewing — it removes the dismiss-and-reopen round
-trip. `Lightbox.tsx` is untouched until this phase.
+- [ ] ~~T041 [P] [US2] Gallery navigation in `web/tests/unit/Lightbox.test.tsx`~~ — **RETIRED 2026-07-31**, superseded by T098/T101 (now inline, in `GalleryCarousel.test.tsx`)
+- [ ] ~~T042 [P] [US2] Regression guard in `web/tests/unit/Lightbox.test.tsx`~~ — **RETIRED 2026-07-31** — moot, since `Lightbox.tsx` never gains the `items` prop this guarded against
+- [ ] ~~T043 [US2] Add optional `items`/`startIndex` props to `web/components/Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106 (`GalleryCarousel.tsx` owns paging state instead)
+- [ ] ~~T044 [US2] Add prev/next controls anchored to the screen edges in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106 (arrows anchored to the carousel frame's own edges, not the viewport)
+- [ ] ~~T045 [US2] Implement looping navigation in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106 (looping now lives in `GalleryCarousel.tsx`)
+- [ ] ~~T046 [US2] Add the position indicator to `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106
+- [ ] ~~T047 [US2] Ensure each item renders letterboxed, not cropped, in `Lightbox.tsx`~~ — **RETIRED 2026-07-31** — this was never gallery-specific; it describes `Lightbox`'s existing single-image baseline behaviour, unaffected by any of this feature's stages
+- [ ] ~~T048 [US2] Add keyboard Left/Right navigation in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, moot without inter-item navigation in `Lightbox`
+- [ ] ~~T049 [US2] Gate horizontal swipe on `zoomLevel.current === 1` in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, moot — no swipe navigation is ever added to `Lightbox`
+- [ ] ~~T050 [US2] Upgrade the tile handler to pass `gallery` + `startIndex` to `Lightbox`~~ — **RETIRED 2026-07-31**, superseded by T108 (`GalleryCarousel` opens `Lightbox` on its `currentIndex` item only, no array passed)
+- [ ] ~~T051 [US2] Coverage that scroll position is preserved on dismiss~~ — **RETIRED 2026-07-31** — this was never gallery-specific either; `useScrollLock` behaviour is an existing baseline, not new work this feature introduces
 
-**Independent Test**: Open a published 4-image gallery, click the preview, and confirm all four are reachable by repeated forward navigation including wrap-around from last to first.
-
-**Depends on**: Stage 1 deployed and validated in production.
-
-### Tests for User Story 2
-
-- [ ] T041 [P] [US2] Gallery navigation in `web/tests/unit/Lightbox.test.tsx` — forward and backward looping (FR-019), position indicator content (FR-021), no navigation controls when opened on a single item (FR-022)
-- [ ] T042 [P] [US2] Regression guard in `web/tests/unit/Lightbox.test.tsx` — the existing single-`src` invocation renders and behaves exactly as before when no `items` prop is passed
-
-### Implementation for User Story 2
-
-- [ ] T043 [US2] Add optional `items: GalleryItem[]` and `startIndex: number` props to `web/components/Lightbox.tsx`, keeping the existing single-`src` code path unchanged when they are absent
-- [ ] T044 [US2] Add prev/next controls anchored to the left and right screen edges in `web/components/Lightbox.tsx`, rendered at every viewport size and for every item aspect ratio (FR-018, SC-005)
-- [ ] T045 [US2] Implement looping navigation in both directions in `web/components/Lightbox.tsx` — past-last wraps to first, before-first wraps to last (FR-019)
-- [ ] T046 [US2] Add the position indicator ("3 / 5") to `web/components/Lightbox.tsx` (FR-021)
-- [ ] T047 [US2] Ensure each item renders in its entirety, letterboxed rather than cropped, in `web/components/Lightbox.tsx` (FR-020)
-- [ ] T048 [US2] Add keyboard Left/Right navigation in `web/components/Lightbox.tsx`, alongside the existing Escape handler
-- [ ] T049 [US2] Gate horizontal swipe navigation on `zoomLevel.current === 1` in `web/components/Lightbox.tsx` so pan-while-zoomed keeps working — the highest-risk regression in this stage (research D6)
-- [ ] T050 [US2] Upgrade the Stage 1 tile handler (T077) in `web/components/ShoutCard.tsx` to pass the full `gallery` array plus `startIndex` instead of a single `src`, for both shouts and comments (FR-017, FR-031)
-- [ ] T051 [US2] Add explicit coverage in `web/tests/unit/Lightbox.test.tsx` that scroll position is preserved on dismiss via `web/hooks/useScrollLock.ts` (FR-023)
-
-**Checkpoint**: US1 and US2 both work independently. **Deploy Stage 2 and validate in production before starting Phase 5.**
+**Checkpoint**: N/A — this phase never shipped and never will. Stage 1 (through
+Phase 1d) deploys directly to Stage 3 with nothing in between.
 
 ---
 
-## Phase 5: User Story 3 - Reorder the gallery before posting, and mix in GIFs (Priority: P3) — **Stage 3**
+## Phase 5: User Story 3 - Reorder the gallery before posting (Priority: P3) — **Stage 3**
 
 **Scope narrowed 2026-07-30**: per-item removal (FR-024) moved to Phase 1c —
-see T082/T090 there. This phase now covers only reordering and GIF mixing.
+see T082/T090 there. **Narrowed again 2026-07-31**: GIF-mixing work is removed
+entirely — FR-026 is permanently reversed, not deferred (see spec.md Session
+2026-07-31 and `research.md` D19) — so this phase now covers only reordering.
 
-**Goal**: Reorder while composing; GIFs mixable with images. Both composers.
+**Goal**: Reorder while composing. Both composers.
 
-**Independent Test**: Attach four images, move the last to the front, add a GIF, publish, and confirm the gallery contains exactly the intended items in the intended order — verified in both the shout and comment composers.
+**Independent Test**: Attach four images, move the last to the front, publish, and confirm the gallery contains exactly the intended items in the intended order — verified in both the shout and comment composers.
 
-**Depends on**: Stage 2 deployed and validated in production.
+**Depends on**: Stage 1 (through Phase 1d) deployed and validated in production — Stage 2 no longer exists as an intervening gate (retired, see Phase 4).
 
 ### Tests for User Story 3
 
 - [ ] ~~T052 [P] [US3] Removal behavior in `web/tests/unit/useMediaAttachments.test.ts`~~ — **SUPERSEDED 2026-07-30 by T082**, before ever being started. Per-item removal moved out of Stage 3 into Phase 1c.
 - [ ] T053 [P] [US3] Reordering in `web/tests/unit/useMediaAttachments.test.ts` — the reordered first item becomes the published preview (FR-025)
 - [ ] T054 [P] [US3] Rollback in `web/tests/unit/useMediaAttachments.test.ts` — a failed reorder reverts the pending list to its prior state (Constitution Principle V)
-- [ ] T055 [P] [US3] Mixed galleries in `api/tests/integration/shouts.test.js` — an image+GIF `mediaIds` array is accepted (FR-026)
-- [ ] T056 [P] [US3] Restriction parity in `api/tests/integration/gifs.test.js` — a user with `is_media_allowed = false` is blocked from uploading a **new** GIF into a gallery but may still re-select an **existing** one from "Мои GIF" (FR-009, SC-007)
+- [ ] ~~T055 [P] [US3] Mixed galleries in `api/tests/integration/shouts.test.js`~~ — **RETIRED 2026-07-31**, before ever being started. FR-026 (mixed image+GIF galleries) is permanently reversed, not merely deferred — see T103 for the opposite assertion (GIFs are rejected from galleries, unconditionally).
+- [ ] ~~T056 [P] [US3] Restriction parity in `api/tests/integration/gifs.test.js`~~ — **RETIRED 2026-07-31**, before ever being started. Moot: since GIFs can never join a gallery, feature 005's GIF-upload restriction has nothing gallery-specific left to test here — it continues to apply to single-GIF attachments, already covered by feature 005's own tests.
 
 ### Implementation for User Story 3
 
@@ -329,18 +414,19 @@ see T082/T090 there. This phase now covers only reordering and GIF mixing.
 - [ ] T058 [US3] Add reordering of pending items to `web/hooks/useMediaAttachments.ts`, with the first item driving the preview (FR-025)
 - [ ] T059 [US3] Make reorder optimistic with guaranteed rollback on failure in `web/hooks/useMediaAttachments.ts` (Constitution Principle V)
 - [ ] T060 [US3] Add the reorder UI affordance to both `web/components/ShoutInput.tsx`'s and the reply composer's `PendingMediaStrip` usage in `web/components/ShoutCard.tsx` (FR-025, FR-031) — remove is already available from Phase 1c
-- [ ] T061 [US3] Remove the FR-035 gate from `web/components/ShoutInput.tsx`, `web/components/ShoutCard.tsx` and `web/components/EmojiPicker.tsx`, enabling free image+GIF mixing (FR-026 takes effect, FR-035 expires)
-- [ ] T062 [US3] Allow selecting a GIF into an existing gallery in `web/components/GifPicker.tsx`, appending rather than replacing
-- [ ] T063 [US3] Verify animated GIF items animate correctly inside mixed galleries in both `web/components/GalleryGrid.tsx` and `web/components/Lightbox.tsx` (US3 acceptance scenario 5)
+- [ ] ~~T061 [US3] Remove the FR-035 gate, enabling free image+GIF mixing~~ — **RETIRED 2026-07-31**, before ever being started. FR-035 is now permanent (see Phase 1d, T110) — this gate is never removed.
+- [ ] ~~T062 [US3] Allow selecting a GIF into an existing gallery in `web/components/GifPicker.tsx`~~ — **RETIRED 2026-07-31**, before ever being started. A GIF can never join an existing (2+-item) gallery — see Phase 1d.
+- [ ] ~~T063 [US3] Verify animated GIF items animate correctly inside mixed galleries~~ — **RETIRED 2026-07-31**, before ever being started. Mixed galleries can never exist; `GalleryCarousel.tsx` (T106) deliberately carries no animated/GIF-handling code at all.
 
-**Checkpoint**: All three user stories are independently functional.
+**Checkpoint**: US1 (through Phase 1d) and US3 are both independently
+functional. US2/Stage 2 is retired, not a gap — there is nothing between them.
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T064 [P] Update `docs/api.md` and `docs/web.md` for the gallery DTO, the `mediaIds` create contract, the shared hook and the new components — **via the `/docs` skill only**
-- [ ] T065 [P] Audit all new Russian copy for correct declensions and pluralization across `web/hooks/useMediaAttachments.ts`, `web/components/ShoutInput.tsx`, `web/components/ShoutCard.tsx`, `web/components/GalleryGrid.tsx` and `web/components/Lightbox.tsx` (Constitution Principle II)
+- [ ] T065 [P] Audit all new Russian copy for correct declensions and pluralization across `web/hooks/useMediaAttachments.ts`, `web/components/ShoutInput.tsx`, `web/components/ShoutCard.tsx`, `web/components/GalleryCarousel.tsx` (replaces the retired `GalleryGrid.tsx`) and `web/components/Lightbox.tsx` (Constitution Principle II)
 - [ ] T066 [P] Add an automated worker test in `workers/tests/` asserting that **every** item of a gallery is converted by the 24-hour downgrade and none is treated as orphaned (FR-010, SC-008, research D7)
 - [ ] T067 Confirm no N+1 was introduced — verify a feed page containing several galleries issues exactly one additional query, per research D5
 - [ ] T068 Run the full `quickstart.md` validation pass for all three stages, including the cross-stage 24-hour compression check
@@ -363,26 +449,37 @@ see T082/T090 there. This phase now covers only reordering and GIF mixing.
   and Phase 3's T031/T034 composer wiring (both complete). Composer-only; no API
   redeploy required — only the client orchestration in `useMediaAttachments.ts`
   and the new `PendingMediaStrip.tsx` change.
-- **Phase 4 (US2)**: depends on Phase **1c** being deployed to production, not
-  merely merged (revised again — Stage 1 is not complete until the pending-preview
-  and upload-timing revision ships)
-- **Phase 5 (US3)**: depends on Phase 4 **being deployed to production**
+- **Phase 1d (US1 revision)**: despite its number, depends on Phase 2's schema/DTO,
+  Phase 3's create routes, Phase 1b's grid/Lightbox wiring, and Phase 1c's hook
+  rework (all complete). Touches `GalleryCarousel.tsx` (new, replacing
+  `GalleryGrid.tsx`), the create routes' eligibility check, and the composers'
+  GIF-picker gate condition.
+- ~~**Phase 4 (US2)**~~: **RETIRED 2026-07-31** — no dependency to track; this
+  phase never starts.
+- **Phase 5 (US3)**: depends on Phase **1d** being deployed to production, not
+  Phase 4 (revised — Stage 2 no longer exists as an intervening gate)
 - **Phase 6 (Polish)**: depends on Phase 5
 
 ### User Story Dependencies
 
 Unlike the usual Spec Kit pattern, these stories are **strictly sequential** —
-see the sequencing constraint at the top. US2 extends UI delivered by US1, and
-US3 removes the FR-035 gate that US1 installs.
+see the sequencing constraint at the top. *(Revised 2026-07-31 — US2 is
+retired; US3 no longer "removes the FR-035 gate that US1 installs," since
+FR-035 is now permanent. US3's only remaining dependency on US1 is the shared
+`useMediaAttachments.ts` hook and `PendingMediaStrip.tsx` it reorders within.)*
 
 ### Within Each User Story
 
 - Tests are written first and must fail before implementation
 - Schema → helpers → hook → routes → components
-- `api/src/helpers/gallery.js` (T006) must exist before T027/T028
+- `api/src/helpers/gallery.js` (T006) must exist before T027/T028 — *(historical
+  reference; the actual shipped module is `api/src/helpers/attachments.js`, see
+  the 2026-07-31 revision banner above — T006's own file path is left as
+  originally written since Phase 2 already shipped)*
 - `web/utils/plural.ts` (T012) must exist before T014
 - `web/hooks/useMediaAttachments.ts` (T014) must exist before T031 and T034
 - `web/hooks/useMediaAttachments.ts`'s Phase 1c rework (T090–T092) must exist before `PendingMediaStrip.tsx` (T093) and its two call sites (T094/T095)
+- `web/components/GalleryCarousel.tsx` (T106) must exist before its call-site swap (T108); T107's deletion of `GalleryGrid.tsx` should happen only after T108 confirms no remaining references
 
 ### Critical Path
 
@@ -392,9 +489,9 @@ T001 → T004 → T005 → T006 → T009 → T014 → T027 → T031 → T034 →
          └──────────── Stage 1 (initial) deploy ────────────┘
                               → T090 → T091 → T093 → T094 → T095
                               └──── Stage 1 (1c revision) deploy ────┘
-                                          → T043 → T045 → T049 → T050
-                                          └──── Stage 2 deploy ────┘
-                                                      → T058 → T059 → T061
+                                          → T106 → T108 → T109 → T110 → T112
+                                          └──── Stage 1 (1d revision) deploy ────┘
+                                                      → T058 → T059 → T060
 ```
 
 ### Parallel Opportunities
@@ -405,8 +502,10 @@ T001 → T004 → T005 → T006 → T009 → T014 → T027 → T031 → T034 →
 - **Phase 3 implementation**: T030 (superseded) was `[P]`; the `ShoutInput.tsx` chain (T031–T033) and the `ShoutCard.tsx` chain (T034–T037) are each internally serial but **can run in parallel with each other**, since the shared hook removes the coupling
 - **Phase 1c tests**: T081–T089 are all `[P]` → write the entire test suite in one pass
 - **Phase 1c implementation**: T090–T092 all touch `useMediaAttachments.ts` and MUST stay serial; T093 (`PendingMediaStrip.tsx`) can start once T090's shape is settled; T094/T095 (the two composer call sites) **can run in parallel with each other** once T093 exists, same reasoning as Phase 3
-- **Phase 4**: T041/T042 `[P]`; T043–T049 all touch `Lightbox.tsx` and MUST stay serial
-- **Phase 5**: T053–T056 `[P]`; T058–T059 all touch the hook and MUST stay serial
+- **Phase 1d tests**: T098–T105 are all `[P]` → write the entire test suite in one pass
+- **Phase 1d implementation**: T106–T108 (the carousel component and its two call sites) are serial and independent of T109–T111 (the server-side eligibility fix and its doc correction), which can proceed **in parallel** with the frontend chain; T110 (client gate) can start as soon as T109's server behavior is settled, or in parallel if the team trusts the contract; T112 (governance) is independent of all of it
+- ~~**Phase 4**~~: retired — no parallel opportunities to track
+- **Phase 5**: T053–T054 `[P]`; T058–T059 all touch the hook and MUST stay serial
 - **Phase 6**: T064, T065, T066 `[P]`
 
 ---
@@ -447,31 +546,51 @@ Task: "Tile activation in web/tests/unit/PendingMediaStrip.test.tsx"
 Task: "Composer parity in ShoutInput.test.tsx and ShoutCardReply.test.tsx"
 ```
 
+## Parallel Example: Phase 1d tests
+
+```bash
+# All eight Phase 1d test tasks touch two suites — write them together:
+Task: "Paging and looping in web/tests/unit/GalleryCarousel.test.tsx"
+Task: "Fixed frame in web/tests/unit/GalleryCarousel.test.tsx"
+Task: "Letterbox rendering in web/tests/unit/GalleryCarousel.test.tsx"
+Task: "Arrow and indicator visibility in web/tests/unit/GalleryCarousel.test.tsx"
+Task: "Tile activation in web/tests/unit/GalleryCarousel.test.tsx"
+Task: "Extended R5 (uploaded-GIF rejection) in api/tests/integration/shouts.test.js and comments.test.js"
+Task: "Client GIF-picker gate in web/tests/unit/useMediaAttachments.test.ts"
+Task: "composerParity.test.tsx updates for GalleryCarousel and the hasGif gate"
+```
+
 ---
 
 ## Implementation Strategy
 
-### MVP scope — Stage 1 (Phases 1, 1b, 1c, 2, 3 — T001–T040, T071–T080, T081–T097)
+### MVP scope — Stage 1 (Phases 1, 1b, 1c, 1d, 2, 3 — T001–T040, T071–T080, T081–T097, T098–T112)
 
 1. Phase 1: baseline, plus the constitution amendment and `/docs` update that gate the deploy
 2. Phase 2: schema, migration, gallery helper, DTO, worker fix, **shared attachment hook**
 3. Phase 3: create routes + SSE DTO + both composers + preview UI
 4. Phase 1b: adaptive grid, every published item viewable
 5. Phase 1c: deferred/atomic upload, per-item removal, pending-preview strip
-6. **STOP and VALIDATE**: run `quickstart.md` Stage 1 checks, especially the single-media regression (SC-006), comment-composer parity (FR-031), and the 2026-07-30 network-trace checks (no upload before submit; retry skips already-uploaded files)
-7. **Deploy to production** and let real users exercise it
+6. Phase 1d: single-item carousel replacing the grid, permanent GIF exclusion (both sources)
+7. **STOP and VALIDATE**: run `quickstart.md` Stage 1 checks, especially the single-media regression (SC-006), comment-composer parity (FR-031), the 2026-07-30 network-trace checks (no upload before submit; retry skips already-uploaded files), and the 2026-07-31 carousel/GIF-exclusion checks (fixed-frame letterboxing at mixed ratios; both GIF sources blocked server- and client-side; second constitution/`CLAUDE.md` correction landed)
+8. **Deploy to production** and let real users exercise it
 
 This alone delivers the feature's core value: users can publish multi-image
-shouts **and comments**, and readers can see that a gallery exists.
+shouts **and comments**, and readers can see and browse a gallery.
 
 ### Incremental delivery
 
 - **Stage 1** (T001–T040) → deployed 2026-07-25 → validation exposed the
   viewability defect → **Stage 1 revision** (T071–T080) → re-deploy → validate →
   further feedback exposed the composer-timing/removal papercuts →
-  **Stage 1 revision 2** (T081–T097) → re-deploy → validate
-- **Stage 2** (T041–T051) → deploy → validate, with special attention to zoom/pan regressions
-- **Stage 3** (T053, T054, T055, T056, T058–T063) + polish (T064–T070) → deploy → validate mixed galleries
+  **Stage 1 revision 2** (T081–T097) → re-deploy → validate → further feedback
+  requested a carousel instead of a grid and permanent GIF exclusion →
+  **Stage 1 revision 3** (T098–T112) → re-deploy → validate
+- ~~**Stage 2** (T041–T051)~~ → **retired**, never implemented — the Phase 1d
+  carousel already delivers looping navigation inline
+- **Stage 3** (T053, T054, T058–T060) + polish (T064–T070) → deploy → validate
+  reordering (no mixed-gallery validation — that direction is permanently
+  reversed)
 
 ### Team strategy
 
@@ -480,7 +599,9 @@ developers does not shorten the calendar**. Within Stage 1, the shared hook
 creates a genuine split: once T014 lands, one developer takes the `api/` chain
 (T027–T029) while another takes `ShoutInput.tsx` (T031–T033) and a third takes
 the `ShoutCard.tsx` reply composer (T034–T037), all against the same hook
-contract.
+contract. Within Phase 1d, the carousel component (T106–T108) and the
+GIF-exclusion fix (T109–T111) are independent enough for two developers to
+split without either blocking the other.
 
 ---
 
@@ -488,6 +609,7 @@ contract.
 
 - `[P]` = different files, no dependencies
 - Attachment logic lives in `useMediaAttachments.ts`, **not** in either composer — this is what keeps FR-031 parity from drifting across three stages
-- `api/src/helpers/gallery.js` is the only module permitted to write `media_id` or the join tables (Invariant I1)
-- `CLAUDE.md` and `docs/*.md` are modified **only** through the `/docs` skill
+- `api/src/helpers/gallery.js` is the only module permitted to write `media_id` or the join tables (Invariant I1) — *(historical wording; the actual shipped module is `api/src/helpers/attachments.js`, and it has never retained `media_id` at all — see the 2026-07-31 revision banner. Left as originally written per explicit scope decision to fix only what the 2026-07-31 revision directly touches.)*
+- `CLAUDE.md` and `docs/*.md` are modified **only** through the `/docs` skill — as of 2026-07-31 this applies to **two** corrections: the original "Single media per post/comment" amendment (T003) and the follow-up "images/GIFs" → "images" narrowing (T112)
+- Galleries are **images-only, permanently**, as of 2026-07-31 (T109, T110) — video was always excluded (FR-028); GIFs (either an uploaded animated file or a Giphy-picker reference) now are too, unconditionally, with no future stage that re-enables them
 - Commit after each task or logical group; stop at any checkpoint to validate

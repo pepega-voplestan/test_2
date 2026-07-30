@@ -100,7 +100,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     if (rows.length !== galleryIds.length) {
       return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
     }
-    if (galleryIds.length > 1 && !rows.every((r) => isMultiItemEligible(r.media_type))) {
+    if (galleryIds.length > 1 && !rows.every((r) => isMultiItemEligible(r.media_type, r.media_meta))) {
       return res.status(400).json({ error: "В галерею можно добавить только изображения" });
     }
 

@@ -361,6 +361,140 @@ produced the FR-031 gap `/speckit-analyze` caught in Stage 1. Building this as
 one new component now is cheaper than building it once, discovering the second
 composer diverges, and reconciling them later.
 
+## Revision 2026-07-31 — Published-gallery carousel & permanent GIF exclusion
+
+Added after further production feedback on the deployed Stage 1 build. D1–D17
+are unaffected in their own logic. **Correction to D1's premise, discovered
+while verifying file paths for this revision**: D1 describes retaining
+`Shout.media_id`/`Comment.media_id` as a mirror of the gallery's position-0
+item, written by a `helpers/gallery.js` module. The actual shipped migration
+(`20260726180452_add_media_attachments`) drops both columns in the same
+migration that creates the join tables, and the writer module is
+`helpers/attachments.js` (`attachMedia()`), not `gallery.js` — the codebase
+took the "join table as sole source of truth" alternative D1 explicitly
+rejected for Stage 1. This is noted here for accuracy; reconciling all of D1
+and the rest of this document's Stage 1 narrative against shipped code is a
+separate, dedicated task, not part of this revision (see `plan.md`'s
+2026-07-31 revision banner). Everything below uses the real, current names.
+
+### D18. Grid retired outright; carousel is new paging state, not a new layout system
+
+**Decision**: `GalleryGrid.tsx` (and its CSS Grid templates, D11, and its
+`containerRatio()` clamping, D12) is deleted, not extended. `GalleryCarousel.tsx`
+replaces it: a `useState<number>` current-index starting at 0, forward/backward
+handlers doing `(i + 1) % length` / `(i - 1 + length) % length` for looping
+(FR-043), and a fixed 1:1-square frame (FR-014) that never varies with content.
+
+**Rationale**: The grid's entire design (D11/D12) existed to solve "how do I
+lay out 2–5 items simultaneously, shaped by the first one." None of that
+problem exists anymore once only one item is ever visible at a time — keeping
+the grid component and bolting a carousel mode onto it would mean maintaining
+two rendering strategies in one file for no shared benefit. A clean replacement
+is simpler than a variant.
+
+**Alternatives considered**:
+- *Keep `GalleryGrid.tsx`, add a `mode="carousel"` prop.* Rejected: the grid's
+  props (`maxHeight`, item-count-driven CSS templates) and the carousel's
+  (`currentIndex`, loop handlers) share almost nothing; a dual-mode component
+  would carry dead code for whichever mode isn't active.
+- *Derive the frame's ratio from the first item, like the grid did (D12), just
+  applied to one image at a time.* Rejected per the user's explicit direction —
+  the frame must be a fixed square, identical across every gallery regardless
+  of content, mirroring `PendingMediaStrip.tsx`'s tiles (FR-040) rather than
+  the grid's per-gallery-derived shape.
+
+### D19. GIF exclusion is half-shipped already — Giphy-sourced GIFs are blocked server-side, uploaded GIF files are not
+
+**Decision**: Extend `isMultiItemEligible()`'s eligibility check to also reject
+an uploaded animated GIF file, not just a Giphy-sourced reference. Ship this as
+a genuine (small) server-side change, not a no-op.
+
+**Rationale — the finding is more nuanced than first assumed.** Reading the
+actual route/helper code while planning this revision turned up two different
+representations of "a GIF" in this codebase, with two different outcomes
+today:
+
+1. **Giphy-picker GIFs** (`api/src/routes/gifs.js:131`) are stored with
+   `media_type: "giphy"` — a distinct value. `isMultiItemEligible()`'s
+   `MULTI_ITEM_ELIGIBLE_TYPES = new Set(["image"])` already excludes these
+   from any 2+-item gallery, unconditionally, since Stage 1 first shipped.
+   **No change needed here.**
+2. **Directly-uploaded animated GIF files** (`api/src/routes/upload.js`,
+   `image/gif` MIME) are stored with `media_type: "image"` — the *same* type
+   as an ordinary static photo — with only a `meta.animated: true` flag buried
+   inside the `media_meta` JSON blob (parsed at read time in
+   `helpers/media.js`, never at the eligibility-check site). Because
+   `isMultiItemEligible()` only inspects `media_type`, an uploaded animated
+   GIF **currently passes** the multi-item eligibility check exactly like a
+   static image would. Nothing in `useMediaAttachments.ts`'s `addFiles` stops
+   a user from multi-selecting two `.gif` files together either — capacity and
+   MIME-type validation there don't distinguish animated from static images.
+   **A multi-item gallery containing uploaded (not Giphy-sourced) GIFs is
+   creatable today, server included.**
+
+This means the original assumption for this revision ("no backend work
+needed, `isMultiItemEligible` already covers it") was wrong for this second
+case — it was verified against the Giphy path only. The fix: the eligibility
+check must also parse `media_meta` for rows with `media_type === "image"` and
+reject any with `animated: true` when `galleryIds.length > 1`, exactly the
+same shape as the existing `media_type` check, just reading one JSON field
+deeper.
+
+**Consequence for the client-side gate**: `gifPickerBlocked`/`replyGifBlocked`
+in the composers already treat an uploaded animated GIF and a Giphy-picker GIF
+identically via the hook's `isGif` flag (`file.type === 'image/gif'` at
+selection time), so the *client* gate needs the same fix regardless of source
+— add `hasGif` to both blocking conditions, closing the "attach a second GIF"
+gap client-side too, now backed by a server check that actually agrees for
+both GIF sources.
+
+**Alternatives considered**:
+- *Leave uploaded-GIF exclusion as client-only, matching the (corrected)
+  understanding that the data model already "mostly" enforces it.* Rejected —
+  half-enforcement across two GIF sources is exactly the kind of
+  inconsistency this revision exists to close; the constitution's own
+  "backend enforces, frontend gates as secondary guard" principle applies to
+  both.
+- *Normalize uploaded animated GIFs to `media_type: "giphy"` too, so one Set
+  check covers everything.* Rejected — `media_type: "image"` vs `"giphy"`
+  already distinguishes "we have the file" from "we only have a reference,"
+  which matters elsewhere (compression job, storage); repurposing it would be
+  a larger, riskier change than checking one extra JSON field at the
+  eligibility site.
+- *Also correct `contracts/shout-comment-create.md`'s stale "Deliberately NOT
+  enforced server-side" line to say "half enforced."* Superseded by actually
+  finishing the enforcement instead — once both GIF sources are blocked, the
+  line is simply corrected to describe the completed rule (see the contract).
+
+### D20. Stage 2 is dropped; `Lightbox.tsx` never gains multi-item navigation
+
+**Decision**: The previously-planned Stage 2 (extend `Lightbox` with optional
+`items`/`startIndex` props for fullscreen looping navigation) is retired
+outright, not merely deferred. `Lightbox.tsx` keeps its existing single-`src`
+signature permanently within this spec's scope.
+
+**Rationale**: Stage 2's entire value proposition — loop through a gallery
+without dismissing and reopening the viewer — is now delivered by the inline
+carousel itself (FR-042–FR-044), before the reader ever opens anything
+fullscreen. Building a second, fullscreen-specific looping navigation layer on
+top would duplicate that exact capability for a marginal benefit (browsing at
+full size instead of inline), which the existing zoom/pan behavior in
+`Lightbox` already partially covers per item. Dropping it is simpler than
+building it and finding it redundant in production, which is what happened to
+the grid's "+N" badge and first-item-only preview earlier in this feature's
+history.
+
+**Alternatives considered**:
+- *Keep Stage 2, scoped down to "just add the position indicator to
+  `Lightbox`."* Rejected — a position indicator with no navigation to indicate
+  positions *between* is not a coherent feature on its own, and the navigation
+  itself is exactly the redundant part.
+- *Fold Stage 2's `items`/`startIndex` props into `Lightbox` now, unused,
+  for future-proofing.* Rejected as speculative — this project's own
+  conventions (see CLAUDE.md guidance against premature abstraction)
+  disfavor building for a hypothetical future requirement with no current
+  caller.
+
 ## Known debt accepted (not introduced by this feature)
 
 - **Orphaned uploads — narrowed by the 2026-07-30 revision.** Previously: files
@@ -374,4 +508,7 @@ composer diverges, and reconciling them later.
   roughly the same order of magnitude as today's single-media orphan risk, not
   a multiple of it. A reaping job for unreferenced `Media` rows remains the
   correct long-term fix and stays out of scope here.
-- **`media_id` denormalization.** See D1. Removable once Stage 3 is stable.
+- **`media_id` denormalization.** *(Correction 2026-07-31 — see the revision
+  note above: this was never actually shipped. The join tables have been the
+  sole source of truth since Stage 1, so there is no mirror to remove and no
+  debt here after all.)*

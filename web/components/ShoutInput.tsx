@@ -84,10 +84,12 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
   const hasMedia = media.hasMedia || !!detectedYtId;
 
-  // FR-035 — TEMPORARY, Stages 1–2 only. Mixed image+GIF galleries ship in
-  // Stage 3; until then images and GIFs are strictly mutually exclusive.
-  // REMOVE THIS GATE IN STAGE 3 (task T061) together with its twin in ShoutCard.
-  const gifPickerBlocked = media.hasImages || media.hasVideo || media.isFull;
+  // FR-035 — PERMANENT (2026-07-31): galleries are images-only. A GIF picker
+  // stays unavailable once any image or another GIF is already attached (this
+  // caps GIF attachment at exactly one, closing the "stack multiple GIFs" gap
+  // — see research D19), and image attachment stays unavailable once a GIF is
+  // attached. Twin gate lives in ShoutCard's reply composer.
+  const gifPickerBlocked = media.hasImages || media.hasVideo || media.isFull || media.hasGif;
   const imageAttachBlocked = media.hasGif || media.hasVideo || media.isFull;
   const hasPoll = !!pollPayload && pollPayload.options.length > 0;
   const canSubmit = (content.trim() || hasMedia) && (!hasPoll || content.trim()) && !isOverLimit && !isSubmitting && !isUploading;

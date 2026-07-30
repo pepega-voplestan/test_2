@@ -522,6 +522,36 @@ describe("Shouts routes", () => {
       expect(res.status).toBe(400);
     });
 
+    // 2026-07-31 revision (research D19): a Giphy-picker GIF (media_type
+    // "giphy") was always rejected by R5's media_type check. An uploaded
+    // animated GIF file is stored as media_type "image" with its animated-ness
+    // only in media_meta, so it slipped past that same check until this fix.
+    it("rejects an uploaded animated GIF file in a gallery, closing the media_meta gap (R5)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [img] = await makeImages(user.id, 1);
+      const uploadedGif = await createMedia({
+        userId: user.id,
+        mediaType: "image",
+        mediaUrl: "uploads/test/animated.webp",
+        mediaMeta: JSON.stringify({ w: 320, h: 240, size: 2048, mime: "image/gif", animated: true }),
+      });
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "gif", mediaIds: [img, uploadedGif.id] });
+      expect(res.status).toBe(400);
+      expect(await getTestPrisma().shoutMedia.count()).toBe(0);
+    });
+
+    it("still rejects a Giphy-picker GIF (media_type \"giphy\") in a gallery (R5)", async () => {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(user);
+      const [img] = await makeImages(user.id, 1);
+      const giphyGif = await createMedia({ userId: user.id, mediaType: "giphy", mediaUrl: "https://giphy.com/test.gif" });
+
+      const res = await agent.post("/api/v1/shouts").send({ content: "gif", mediaIds: [img, giphyGif.id] });
+      expect(res.status).toBe(400);
+    });
+
     it("rejects duplicate media ids (R6)", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local" });
       const agent = await authenticatedAgent(user);

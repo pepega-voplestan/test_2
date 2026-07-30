@@ -80,7 +80,7 @@ describe('composer parity — gallery submission (FR-006)', () => {
   });
 });
 
-describe('composer parity — FR-035 gate (Stages 1–2 only)', () => {
+describe('composer parity — FR-035 gate, permanent as of 2026-07-31', () => {
   it('both composers gate the GIF picker while images are attached', () => {
     expect(shoutInput).toMatch(/gifPickerBlocked/);
     expect(shoutCard).toMatch(/replyGifBlocked/);
@@ -91,10 +91,20 @@ describe('composer parity — FR-035 gate (Stages 1–2 only)', () => {
     expect(shoutCard).toMatch(/replyImageBlocked/);
   });
 
-  it('both gates are flagged for removal in Stage 3', () => {
-    // Guards against the temporary gate quietly becoming permanent.
-    expect(shoutInput).toMatch(/Stage 3/);
-    expect(shoutCard).toMatch(/Stage 3/);
+  it('both GIF-picker gates also block once a GIF is already attached, not just when an image is (research D19)', () => {
+    // Closes the "stack multiple GIFs" gap: hasGif must be part of the
+    // blocking condition, not only hasImages/hasVideo/isFull.
+    expect(shoutInput).toMatch(/gifPickerBlocked = media\.hasImages \|\| media\.hasVideo \|\| media\.isFull \|\| media\.hasGif/);
+    expect(shoutCard).toMatch(/replyGifBlocked = replyMedia\.hasImages \|\| replyMedia\.hasVideo \|\| replyMedia\.isFull \|\| replyMedia\.hasGif/);
+  });
+
+  it('both gates are documented as permanent, not time-boxed to a stage', () => {
+    // Guards against the gate silently reverting to "temporary" framing —
+    // FR-026 (mixed galleries) is reversed for good, not deferred.
+    expect(shoutInput).toMatch(/PERMANENT/);
+    expect(shoutCard).toMatch(/PERMANENT/);
+    expect(shoutInput).not.toMatch(/REMOVE THIS GATE IN STAGE 3/);
+    expect(shoutCard).not.toMatch(/Remove in Stage 3/);
   });
 });
 
@@ -134,9 +144,10 @@ describe('composer parity — pending-preview & upload-timing revision (2026-07-
   });
 });
 
-describe('gallery rendering (FR-012, FR-031, FR-036)', () => {
-  it('ShoutCard renders GalleryGrid for both shouts and comments', () => {
-    expect(shoutCard).toContain("import GalleryGrid from './GalleryGrid'");
+describe('gallery rendering — single-item carousel (FR-012, FR-031, FR-036, revised 2026-07-31)', () => {
+  it('ShoutCard renders GalleryCarousel (not the retired GalleryGrid) for both shouts and comments', () => {
+    expect(shoutCard).toContain("import GalleryCarousel from './GalleryCarousel'");
+    expect(shoutCard).not.toContain("GalleryGrid");
     expect(shoutCard).toMatch(/shout\.gallery && shout\.gallery\.length > 1/);
     expect(shoutCard).toMatch(/comment\.gallery && comment\.gallery\.length > 1/);
   });
@@ -154,5 +165,12 @@ describe('gallery rendering (FR-012, FR-031, FR-036)', () => {
     expect(shoutCard).toMatch(/onOpen=\{setGalleryIndex\}/);
     expect(shoutCard).toMatch(/galleryIndex !== null && shout\.gallery\?\.\[galleryIndex\]/);
     expect(shoutCard).toMatch(/galleryIndex !== null && comment\.gallery\?\.\[galleryIndex\]/);
+  });
+
+  it('no longer branches on animated/gif for gallery items, since galleries are images-only', () => {
+    // The Lightbox src for a gallery item used to ternary on `.animated && .gif`
+    // — that branch can never fire anymore (FR-035), so it's dead code, removed.
+    expect(shoutCard).not.toMatch(/shout\.gallery\[galleryIndex\]\.animated/);
+    expect(shoutCard).not.toMatch(/comment\.gallery\[galleryIndex\]\.animated/);
   });
 });

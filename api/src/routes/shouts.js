@@ -221,14 +221,14 @@ router.post("/shouts", requireAuth, asyncHandler(async (req, res) => {
     // per existing behavior, anyone) uploaded before the restriction was applied.
     const rows = await prisma.media.findMany({
       where: { id: { in: galleryIds } },
-      select: { id: true, media_type: true },
+      select: { id: true, media_type: true, media_meta: true },
     });
     if (rows.length !== galleryIds.length) {
       return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
     }
     // A single non-gallery attachment (video / giphy / youtube reuse) keeps working
     // exactly as before; only multi-item galleries are restricted to images.
-    if (galleryIds.length > 1 && !rows.every((r) => isMultiItemEligible(r.media_type))) {
+    if (galleryIds.length > 1 && !rows.every((r) => isMultiItemEligible(r.media_type, r.media_meta))) {
       return res.status(400).json({ error: "В галерею можно добавить только изображения" });
     }
 

@@ -38,12 +38,22 @@ Applied in addition to the existing `mediaId: z.string().uuid().optional()`.
 | R2 | `mediaIds.length <= 5` (FR-002, FR-033) | 400 `{ "error": "Можно прикрепить не более 5 файлов" }` |
 | R3 | Gallery MUST NOT be combined with `youtubeUrl` (FR-027) | 400 `{ "error": "Можно прикрепить или изображение, или видео" }` — reuses the existing message |
 | R4 | Every id in `mediaIds` MUST exist in `media` | 400 `{ "error": "Медиа не найдено. Загрузите файл заново" }` — reuses the existing message |
-| R5 | Every referenced media MUST have `media_type = "image"` (I4) | 400, generic Russian error |
+| R5 | When `mediaIds.length > 1`: every referenced media MUST have `media_type = "image"` **and** `media_meta.animated` MUST NOT be `true` (I4) | 400, generic Russian error |
 | R6 | `mediaIds` MUST contain no duplicates | 400, generic Russian error |
 | R7 | Requires text or media, as today | 400 `{ "error": "Нужен текст или медиа" }` |
 
-**Deliberately NOT enforced server-side**: the Stage 1–2 GIF/image exclusivity
-(FR-035). It is a client-only, time-boxed UX gate — see `research.md` D8.
+**R5, corrected 2026-07-31.** This rule previously checked only `media_type`,
+which already excluded Giphy-picker GIFs (`media_type: "giphy"`) from any
+2+-item gallery, but did **not** catch a directly uploaded animated GIF file —
+those are stored as `media_type: "image"` with their animated-ness only inside
+`media_meta`, so they passed this check undetected. R5 now also parses
+`media_meta` and rejects `animated: true` rows the same way, closing that gap
+(see `research.md` D19). The mutual-exclusivity gate in the composer UI
+(FR-035, previously described here as "Stage 1–2... client-only, time-boxed" —
+see `research.md` D8) is **not** what enforces gallery type eligibility; R5 is,
+and always has been for the Giphy-picker case. FR-035's UI gate is a permanent
+secondary guard on top of R5, not a substitute for it, matching the
+constitution's "backend enforces, frontend gates as secondary guard" principle.
 
 ## Interaction with `is_media_allowed` (feature 005)
 

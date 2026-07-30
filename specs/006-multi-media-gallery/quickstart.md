@@ -1,6 +1,6 @@
 # Quickstart: Validating Multi-Media Gallery Attachments
 
-**Feature**: 006-multi-media-gallery | **Date**: 2026-07-25 (revised 2026-07-26, 2026-07-30)
+**Feature**: 006-multi-media-gallery | **Date**: 2026-07-25 (revised 2026-07-26, 2026-07-30, 2026-07-31)
 
 How to run and verify each stage. Stages are independently deployable — validate
 and ship one before starting the next (SC-009).
@@ -46,7 +46,8 @@ Expected new coverage:
 | `api/tests/integration/comments.test.js` | Same rules apply identically to comments (FR-031) |
 | `api/tests/integration/feed.test.js` | `gallery` present with 2+ items, **absent** with 1 (FR-016); `gallery[0]` deep-equals `media` (G1); order stable (G2) |
 | `api/tests/integration/upload.test.js` | Unchanged per-file behavior still passes; restricted user (005) still blocked |
-| `web/tests/unit/` | Capacity gate rejects whole action (FR-033); client-side pre-validation retains valid files (FR-034); GIF gate active (FR-035); Russian plural declensions; grid layout per item count + clamped container ratio (FR-012/FR-014); **(2026-07-30)** no upload call fires before submit; per-item removal (FR-024); pending tile opens Lightbox on its object URL (FR-037); atomic submit blocks all-or-nothing on a failing upload (FR-041); retry reuses already-obtained `mediaId`s without re-uploading (research D16) |
+| `web/tests/unit/` | Capacity gate rejects whole action (FR-033); client-side pre-validation retains valid files (FR-034); GIF gate active and now permanent (FR-035); Russian plural declensions; **(2026-07-30)** no upload call fires before submit; per-item removal (FR-024); pending tile opens Lightbox on its object URL (FR-037); atomic submit blocks all-or-nothing on a failing upload (FR-041); retry reuses already-obtained `mediaId`s without re-uploading (research D16); **(2026-07-31)** carousel paging/looping arithmetic, fixed 1:1-square frame regardless of item ratio (FR-012/FR-014); GIF picker also blocked once one GIF is attached, either source (research D19) |
+| `api/tests/integration/shouts.test.js` / `comments.test.js` | **(2026-07-31)** A 2+-item `mediaIds` array containing an uploaded animated GIF file is rejected (extended R5, research D19) — in addition to the pre-existing Giphy-picker-GIF rejection |
 
 ### Manual
 
@@ -79,24 +80,43 @@ Expected new coverage:
    (FR-041). Restore the connection and click **Try again** → confirm (Network
    tab) that files which already succeeded are **not** re-uploaded, only the
    previously-failing one is retried, and the submission then completes.
-10. Publish a 3-image gallery → feed shows **all three** as a grid: one tall
-    tile left, two stacked right (FR-012). No "+N" badge anywhere.
-11. Click the **third** tile → the existing viewer opens on that image, full
-    size, with zoom and drag-to-dismiss working (FR-036). Dismiss returns to the
-    feed.
-12. Post 2-, 4- and 5-image galleries → layouts match the four arrangements in
-    [contracts/gallery-grid.md](./contracts/gallery-grid.md).
-13. Post a gallery whose **first** image is extreme portrait (e.g. 1:4) → the
-    container is clamped, not four times taller than a normal post (FR-014).
-14. Compare a gallery in a **comment** vs a **shout** → the comment grid is
-    visibly shorter (200px vs 300px cap) and otherwise identical (FR-015/FR-031);
-    confirm the pending `PendingMediaStrip` itself is the **same 80px size in
-    both composers** (FR-040).
+10. Publish a 3-image gallery → feed shows the **first** image in a carousel
+    frame, with arrows on the frame's left/right edges and a position
+    indicator ("1 / 3") at the bottom of the frame. *(Revised 2026-07-31 —
+    supersedes "shows all three as a grid.")*
+11. Navigate forward twice, then once more → the carousel wraps back to the
+    first image (FR-043); navigate backward from the first → wraps to the
+    last. *(Added 2026-07-31 — absorbed from the retired Stage 2.)*
+12. Activate the currently-displayed image → the existing viewer opens on it,
+    full size, with zoom and drag-to-dismiss working (FR-036). Dismiss returns
+    to the feed at the same carousel position.
+13. Post 2-, 4- and 5-image galleries with mixed aspect ratios (some portrait,
+    some landscape, some square) → the frame is the **same fixed 1:1 square**
+    for every one of them, every image is letterboxed to fit whole (never
+    cropped or stretched), and gaps are filled with the page's darkest
+    background — see [contracts/gallery-carousel.md](./contracts/gallery-carousel.md).
+    *(Revised 2026-07-31 — supersedes the "layouts match the four arrangements"
+    and "extreme portrait clamped" checks, which described the retired grid.)*
+14. Compare a gallery in a **comment** vs a **shout** → the comment carousel
+    frame is visibly smaller (200px vs 300px cap) and otherwise identical
+    (FR-015/FR-031); confirm the pending `PendingMediaStrip` itself is the
+    **same 80×80 size in both composers** (FR-040).
 15. **Regression check (SC-006)**: find a pre-existing single-image shout →
-    renders exactly as before, with no grid and no change in size.
+    renders exactly as before, with no carousel controls and no change in size.
 16. Set a user's `is_media_allowed = false` in admin → their submit fails
     entirely with 005's existing message, nothing attaches, nothing posts
     (FR-009).
+17. **(2026-07-31)** With one GIF already attached (either an uploaded `.gif`
+    file or one picked from "Мои GIF"/Giphy search), open the GIF picker
+    again → **unavailable** — a gallery may never contain more than one GIF
+    (research D19). Attach an image instead while a GIF is attached → also
+    unavailable, unchanged from before.
+18. **(2026-07-31)** Attempt to submit a `mediaIds` request containing an
+    uploaded animated `.gif` file alongside another image (e.g. via a modified
+    client, bypassing the composer's own gate) → the server rejects it (R5,
+    extended to check `media_meta.animated`, not just `media_type`) — confirm
+    this in `api/tests/integration/shouts.test.js`/`comments.test.js`, since
+    the composer UI itself should never let a real user reach this state.
 
 ### Deploy gate
 
@@ -107,47 +127,42 @@ Expected new coverage:
       clicked, in a manual network trace
 - [ ] **(2026-07-30)** Failed-submit retry verified to skip already-uploaded
       files (research D16)
+- [ ] **(2026-07-31)** Carousel frame verified fixed-size/letterboxed across a
+      gallery with mixed aspect ratios, at the narrowest supported mobile width
+      (SC-005/SC-010)
+- [ ] **(2026-07-31)** Uploaded-animated-GIF gap in R5 verified closed
+      server-side (research D19), and the client GIF-picker gate verified to
+      block a second GIF of either source
+- [ ] **(2026-07-31)** Second `/docs` correction landed — constitution v2.0.0
+      and `CLAUDE.md` no longer say "images/GIFs"
 
-## Stage 2 — Navigating between items
+## ~~Stage 2 — Navigating between items~~ — RETIRED 2026-07-31
 
-### Manual
+*Retired in full — see `plan.md`'s Stage 2 section and `research.md` D20.*
+Looping navigation, edge-anchored arrows, and the position indicator are all
+now covered by Stage 1's carousel (manual steps 10–12 above); there is no
+separate fullscreen navigation stage left to validate. The regression checks
+below remain relevant to `Lightbox.tsx` in general (they were never actually
+gallery-specific) and are worth keeping as a standing regression list, not
+because Stage 2 still exists:
 
-1. Open a 4-image gallery by clicking its **third** tile → viewer opens on the third item, and inter-item navigation is now available (FR-017).
-2. Navigate forward past the last → wraps to the first (FR-019).
-3. Navigate back from the first → wraps to the last (FR-019).
-4. Position indicator reads `1 / 4` … `4 / 4` (FR-021).
-5. Each image displays **whole, uncropped** (FR-020).
-6. Open a **1-item** gallery → no navigation controls (FR-022).
-7. Dismiss → feed scroll position preserved (FR-023).
-8. Same checks on a **comment** gallery (FR-031).
+- Pinch-zoom, wheel-zoom, double-tap zoom still work.
+- Vertical drag-to-dismiss still works; Escape still closes.
+- At the narrowest supported mobile width, `Lightbox`'s own controls remain
+  reachable and are never overlapped by the image.
 
-### Regression checks (existing Lightbox behavior must not break)
+## Stage 3 — Reorder
 
-9. Pinch-zoom, wheel-zoom, double-tap zoom still work.
-10. **While zoomed, horizontal drag still pans** and does *not* navigate
-    (research D6) — this is the most likely regression in this stage.
-11. Vertical drag-to-dismiss still works; Escape still closes.
-
-### Responsive check
-
-12. At the narrowest supported mobile width, arrows remain on-screen, reachable,
-    and not overlapped by the image (FR-018, SC-005).
-
-## Stage 3 — Reorder and mix
-
-**Scope note (narrowed 2026-07-30)**: per-item removal moved to Stage 1 — see
-its manual step 6 above. This stage now covers only reordering and GIF mixing.
+**Scope note (narrowed 2026-07-30, narrowed again 2026-07-31)**: per-item
+removal moved to Stage 1 — see manual step 6 in that section. GIF-mixing work
+is removed entirely — GIFs are now permanently excluded from galleries (see
+Stage 1's steps 17–18) — so this stage covers only reordering.
 
 ### Manual
 
 1. **Reorder** so the last becomes first → composer reflects it; after publishing
-   that item is the preview (FR-025, FR-007 of US3).
+   that item opens the carousel first (FR-025, FR-007 of US3).
 2. Force a failure during reorder → UI **reverts** (Constitution V).
-3. Attach 2 images **plus a GIF** → all in one gallery (FR-026); GIF gate is gone.
-4. Browse the mixed gallery fullscreen → GIF animates, statics display,
-   navigation unaffected (US3 #5).
-5. Restricted user (005): uploading a **new** GIF is blocked, but re-selecting an
-   **existing** GIF from "Мои GIF" succeeds (FR-009, SC-007).
 
 ## Cross-stage: the 24-hour compression window
 
@@ -164,7 +179,7 @@ Run the job with a shortened window against a published gallery and confirm
 ## Reference
 
 - Read shape: [contracts/gallery-dto.md](./contracts/gallery-dto.md)
-- Inline grid UI: [contracts/gallery-grid.md](./contracts/gallery-grid.md)
+- Inline carousel UI: [contracts/gallery-carousel.md](./contracts/gallery-carousel.md) (replaces the retired [contracts/gallery-grid.md](./contracts/gallery-grid.md))
 - Write rules: [contracts/shout-comment-create.md](./contracts/shout-comment-create.md)
 - Upload flow: [contracts/upload-orchestration.md](./contracts/upload-orchestration.md)
 - Schema and invariants: [data-model.md](./data-model.md)

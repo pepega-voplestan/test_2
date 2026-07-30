@@ -6,7 +6,7 @@ import { useIgnoredUsers } from '../context/IgnoredUsersContext';
 import { useScrollLock } from '../hooks/useScrollLock';
 import EmojiPicker, { GifPickerSelection } from './EmojiPicker';
 import Lightbox from './Lightbox';
-import GalleryGrid from './GalleryGrid';
+import GalleryCarousel from './GalleryCarousel';
 import { useMediaAttachments, SUBMIT_FAILED_MESSAGE } from '../hooks/useMediaAttachments';
 import PendingMediaStrip from './PendingMediaStrip';
 import MentionInput, { MentionInputHandle, effectiveLength, isIOS } from './MentionInput';
@@ -893,7 +893,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {/* Gallery of 2+ items on a comment — identical treatment to shouts (FR-031). */}
           {showMedia && comment.gallery && comment.gallery.length > 1 ? (
-            <GalleryGrid items={comment.gallery} maxHeight={200} onOpen={setGalleryIndex} />
+            <GalleryCarousel items={comment.gallery} maxHeight={200} onOpen={setGalleryIndex} />
           ) : showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
               <img
@@ -910,9 +910,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {galleryIndex !== null && comment.gallery?.[galleryIndex] && (
             <Lightbox
-              src={comment.gallery[galleryIndex].animated && comment.gallery[galleryIndex].gif
-                ? comment.gallery[galleryIndex].gif!
-                : comment.gallery[galleryIndex].full}
+              src={comment.gallery[galleryIndex].full}
               orientation={comment.gallery[galleryIndex].orientation}
               onClose={() => setGalleryIndex(null)}
             />
@@ -1074,8 +1072,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const [isReplyDragging, setIsReplyDragging] = useState(false);
   const replyDragCounterRef = useRef(0);
-  // FR-035 — TEMPORARY, Stages 1–2 only. Remove in Stage 3 (task T061).
-  const replyGifBlocked = replyMedia.hasImages || replyMedia.hasVideo || replyMedia.isFull;
+  // FR-035 — PERMANENT (2026-07-31): galleries are images-only. See the twin
+  // gate in ShoutInput.tsx for the full rationale (research D19).
+  const replyGifBlocked = replyMedia.hasImages || replyMedia.hasVideo || replyMedia.isFull || replyMedia.hasGif;
   const replyImageBlocked = replyMedia.hasGif || replyMedia.hasVideo || replyMedia.isFull;
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const mentionInputRef = useRef<MentionInputHandle>(null);
@@ -1393,12 +1392,11 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
         <EmbedCard key={`embed-${idx}`} embed={embed} />
       ))}
 
-      {/* Gallery of 2+ items: adaptive grid showing every item (feature 006). */}
+      {/* Gallery of 2+ items: single-item carousel (feature 006, 2026-07-31 revision). */}
       {shout.gallery && shout.gallery.length > 1 ? (
-        <GalleryGrid
+        <GalleryCarousel
           items={shout.gallery}
           maxHeight={300}
-          staticOnly={fullHide || isMediaOnlyHidden}
           onOpen={setGalleryIndex}
         />
       ) : shout.media?.type === 'image' && (
@@ -1413,9 +1411,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
       {galleryIndex !== null && shout.gallery?.[galleryIndex] && (
         <Lightbox
-          src={shout.gallery[galleryIndex].animated && shout.gallery[galleryIndex].gif
-            ? shout.gallery[galleryIndex].gif!
-            : shout.gallery[galleryIndex].full}
+          src={shout.gallery[galleryIndex].full}
           orientation={shout.gallery[galleryIndex].orientation}
           onClose={() => setGalleryIndex(null)}
         />

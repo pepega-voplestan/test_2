@@ -125,3 +125,57 @@ Downstream artifacts are now stale and must be regenerated: `plan.md` (composer
 architecture — upload timing moved off the select-time path, pending-item viewer
 wiring), `tasks.md` (Stage 1 composer tasks, the now-narrowed Stage 3 boundary), and
 `contracts/gallery-dto.md` if it describes the upload-then-create request sequence.
+
+### Published-gallery carousel & permanent GIF exclusion (2026-07-31)
+
+Re-validated after further production feedback (Clarifications, Session
+2026-07-31). **Still passing on the first iteration** — no
+[NEEDS CLARIFICATION] markers were needed; both open design points (carousel
+frame sizing, and what happens to the previously-planned Stage 2) were resolved
+directly with the user before writing the spec, and the migration question
+was answered by explaining no schema or data migration is needed at all — this
+is validation logic only, same shape as the existing R1–R6 write-contract rules.
+
+This is the largest single revision to published-gallery behavior so far:
+
+- **FR-012 rewritten, not just revised**: the adaptive grid (itself only five
+  days old in production) is retired entirely in favor of a single-item
+  carousel. FR-014 is rewritten to match — the frame is now a fixed 1:1 square
+  independent of any item's ratio, letterboxed with `th-page`, deliberately
+  mirroring the composer's pending-preview tiles (FR-040) instead of the grid's
+  old "clamped to the first item" approach.
+- **FR-017–FR-023 tombstoned as a block** (following the FR-013 precedent) —
+  Stage 2's separate fullscreen looping viewer is dropped outright, since the
+  new inline carousel already delivers that value; two of the seven turned out
+  to have never been gallery-specific to begin with (FR-020, FR-023 just
+  restated the existing single-image Lightbox's baseline behavior) and needed
+  no replacement at all.
+- **FR-026 tombstoned**: GIF-mixing in galleries (previously Stage 3's other
+  deliverable) is reversed permanently, not deferred. FR-035 is rewritten to be
+  a permanent rule instead of an expiring one, and is strengthened to close a
+  real gap the original wording missed — nothing previously stopped multiple
+  GIFs from stacking into an all-GIF gallery, only cross-type mixing was
+  blocked.
+- **Governance re-opened**: the already-landed constitution amendment (v2.0.0)
+  and `CLAUDE.md` both say "up to 5 images/GIFs" — now inaccurate. A follow-up
+  `/docs`-mediated correction is required before this revision reaches
+  production, tracked in the Governance Note and Dependencies.
+- User Story 2 is retired in place (not deleted) with a pointer to where its
+  value now lives in User Story 1; User Story 3 drops "and mix in GIFs" from
+  its title and loses 4 of its 6 acceptance scenarios, which were entirely
+  about GIF mixing.
+
+Requirements are now FR-001…FR-044, with FR-013, FR-017–FR-023, and FR-026 all
+retained as tombstones — eight retired requirements is the most this spec has
+carried at once, but every one of them is still referenced by number from
+`plan.md`/`tasks.md`/historical Clarifications, so renumbering would silently
+break those references rather than clarify anything.
+
+Downstream artifacts are now stale and must be regenerated: `plan.md` (drop the
+Stage 2 section entirely, rewrite the Stage 1 frontend section for the
+carousel component, revise the Constitution Check for the second `/docs`
+correction), `tasks.md` (retire Phase 4's US2 tasks, rewrite Phase 1b/whatever
+comes next for the carousel, narrow the remaining Stage 3 phase further),
+`contracts/gallery-grid.md` (describes a grid that no longer exists — likely
+needs replacing with a `gallery-carousel.md` contract), and `contracts/
+gallery-dto.md` if it references grid-consumption expectations.
