@@ -94,7 +94,6 @@ model ShoutMedia {
 
   @@id([shout_id, position])
   @@unique([shout_id, media_id])
-  @@index([shout_id], name: "idx_shout_media_shout")
   @@index([media_id], name: "idx_shout_media_media")
   @@map("shout_media")
 }
@@ -110,7 +109,6 @@ model CommentMedia {
 
   @@id([comment_id, position])
   @@unique([comment_id, media_id])
-  @@index([comment_id], name: "idx_comment_media_comment")
   @@index([media_id], name: "idx_comment_media_media")
   @@map("comment_media")
 }

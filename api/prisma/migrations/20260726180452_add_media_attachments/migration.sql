@@ -23,16 +23,10 @@ CREATE TABLE "comment_media" (
 );
 
 -- CreateIndex
-CREATE INDEX "idx_shout_media_shout" ON "shout_media"("shout_id");
-
--- CreateIndex
 CREATE INDEX "idx_shout_media_media" ON "shout_media"("media_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "shout_media_shout_id_media_id_key" ON "shout_media"("shout_id", "media_id");
-
--- CreateIndex
-CREATE INDEX "idx_comment_media_comment" ON "comment_media"("comment_id");
 
 -- CreateIndex
 CREATE INDEX "idx_comment_media_media" ON "comment_media"("media_id");
