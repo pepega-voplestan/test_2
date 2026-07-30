@@ -29,6 +29,15 @@ a production deployment stage.
 > were made obsolete) and Phase 1b (T071–T080) carries the replacement work. Stage 2
 > shrank correspondingly — it no longer unlocks viewing, only removes the
 > dismiss-and-reopen round trip.
+>
+> **Revised again 2026-07-30** after further production feedback on the deployed
+> Stage 1 build. Two composer-side changes, still entirely within Stage 1: (1)
+> per-item removal (FR-024) is pulled forward from Stage 3 into effect now, plus a
+> new bordered/divided pending-preview strip and click-to-`Lightbox` on pending
+> items; (2) upload moves from selection-time to submit-time, atomically (research
+> D14–D17). **Phase 1c (T081–T097)** carries this work. **T052 and T057 are
+> superseded** — per-item removal moved out of Stage 3 into Phase 1c — and Phase 5
+> is retitled/narrowed to reordering only.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -53,9 +62,9 @@ installs.
 
 | Stage | Phases | Gate before next stage |
 |---|---|---|
-| **Stage 1** | Phase 1 + **Phase 1b** + Phase 2 + Phase 3 (US1) | Deployed; constitution amended; single-media regression verified; every attached image visible inline and openable |
+| **Stage 1** | Phase 1 + **Phase 1b** + **Phase 1c** + Phase 2 + Phase 3 (US1) | Deployed; constitution amended; single-media regression verified; every attached image visible inline and openable; pending items individually removable/previewable; upload deferred to submit and atomic |
 | **Stage 2** | Phase 4 (US2) | Deployed; Lightbox zoom/pan regressions verified |
-| **Stage 3** | Phase 5 (US3) + Phase 6 | Deployed; mixed galleries verified |
+| **Stage 3** | Phase 5 (US3, reorder + GIF mixing only) + Phase 6 | Deployed; mixed galleries verified |
 
 Parallelism marked `[P]` below is **within** a phase only.
 
@@ -127,6 +136,70 @@ shorter than the same gallery in a shout.
 - [X] T080 [US1] Verify the single-attachment path is untouched — a 1-item gallery still renders today's single-image markup with no grid (FR-016, FR-032, SC-006)
 
 **Checkpoint**: every attached image is visible inline and openable full size. **Re-deploy Stage 1 and validate before starting Phase 4.**
+
+---
+
+## Phase 1c: Stage 1 revision — pending-preview & upload-timing (US1, P1) — **Stage 1**
+
+**Why**: Further production feedback on the deployed Stage 1 build. Per
+Clarifications Session 2026-07-30: per-item removal (FR-024) is pulled forward
+from Stage 3; a pending tile becomes individually clickable into the existing
+`Lightbox`; the pending-preview area becomes its own bordered/divided
+horizontal-scroll container at a unified 80px size; and — the larger change —
+upload moves from selection-time to submit-time, with submission becoming
+atomic (FR-041).
+
+**Ordering**: numbered 1c for the same reason Phase 1b is numbered 1b — it is
+part of **Stage 1**, not a later stage, and its prerequisites (Phase 2's T014
+hook, Phase 3's T031/T034 composer wiring, Phase 1b's T076/T077 grid + Lightbox
+wiring) are already complete and deployed, so this is the next Stage 1 work and
+can be picked up immediately. It supersedes T052 and T057 from Phase 5 (see
+Notes there).
+
+**Scope boundary**: composer-only. No schema, DTO, or published-gallery display
+change — `GalleryGrid.tsx` and `Lightbox.tsx`'s own code are untouched (Lightbox
+is only ever passed a different kind of `src`, a local object URL instead of a
+server URL — no new prop). No new API endpoint — `POST /upload/media` and the
+create routes are unchanged; only client orchestration timing changes (research
+D14).
+
+**Independent Test**: Attach four images to a shout, remove the second one and
+confirm no network request fires; click a pending tile and confirm the existing
+viewer opens on its local preview; submit successfully and confirm uploads only
+fire at that point, in parallel; then simulate one file failing at submit and
+confirm nothing posts, the failure is named, everything else stays intact, and
+"Try again" succeeds without re-uploading the files that already succeeded.
+Repeat for the comment composer.
+
+### Tests for Phase 1c
+
+> Write first and confirm they FAIL before implementing.
+
+- [X] T081 [P] [US1] Deferred upload in `web/tests/unit/useMediaAttachments.test.ts` — selecting/dropping a file does not call `POST /upload/media`; the pending item exposes only a local object URL until submit (FR-041, research D14)
+- [X] T082 [P] [US1] Per-item removal in `web/tests/unit/useMediaAttachments.test.ts` — removing one pending item removes only that item, leaves the others in their existing relative order, and triggers no network call (FR-024)
+- [X] T083 [P] [US1] Atomic submit success in `web/tests/unit/useMediaAttachments.test.ts` — `submit()` uploads every pending file in parallel and calls the create callback only once every upload has succeeded, passing `mediaIds` in pending order (FR-041, research D15)
+- [X] T084 [P] [US1] Atomic submit failure in `web/tests/unit/useMediaAttachments.test.ts` — if any upload fails, no create callback is invoked, the pending list and composed text are left untouched, and the specific failing file(s) and reason are surfaced (FR-041)
+- [X] T085 [P] [US1] Retry reuse in `web/tests/unit/useMediaAttachments.test.ts` — after a failed submit, calling `submit()` again does not re-upload pending items that already carry a `mediaId` from the prior attempt, only the failed/unattempted ones (research D16)
+- [X] T086 [P] [US1] Container layout in `web/tests/unit/PendingMediaStrip.test.tsx` — bordered container with a divider, single horizontal row, horizontal scroll (not wrap) when items overflow the visible width (FR-038, FR-039)
+- [X] T087 [P] [US1] Sizing in `web/tests/unit/PendingMediaStrip.test.tsx` — every tile renders at 80px max-height regardless of shout/comment context, and the remove control's own size is unchanged from today's shipped size (FR-040)
+- [X] T088 [P] [US1] Tile activation in `web/tests/unit/PendingMediaStrip.test.tsx` — activating a tile opens `Lightbox` with that item's local object URL as `src`, with no inter-item navigation (FR-037)
+- [X] T089 [P] [US1] Composer parity in `web/tests/unit/ShoutInput.test.tsx` and `web/tests/unit/ShoutCardReply.test.tsx` — `PendingMediaStrip`, per-item removal, deferred upload and atomic submit/retry behave identically in both composers (FR-031)
+
+### Implementation for Phase 1c
+
+- [X] T090 [US1] Rework `web/hooks/useMediaAttachments.ts` — hold each pending item as `{ id, file, objectUrl, mediaId?: string }`; remove the per-file `POST /upload/media` call from the selection/drop path (client-side type/size pre-validation stays at selection time, FR-034); add `removeItem(id)` as a pure state mutation with no network call (FR-024)
+- [X] T091 [US1] Add `submit()` orchestration to `web/hooks/useMediaAttachments.ts` — upload every pending item without a `mediaId` yet, in parallel (research D15); invoke the caller's create callback only if every upload succeeds, passing `mediaIds` in pending order; on any failure, make no create call, surface a per-file error, and leave the pending list intact for retry (FR-041)
+- [X] T092 [US1] Ensure `submit()` reuses previously-obtained `mediaId`s on retry in `web/hooks/useMediaAttachments.ts` — a pending item that already succeeded in a prior failed attempt must not be re-uploaded (research D16)
+- [X] T093 [US1] Create `web/components/PendingMediaStrip.tsx` per `contracts/upload-orchestration.md` — bordered container with a thin divider, single horizontal row, horizontal scroll on overflow (FR-038/FR-039); 80px max-height tiles unified across both composer contexts (FR-040); per-item remove control at its existing visual size (FR-024); tile click opens the existing `Lightbox` on the item's local `objectUrl` (FR-037)
+- [X] T094 [US1] Replace the ad hoc pending-preview markup in `web/components/ShoutInput.tsx` with `PendingMediaStrip`, wired to the hook's `removeItem`/`submit` (FR-024, FR-037, FR-038–FR-040)
+- [X] T095 [US1] Replace the ad hoc pending-preview markup in the reply composer inside `web/components/ShoutCard.tsx` with `PendingMediaStrip`, identically to T094 (FR-031)
+- [X] T096 [US1] Add a clear Russian-language atomic-submit-failure message and a "Try again" action to both `web/components/ShoutInput.tsx` and the reply composer in `web/components/ShoutCard.tsx`, naming the specific failing file(s) and triggering `submit()` again on retry (FR-041)
+- [X] T097 [US1] Add an assertion in `web/tests/unit/useMediaAttachments.test.ts` that a permission-revoked (`is_media_allowed = false`) upload attempted during `submit()` blocks the entire submission — no partial post — matching FR-009's 2026-07-30 wording
+
+**Checkpoint**: pending items are individually removable and individually
+previewable; no upload occurs before submit; a failing submit posts nothing and
+offers a retry that never re-uploads already-succeeded files. **Re-deploy Stage
+1 and validate before starting Phase 4.**
 
 ---
 
@@ -231,28 +304,31 @@ trip. `Lightbox.tsx` is untouched until this phase.
 
 ---
 
-## Phase 5: User Story 3 - Curate the gallery before posting, and mix in GIFs (Priority: P3) — **Stage 3**
+## Phase 5: User Story 3 - Reorder the gallery before posting, and mix in GIFs (Priority: P3) — **Stage 3**
 
-**Goal**: Reorder/remove while composing; GIFs mixable with images. Both composers.
+**Scope narrowed 2026-07-30**: per-item removal (FR-024) moved to Phase 1c —
+see T082/T090 there. This phase now covers only reordering and GIF mixing.
 
-**Independent Test**: Attach four images, remove the second, move the last to the front, add a GIF, publish, and confirm the gallery contains exactly the intended items in the intended order — verified in both the shout and comment composers.
+**Goal**: Reorder while composing; GIFs mixable with images. Both composers.
+
+**Independent Test**: Attach four images, move the last to the front, add a GIF, publish, and confirm the gallery contains exactly the intended items in the intended order — verified in both the shout and comment composers.
 
 **Depends on**: Stage 2 deployed and validated in production.
 
 ### Tests for User Story 3
 
-- [ ] T052 [P] [US3] Removal behavior in `web/tests/unit/useMediaAttachments.test.ts` — removing one pending item leaves the others attached in their existing relative order (FR-024)
+- [ ] ~~T052 [P] [US3] Removal behavior in `web/tests/unit/useMediaAttachments.test.ts`~~ — **SUPERSEDED 2026-07-30 by T082**, before ever being started. Per-item removal moved out of Stage 3 into Phase 1c.
 - [ ] T053 [P] [US3] Reordering in `web/tests/unit/useMediaAttachments.test.ts` — the reordered first item becomes the published preview (FR-025)
-- [ ] T054 [P] [US3] Rollback in `web/tests/unit/useMediaAttachments.test.ts` — a failed remove or reorder reverts the pending list to its prior state (Constitution Principle V)
+- [ ] T054 [P] [US3] Rollback in `web/tests/unit/useMediaAttachments.test.ts` — a failed reorder reverts the pending list to its prior state (Constitution Principle V)
 - [ ] T055 [P] [US3] Mixed galleries in `api/tests/integration/shouts.test.js` — an image+GIF `mediaIds` array is accepted (FR-026)
 - [ ] T056 [P] [US3] Restriction parity in `api/tests/integration/gifs.test.js` — a user with `is_media_allowed = false` is blocked from uploading a **new** GIF into a gallery but may still re-select an **existing** one from "Мои GIF" (FR-009, SC-007)
 
 ### Implementation for User Story 3
 
-- [ ] T057 [US3] Add per-item removal to `web/hooks/useMediaAttachments.ts`, available to both composers (FR-024)
+- [ ] ~~T057 [US3] Add per-item removal to `web/hooks/useMediaAttachments.ts`~~ — **SUPERSEDED 2026-07-30 by T090**, before ever being started. Implemented in Phase 1c instead, available to both composers from Stage 1 onward.
 - [ ] T058 [US3] Add reordering of pending items to `web/hooks/useMediaAttachments.ts`, with the first item driving the preview (FR-025)
-- [ ] T059 [US3] Make remove and reorder optimistic with guaranteed rollback on failure in `web/hooks/useMediaAttachments.ts` (Constitution Principle V)
-- [ ] T060 [US3] Add the remove/reorder UI affordances to both `web/components/ShoutInput.tsx` and the reply composer in `web/components/ShoutCard.tsx` (FR-024, FR-025, FR-031)
+- [ ] T059 [US3] Make reorder optimistic with guaranteed rollback on failure in `web/hooks/useMediaAttachments.ts` (Constitution Principle V)
+- [ ] T060 [US3] Add the reorder UI affordance to both `web/components/ShoutInput.tsx`'s and the reply composer's `PendingMediaStrip` usage in `web/components/ShoutCard.tsx` (FR-025, FR-031) — remove is already available from Phase 1c
 - [ ] T061 [US3] Remove the FR-035 gate from `web/components/ShoutInput.tsx`, `web/components/ShoutCard.tsx` and `web/components/EmojiPicker.tsx`, enabling free image+GIF mixing (FR-026 takes effect, FR-035 expires)
 - [ ] T062 [US3] Allow selecting a GIF into an existing gallery in `web/components/GifPicker.tsx`, appending rather than replacing
 - [ ] T063 [US3] Verify animated GIF items animate correctly inside mixed galleries in both `web/components/GalleryGrid.tsx` and `web/components/Lightbox.tsx` (US3 acceptance scenario 5)
@@ -283,8 +359,13 @@ trip. `Lightbox.tsx` is untouched until this phase.
 - **Phase 1b (US1 revision)**: despite its number, depends on Phases 2 and 3 (both complete). Presentation-only; touches
   `GalleryGrid.tsx` (new) and the two call sites in `ShoutCard.tsx`. Nothing in
   Phases 1–2 needs revisiting, and no redeploy of the API is required.
-- **Phase 4 (US2)**: depends on Phase **1b** being deployed to production, not
-  merely merged (revised — Stage 1 is not complete until the grid ships)
+- **Phase 1c (US1 revision)**: despite its number, depends on Phase 2's T014 hook
+  and Phase 3's T031/T034 composer wiring (both complete). Composer-only; no API
+  redeploy required — only the client orchestration in `useMediaAttachments.ts`
+  and the new `PendingMediaStrip.tsx` change.
+- **Phase 4 (US2)**: depends on Phase **1c** being deployed to production, not
+  merely merged (revised again — Stage 1 is not complete until the pending-preview
+  and upload-timing revision ships)
 - **Phase 5 (US3)**: depends on Phase 4 **being deployed to production**
 - **Phase 6 (Polish)**: depends on Phase 5
 
@@ -301,16 +382,19 @@ US3 removes the FR-035 gate that US1 installs.
 - `api/src/helpers/gallery.js` (T006) must exist before T027/T028
 - `web/utils/plural.ts` (T012) must exist before T014
 - `web/hooks/useMediaAttachments.ts` (T014) must exist before T031 and T034
+- `web/hooks/useMediaAttachments.ts`'s Phase 1c rework (T090–T092) must exist before `PendingMediaStrip.tsx` (T093) and its two call sites (T094/T095)
 
 ### Critical Path
 
 ```text
 T001 → T004 → T005 → T006 → T009 → T014 → T027 → T031 → T034 → T035 → T037
          (T002/T003 gate the deploy, not the code)
-         └──────────── Stage 1 deploy ────────────┘
-                              → T043 → T045 → T049 → T050
-                              └──── Stage 2 deploy ────┘
-                                          → T057 → T059 → T061
+         └──────────── Stage 1 (initial) deploy ────────────┘
+                              → T090 → T091 → T093 → T094 → T095
+                              └──── Stage 1 (1c revision) deploy ────┘
+                                          → T043 → T045 → T049 → T050
+                                          └──── Stage 2 deploy ────┘
+                                                      → T058 → T059 → T061
 ```
 
 ### Parallel Opportunities
@@ -319,8 +403,10 @@ T001 → T004 → T005 → T006 → T009 → T014 → T027 → T031 → T034 →
 - **Phase 2**: T007, T008, T010, T011, T012, T013 are independent files → run together (T004→T005→T006 and T012→T014 stay serial)
 - **Phase 3 tests**: T015–T026 are all `[P]` → write the entire test suite in one pass
 - **Phase 3 implementation**: T030 (superseded) was `[P]`; the `ShoutInput.tsx` chain (T031–T033) and the `ShoutCard.tsx` chain (T034–T037) are each internally serial but **can run in parallel with each other**, since the shared hook removes the coupling
+- **Phase 1c tests**: T081–T089 are all `[P]` → write the entire test suite in one pass
+- **Phase 1c implementation**: T090–T092 all touch `useMediaAttachments.ts` and MUST stay serial; T093 (`PendingMediaStrip.tsx`) can start once T090's shape is settled; T094/T095 (the two composer call sites) **can run in parallel with each other** once T093 exists, same reasoning as Phase 3
 - **Phase 4**: T041/T042 `[P]`; T043–T049 all touch `Lightbox.tsx` and MUST stay serial
-- **Phase 5**: T052–T056 `[P]`; T057–T059 all touch the hook and MUST stay serial
+- **Phase 5**: T053–T056 `[P]`; T058–T059 all touch the hook and MUST stay serial
 - **Phase 6**: T064, T065, T066 `[P]`
 
 ---
@@ -346,17 +432,34 @@ Task: "Composer parity in ShoutInput.test.tsx and ShoutCardReply.test.tsx"
 > Note: tests run **sequentially** at execution time (Constitution: Test
 > Isolation). The parallelism above is about authoring them, not running them.
 
+## Parallel Example: Phase 1c tests
+
+```bash
+# All nine Phase 1c test tasks touch two suites — write them together:
+Task: "Deferred upload in web/tests/unit/useMediaAttachments.test.ts"
+Task: "Per-item removal in web/tests/unit/useMediaAttachments.test.ts"
+Task: "Atomic submit success in web/tests/unit/useMediaAttachments.test.ts"
+Task: "Atomic submit failure in web/tests/unit/useMediaAttachments.test.ts"
+Task: "Retry reuse of already-obtained mediaIds in web/tests/unit/useMediaAttachments.test.ts"
+Task: "Container layout in web/tests/unit/PendingMediaStrip.test.tsx"
+Task: "Sizing in web/tests/unit/PendingMediaStrip.test.tsx"
+Task: "Tile activation in web/tests/unit/PendingMediaStrip.test.tsx"
+Task: "Composer parity in ShoutInput.test.tsx and ShoutCardReply.test.tsx"
+```
+
 ---
 
 ## Implementation Strategy
 
-### MVP scope — Stage 1 (Phases 1, 1b, 2, 3 — T001–T040 and T071–T080)
+### MVP scope — Stage 1 (Phases 1, 1b, 1c, 2, 3 — T001–T040, T071–T080, T081–T097)
 
 1. Phase 1: baseline, plus the constitution amendment and `/docs` update that gate the deploy
 2. Phase 2: schema, migration, gallery helper, DTO, worker fix, **shared attachment hook**
 3. Phase 3: create routes + SSE DTO + both composers + preview UI
-4. **STOP and VALIDATE**: run `quickstart.md` Stage 1 checks, especially the single-media regression (SC-006) and comment-composer parity (FR-031)
-5. **Deploy to production** and let real users exercise it
+4. Phase 1b: adaptive grid, every published item viewable
+5. Phase 1c: deferred/atomic upload, per-item removal, pending-preview strip
+6. **STOP and VALIDATE**: run `quickstart.md` Stage 1 checks, especially the single-media regression (SC-006), comment-composer parity (FR-031), and the 2026-07-30 network-trace checks (no upload before submit; retry skips already-uploaded files)
+7. **Deploy to production** and let real users exercise it
 
 This alone delivers the feature's core value: users can publish multi-image
 shouts **and comments**, and readers can see that a gallery exists.
@@ -364,9 +467,11 @@ shouts **and comments**, and readers can see that a gallery exists.
 ### Incremental delivery
 
 - **Stage 1** (T001–T040) → deployed 2026-07-25 → validation exposed the
-  viewability defect → **Stage 1 revision** (T071–T080) → re-deploy → validate
+  viewability defect → **Stage 1 revision** (T071–T080) → re-deploy → validate →
+  further feedback exposed the composer-timing/removal papercuts →
+  **Stage 1 revision 2** (T081–T097) → re-deploy → validate
 - **Stage 2** (T041–T051) → deploy → validate, with special attention to zoom/pan regressions
-- **Stage 3** (T052–T063) + polish (T064–T070) → deploy → validate mixed galleries
+- **Stage 3** (T053, T054, T055, T056, T058–T063) + polish (T064–T070) → deploy → validate mixed galleries
 
 ### Team strategy
 

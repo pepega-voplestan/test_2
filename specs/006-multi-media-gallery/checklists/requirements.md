@@ -98,3 +98,30 @@ The spec's Governance Note records that this feature supersedes the
 constitution's "Single media per post/comment" Domain Constraint, which requires
 a constitution amendment rather than a plan-level deviation. Tracked in the spec
 under Dependencies; carry it into `/speckit-plan`.
+
+### Composer preview & upload-timing revision (2026-07-30)
+
+Re-validated after production feedback on the deployed Stage 1 build (Clarifications,
+Session 2026-07-30). **Still passing on the first iteration** — no
+[NEEDS CLARIFICATION] markers were needed; all open questions raised during scoping
+had reasonable defaults (documented as Assumptions) and were resolved directly with
+the user rather than left as markers, per the "maximum 3, only when no reasonable
+default exists" guidance — none of the three candidate open points (retry scope,
+upload concurrency, single- vs two-call upload contract) met that bar: retry scope
+had an unambiguous default (whole batch, since nothing partially uploaded exists to
+reconcile), and upload concurrency / API contract shape are implementation choices
+correctly deferred to `/speckit-plan`, not spec-level ambiguities.
+
+The change pulls FR-024 (per-item removal while composing) forward out of Stage 3
+into immediate effect, adds pending-item fullscreen preview (FR-037) and container/
+sizing requirements (FR-038–FR-040), and reverses upload timing from
+upload-on-select to upload-on-submit with atomic all-or-nothing semantics (FR-041).
+FR-009 and FR-034 are reworded/narrowed accordingly, and User Story 3 is retitled and
+narrowed to reordering + GIF mixing only, since removal no longer belongs to it.
+
+Requirements are now FR-001…FR-041 with FR-013 still retained as a tombstone.
+
+Downstream artifacts are now stale and must be regenerated: `plan.md` (composer
+architecture — upload timing moved off the select-time path, pending-item viewer
+wiring), `tasks.md` (Stage 1 composer tasks, the now-narrowed Stage 3 boundary), and
+`contracts/gallery-dto.md` if it describes the upload-then-create request sequence.

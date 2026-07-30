@@ -7,7 +7,8 @@ import { useScrollLock } from '../hooks/useScrollLock';
 import EmojiPicker, { GifPickerSelection } from './EmojiPicker';
 import Lightbox from './Lightbox';
 import GalleryGrid from './GalleryGrid';
-import { useMediaAttachments } from '../hooks/useMediaAttachments';
+import { useMediaAttachments, SUBMIT_FAILED_MESSAGE } from '../hooks/useMediaAttachments';
+import PendingMediaStrip from './PendingMediaStrip';
 import MentionInput, { MentionInputHandle, effectiveLength, isIOS } from './MentionInput';
 import PollBlock from './PollBlock';
 
@@ -1069,7 +1070,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   // lockstep (FR-031, research D9). Before feature 006 this composer had its own
   // duplicated upload logic and no drag-and-drop at all.
   const replyMedia = useMediaAttachments({ mediaAllowed: user?.mediaAllowed, logPrefix: 'ShoutCardReply' });
-  const replyMediaId = replyMedia.items.length > 0 ? replyMedia.items[0].mediaId : null;
   const isReplyUploading = replyMedia.isUploading;
   const [replyDetectedYtId, setReplyDetectedYtId] = useState<string | null>(null);
   const [isReplyDragging, setIsReplyDragging] = useState(false);
@@ -1108,7 +1108,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const commentCount = shout.comments ? shout.comments.length : 0;
   const replyCharCount = effectiveLength(replyContent, NEWLINE_CHAR_COST);
   const isReplyOverLimit = replyCharCount > COMMENT_MAX_LENGTH;
-  const replyHasMedia = !!replyMediaId || !!replyDetectedYtId;
+  const replyHasMedia = replyMedia.hasMedia || !!replyDetectedYtId;
   const canSubmitReply = (replyContent.trim() || replyHasMedia) && !isReplyOverLimit && !isSubmittingReply && !isReplyUploading;
   const isOwner = user && shout.user && user.id === shout.user.id;
 
@@ -1156,9 +1156,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const isMediaOnlyHidden = isSpoilerHidden || isNsfwHidden;
 
   useEffect(() => {
-    if (replyMediaId) { setReplyDetectedYtId(null); return; }
+    if (replyMedia.hasMedia) { setReplyDetectedYtId(null); return; }
     setReplyDetectedYtId(detectYouTubeId(replyContent));
-  }, [replyContent, replyMediaId]);
+  }, [replyContent, replyMedia.hasMedia]);
 
   const toggleThread = () => {
     if (onThreadToggle) onThreadToggle(shout.id);
@@ -1246,8 +1246,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (files.length > 0) await replyMedia.addFiles(files);
   };
 
-  // Stage 1 is append-only; per-item removal lands in Stage 3 (FR-024).
-  const removeReplyMedia = () => { replyMedia.clear(); };
+  // Per-item removal (FR-024, pulled forward from Stage 3 on 2026-07-30).
+  const removeReplyMediaItem = (localId: string) => { replyMedia.removeItem(localId); };
 
   const handleCommentGifSelect = async (gif: GifPickerSelection) => {
     if (user?.mediaAllowed === false) { setReplyError('Вам запрещено прикреплять медиафайлы'); return; }
@@ -1275,9 +1275,18 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (!canSubmitReply || !user) return;
     setIsSubmittingReply(true); setReplyError(null);
     try {
+      // Upload deferred from selection to now (FR-041, research D14). Atomic:
+      // `null` means at least one file failed — nothing is posted, and
+      // replyMedia.error/replyMedia.failures already show what went wrong so
+      // the user can hit "Отправить" again (research D16: no re-upload of
+      // whatever already succeeded).
+      const uploadResult = await replyMedia.submit();
+      if (!uploadResult) return; // finally below still resets isSubmittingReply
+      const { mediaIds } = uploadResult;
+
       const body: Record<string, unknown> = { content: replyContent.trim() };
-      if (replyMedia.items.length > 1) body.mediaIds = replyMedia.mediaIds;
-      else if (replyMediaId) body.mediaId = replyMediaId;
+      if (mediaIds.length > 1) body.mediaIds = mediaIds;
+      else if (mediaIds.length === 1) body.mediaId = mediaIds[0];
       else if (replyDetectedYtId) { const m = replyContent.match(/https?:\/\/[^\s]+/); if (m) body.youtubeUrl = m[0]; }
       if (replyToId) body.replyToId = replyToId;
       const res = await fetch(`/api/v1/shouts/${shout.id}/replies`, {
@@ -1822,7 +1831,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                           <EmojiPicker size="sm" onSelect={insertEmoji} onSelectGif={user?.mediaAllowed !== false && !replyDetectedYtId && !replyGifBlocked ? handleCommentGifSelect : undefined} />
                           <button type="button" onClick={() => replyFileInputRef.current?.click()}
                             disabled={isReplyUploading || replyImageBlocked || user?.mediaAllowed === false}
-                            className={`p-0.5 transition-colors ${replyMediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
+                            className={`p-0.5 transition-colors ${replyMedia.hasMedia ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
                             title={user?.mediaAllowed === false ? 'Вам запрещено прикреплять медиафайлы' : replyMedia.isFull ? 'Достигнут лимит в 5 файлов' : replyMedia.hasGif ? 'GIF нельзя совмещать с изображениями' : 'Прикрепить изображения (или перетащите)'}>
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
@@ -1848,21 +1857,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                         </button>
                       </div>
                       {replyMedia.items.length > 0 && (
-                        <div className="relative inline-block mt-1">
-                          <div className="flex gap-1.5 flex-wrap">
-                            {replyMedia.items.map((it: typeof replyMedia.items[number]) => (
-                              it.isVideo ? (
-                                <video key={it.mediaId} src={it.previewUrl} className="max-h-24 rounded border border-th-border" muted preload="metadata" />
-                              ) : (
-                                <img key={it.mediaId} src={it.previewUrl} alt="preview" className="max-h-24 rounded border border-th-border" />
-                              )
-                            ))}
-                          </div>
-                          {isReplyUploading && <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center"><div className="w-4 h-4 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" /></div>}
-                          {!isReplyUploading && <button type="button" onClick={removeReplyMedia} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-[10px]">X</button>}
+                        <div className="relative mt-1">
+                          {isReplyUploading && (
+                            <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center z-10">
+                              <div className="w-4 h-4 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" />
+                            </div>
+                          )}
+                          <PendingMediaStrip items={replyMedia.items} onRemove={removeReplyMediaItem} disabled={isReplyUploading} />
                         </div>
                       )}
-                      {!replyMediaId && replyDetectedYtId && (
+                      {!replyMedia.hasMedia && replyDetectedYtId && (
                         <div className="flex items-center gap-2 mt-1 bg-th-inset/50 rounded p-1.5 border border-th-border-2">
                           <img src={`https://img.youtube.com/vi/${replyDetectedYtId}/default.jpg`} alt="YouTube" className="w-14 h-10 rounded object-cover shrink-0" />
                           <div className="text-[10px] text-th-text-3">YouTube видео</div>
@@ -1874,6 +1878,16 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                {replyMedia.failures.length > 0 && (
                  <div className="mt-1 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                    {replyMedia.failures.map((f: typeof replyMedia.failures[number]) => (<div key={f.name}>{f.name}: {f.message}</div>))}
+                   {replyMedia.error === SUBMIT_FAILED_MESSAGE && (
+                     <button
+                       type="button"
+                       onClick={submitReply}
+                       disabled={isSubmittingReply || isReplyUploading}
+                       className="mt-1 text-[#0087ff] hover:text-blue-400 font-semibold disabled:opacity-50"
+                     >
+                       Попробовать снова
+                     </button>
+                   )}
                  </div>
                )}
              </div>

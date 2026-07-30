@@ -4,6 +4,8 @@
 
 **Created**: 2026-07-25
 
+**Last Amended**: 2026-07-30
+
 **Status**: Draft
 
 **Input**: User description: "Multi-media gallery attachments for shouts and comments: extend the current single-media-per-post/comment limit (a non-negotiable being deliberately superseded by this feature) to allow attaching up to 5 media items to a single shout or comment, images and GIFs freely mixed within the same gallery. Video is explicitly out of scope and keeps today's existing single-attachment path, untouched by this feature. Adding a 2nd file automatically converts the attachment into a gallery — there is no separate 'create gallery' action, it's an implicit resolve. Multi-upload works both via multi-select on the existing upload button and via multi-file drag-and-drop. In the feed/comment view, only the first item is shown as the preview, cropped/laid out to that first item's aspect ratio (Instagram-style uniform crop for any additional items in the same preview), with a Discord-style UI element indicating additional attached items exist — not an inline strip of all items. Clicking opens a fullscreen viewer with left/right navigation arrows fixed to the screen edges regardless of viewport size, letting the user cycle through the whole gallery; navigation loops (swiping past the last item wraps to the first, and vice versa). Applies identically to shouts and comments. Once a shout/comment is posted, its gallery contents are permanently fixed — there is no edit-time pathway to add, remove, or reorder attached media after publishing, consistent with the existing text-only edit behavior. Must reuse the exact same upload validation, size limits, rate limiting, and the existing per-user is_media_allowed restriction as today's single-media path, including the existing 24-hour post-upload compression job — all generalized from 1 item to N. Deliver as one feature branch/spec, but in 3 sequential stages, each deployed to production for real user testing before the next starts: Stage 1: basic multi-image upload (images only, no GIFs), append-only while composing — no reordering or removing individual items before submit (clearing/restarting the whole selection is the only way to change it); inline preview per the layout above; no fullscreen swipe yet. Stage 2: fullscreen swipeable/looping viewer to cycle through an attached gallery; composing is still append-only as in Stage 1. Stage 3: polish pass, enable GIFs in galleries (mixed image+GIF), and add the ability to reorder and remove individual items while composing, before submitting."
@@ -13,7 +15,7 @@
 ### Session 2026-07-25
 
 - Q: When a single multi-select or drag-and-drop action contains more files than the remaining capacity (e.g. 8 files against a 5-item limit), does the system attach what fits or reject the action? → A: Reject the entire action — nothing is attached, the existing pending selection is left untouched, and the limit is explained in Russian. Rationale: capacity is knowable from the file count *before* any upload begins, so there is no partial work to preserve, and this avoids needing a deterministic "first five" rule for drag-and-drop, where operating-system file ordering is not reliably predictable.
-- Q: If one file within a batch fails (unsupported type, oversized, or a transient storage error), what happens to the rest of the batch? → A: Keep the successfully processed items attached and report which items failed and why. Rationale: unlike the over-limit case, failures here surface mid-flight after real work has been done on the other items; discarding good uploads because of one bad file is needless loss. This is deliberately the opposite resolution from the over-limit question above, and the two are not in conflict — the distinction is whether the problem is detectable up front (over-limit: yes, reject wholesale) or only during processing (partial failure: no, preserve what succeeded).
+- Q: If one file within a batch fails (unsupported type, oversized, or a transient storage error), what happens to the rest of the batch? → A: Keep the successfully processed items attached and report which items failed and why. Rationale: unlike the over-limit case, failures here surface mid-flight after real work has been done on the other items; discarding good uploads because of one bad file is needless loss. This is deliberately the opposite resolution from the over-limit question above, and the two are not in conflict — the distinction is whether the problem is detectable up front (over-limit: yes, reject wholesale) or only during processing (partial failure: no, preserve what succeeded). *(Narrowed 2026-07-30 — see Session 2026-07-30: this now applies only to client-side pre-validation failures, since uploads no longer happen mid-selection. See FR-034, FR-041.)*
 - Q: During Stages 1 and 2 — each of which runs in production for a period before mixed image+GIF galleries ship in Stage 3 — what happens when a user with images already attached opens the GIF picker? → A: Strict mutual exclusivity from the first image: the GIF picker is unavailable whenever **one or more** images are attached, and image attachment is unavailable whenever a GIF is attached. This is deliberately stricter than today's behavior, which permits a GIF to replace a single attached image; that replace pathway is withdrawn for the duration of Stages 1–2 and the gate is lifted entirely in Stage 3 when FR-026 takes effect.
 
 ### Session 2026-07-26 — Stage 1 preview redesign (post-deployment feedback)
@@ -32,9 +34,21 @@ The defect: FR-012 showed only the first item inline and the fullscreen viewer w
 
 Raised by `/speckit-analyze` against the completed plan and tasks, and resolved by the user.
 
-- Q: FR-009 originally required that a restricted user's submission be rejected "including its text, with no partial save". But media is uploaded *before* the shout is created, so in practice every upload simply fails and the user remains able to publish text — the submission is never "rejected" as a unit. Which behavior is correct? → A: The architectural behavior is correct and FR-009's wording was wrong. FR-009 is reworded to describe upload-time rejection: no new media can ever be attached by a restricted user, and text-only publishing stays available. This matches how single-media already behaves today, so no new enforcement logic is introduced. The stricter reading would have required a create-route rule with no real enforcement value, since a client could simply omit any signal that an upload had failed.
+- Q: FR-009 originally required that a restricted user's submission be rejected "including its text, with no partial save". But media is uploaded *before* the shout is created, so in practice every upload simply fails and the user remains able to publish text — the submission is never "rejected" as a unit. Which behavior is correct? → A: The architectural behavior is correct and FR-009's wording was wrong. FR-009 is reworded to describe upload-time rejection: no new media can ever be attached by a restricted user, and text-only publishing stays available. This matches how single-media already behaves today, so no new enforcement logic is introduced. The stricter reading would have required a create-route rule with no real enforcement value, since a client could simply omit any signal that an upload had failed. *(Superseded 2026-07-30 — see Session 2026-07-30: upload no longer precedes creation, so this reasoning no longer holds. FR-009 is reworded again.)*
 - Q: FR-014 mandated uniform cropping of "any other item rendered within that same preview area", but FR-012 renders only the first item inline, leaving that clause without a referent. → A: The clause is vestigial, from the earlier multi-tile preview design. FR-014 is trimmed to the aspect-ratio rule that actually applies. See FR-014.
 - Q: FR-013 says the indicator communicates "how many" without specifying whether the number is the total item count or the count of additional items. → A: It is the number of **additional** items — a 3-image gallery shows "+2". See FR-013.
+
+### Session 2026-07-30 — Composer preview & upload-timing revision (post-Stage-1 production feedback)
+
+Raised by the user after exercising the deployed Stage 1 build in production. Scope: the *composing* experience only (the pending-attachment preview shown before a shout/comment is submitted) and the timing of the upload itself. Nothing about published-gallery display (FR-012–FR-023) changes. Applies identically to the shout composer and the comment/reply composer (FR-031).
+
+- Q: Stage 1 shipped composing as strictly append-only, with per-item removal explicitly deferred to Stage 3 (FR-024). Given production feedback that this is a real papercut, should per-item removal be pulled forward ahead of Stage 3? → A: Yes, per-item removal takes effect now. FR-024 is relocated out of the Stage 3 grouping into immediate effect. Reordering (FR-025) is explicitly **not** pulled forward and remains Stage 3 scope — this is a narrower pull-forward than "all of Stage 3's composing work," specifically because removal alone was the reported pain point and reordering has no equivalent complaint on record.
+- Q: Should a pending (not-yet-uploaded) preview tile be clickable? → A: Yes — clicking a pending tile opens the same fullscreen viewer already used for published items (Lightbox), pointed at that item's local, not-yet-uploaded preview instead of a server-hosted URL. No inter-item cycling is required here (that remains Stage 2 scope for *published* galleries) — each pending tile opens independently on itself only.
+- Q: How should the pending-preview area be sized and laid out? → A: One unified size for both composers — 80px max-height (half of the previously shipped 160px for shouts and 96px for comments) — inside its own container: a bordered box with a thin divider in the Discord idiom, arranged as a single horizontal row that scrolls horizontally rather than wrapping when more items are attached than fit in the visible width. The per-item remove (X) button keeps its existing visual size rather than shrinking with the smaller tiles, so it stays clearly tappable.
+- Q: Should file upload continue to happen immediately on selection/drop (today's behavior), or move to submit-time? → A: Move to submit-time. A selected/dropped file is held client-side as a preview only; the network upload does not happen until the user submits the shout/comment. Rationale: this was reported as a real problem in two ways — perceived slowness/uncertainty during composing, and (per `plan.md`'s tech-debt note) every abandoned composer today orphans a `Media` row and a stored file, since upload-on-select uploads regardless of whether the user ever publishes. Deferring upload to submit-time eliminates that orphaning entirely, since no upload network call happens unless the user actually commits to submitting.
+- Q: With upload and creation now happening together at submit-time, what happens if one file in the batch fails to upload? → A: The submission is atomic — if any file fails (a bad file that slipped past client-side pre-validation, a transient storage error, or the user's per-user media-posting permission having been revoked in the interim), nothing is posted: no shout, no comment, no partially-attached gallery. The user sees a clear, specific explanation of which file(s) failed and why; their composed text and every other pending item remain exactly as arranged in the composer; and a "Try again" action resubmits the same batch without requiring the user to re-attach anything. This is a deliberate return to a stricter atomicity than the pre-2026-07-30 architecture accepted, and it directly supersedes the 2026-07-25 post-analysis resolution of FR-009, which had reasoned that upload-before-creation made a true "reject as a unit" impossible. That reasoning no longer applies because upload no longer precedes creation as two independent steps — see FR-009 and FR-041.
+- Q: Client-side pre-validation (file type, size) still happens instantly at selection, same as today. Does the partial-batch-success behavior from the 2026-07-25 Clarifications (FR-034) still apply? → A: Only to that pre-validation layer. A batch of dropped files can still yield some immediately-rejected files (wrong type, too large) alongside others that pass validation and become pending, exactly as today. What changes is what happens *after* that: since no network upload occurs until submit, there is no longer a "some uploaded, some didn't" mid-flight state to preserve — once files are pending, a submit-time failure is all-or-nothing (see above). FR-034 is narrowed accordingly.
+- Q: If a submit fails and the user hits "Try again," does the retry re-attempt the whole batch or only the file(s) that failed? → A: The whole batch. Every pending file, including the ones that succeeded on the failed attempt, is still held client-side untouched, so retrying the complete batch costs nothing extra and keeps the atomicity model simple — there is no partially-uploaded state to reconcile against.
 
 ## Governance Note — Constitution Amendment Required
 
@@ -52,6 +66,11 @@ amendment MUST land before or alongside Stage 1 reaching production.
 The mutual exclusivity between a **gallery** and a **YouTube embed** is retained
 (see FR-027); only the "one image maximum" half of the constraint is relaxed.
 
+The 2026-07-30 revision (composer preview + upload-timing) does not touch this
+constraint further: the five-item cap, the gallery/YouTube exclusivity, and
+publish-time immutability (FR-029) are all unaffected — it only changes when the
+upload happens and what's possible while composing, before anything is published.
+
 ## Staged Delivery
 
 This is a single feature specification delivered in three sequential stages. Each
@@ -61,9 +80,9 @@ stories below.
 
 | Stage | User Story | Scope summary |
 |-------|------------|---------------|
-| 1 | US1 (P1) | Multi-image attach (images only), append-only composing, adaptive inline grid showing every item, each tile opening the existing single-image viewer. No inter-item navigation. |
-| 2 | US2 (P2) | Looping navigation between items inside the viewer opened in Stage 1. Composing unchanged. |
-| 3 | US3 (P3) | Reorder/remove while composing, GIFs mixable into galleries, polish. |
+| 1 | US1 (P1) | Multi-image attach (images only), adaptive inline grid showing every item, each tile opening the existing single-image viewer, no inter-item navigation. *(Revised 2026-07-30)* Composing is no longer append-only: individual pending items can be removed and clicked open in a fullscreen preview; upload is deferred to submit-time and submission is atomic. Reordering is still not available. |
+| 2 | US2 (P2) | Looping navigation between items inside the viewer opened in Stage 1, for *published* galleries. Composing unchanged from Stage 1's (revised) behavior. |
+| 3 | US3 (P3) | Reorder while composing, GIFs mixable into galleries, polish. *(Narrowed 2026-07-30 — per-item removal moved to Stage 1; this stage now covers reordering and GIF mixing only.)* |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -74,8 +93,9 @@ for example several screenshots of the same event — instead of being forced to
 pick a single image or split the thought across multiple posts. They add multiple
 images in one go (by selecting several files at once from the upload button, or by
 dragging a group of files onto the composer), see that all of them are attached,
-and publish. Readers of the resulting shout or comment see every attached image laid out
-as a grid, and can open any one of them full size.
+can remove any one of them individually or preview any one of them full size before
+deciding to publish, and publish. Readers of the resulting shout or comment see every
+attached image laid out as a grid, and can open any one of them full size.
 
 **Why this priority**: This is the core value of the feature and the minimum
 viable slice — the ability to attach and publish more than one image. Without it,
@@ -100,8 +120,12 @@ opens that image full size.
 7. **Given** a user whose media-posting permission is revoked (feature 005), **When** they attempt to publish a shout or comment with newly uploaded images, **Then** the entire submission is rejected exactly as it is today for a single image, with the same Russian-language explanation and no partial save.
 8. **Given** an existing shout or comment that was published with a single image before this feature, **When** any reader views it, **Then** it renders exactly as it did before, with no grid.
 9. **Given** a user has attached one or more images, **When** they publish, **Then** each attached image is subject to the same file-type, file-size, and rate-limit rules that apply to a single-image attachment today.
-10. **Given** a user drags a batch of four files in which one is an unsupported type, **When** the batch is processed, **Then** the three valid images are attached and the invalid one is reported individually with the reason it failed.
+10. **Given** a user drags a batch of four files in which one fails client-side pre-validation (wrong type or too large), **When** the batch is processed, **Then** the three valid images become pending and the invalid one is reported individually with the reason it failed.
 11. **Given** a user has at least one image attached during Stage 1 or Stage 2, **When** they look for the GIF picker, **Then** it is unavailable; and conversely, **Given** a GIF is attached, **When** they look to add an image, **Then** image attachment is unavailable.
+13. **Given** a user is composing with four pending items, **When** they activate the remove control on the second one, **Then** only that item is removed and the other three remain attached in their existing relative order — without affecting or re-uploading anything, since nothing has been uploaded yet. *(Added 2026-07-30.)*
+14. **Given** a user is composing with pending items attached, **When** they click one of the pending preview tiles, **Then** the existing fullscreen viewer opens on that item's local preview, with the same zoom/pan/dismiss behavior as a published item. *(Added 2026-07-30.)*
+15. **Given** a user has several items pending and clicks submit, **When** every file uploads successfully, **Then** the shout or comment is created carrying all of them, in their existing order. *(Added 2026-07-30.)*
+16. **Given** a user has several items pending and clicks submit, **When** one file fails to upload (bad file, transient error, or a permission revoked in that instant), **Then** nothing is posted, the user sees a clear explanation naming the failing file(s) and why, every pending item and all composed text remain exactly as they were, and a "Try again" action resubmits the whole batch without requiring re-attachment. *(Added 2026-07-30.)*
 
 ---
 
@@ -136,44 +160,47 @@ last back to the first.
 
 ---
 
-### User Story 3 - Curate the gallery before posting, and mix in GIFs (Priority: P3)
+### User Story 3 - Reorder a pending gallery and mix in GIFs (Priority: P3)
 
-A user assembling a gallery realizes the images are in the wrong order, or that
-one of them shouldn't be included, and wants to fix that without discarding
-everything and starting over. Separately, they want to combine GIFs and static
-images in a single gallery.
+*(Retitled 2026-07-30 — previously "Curate the gallery before posting, and mix in GIFs"; per-item removal moved to User Story 1, so this story now covers only reordering and GIF mixing.)*
 
-**Why this priority**: This is refinement of an already-working flow. In Stages 1
-and 2 a mis-assembled selection is recoverable by clearing and re-adding, which is
-clumsy but not blocking. GIF support broadens the feature but is not required to
-prove its core value.
+A user assembling a gallery realizes the images are in the wrong order, and wants
+to fix that without discarding everything and starting over. Separately, they want
+to combine GIFs and static images in a single gallery.
 
-**Independent Test**: While composing, attach four images, remove the second one,
-move the last one to the front, add a GIF, publish, and confirm the published
-gallery contains exactly the four intended items in the intended order.
+**Why this priority**: This is refinement of an already-working flow. A
+mis-ordered selection is recoverable by clearing and re-adding, which is clumsy
+but not blocking, and (since 2026-07-30) individual removal is already available
+from Stage 1 — only reordering remains a rough edge. GIF support broadens the
+feature but is not required to prove its core value.
+
+**Independent Test**: While composing, attach four images, move the last one to
+the front, add a GIF, publish, and confirm the published gallery contains exactly
+the four intended items in the intended order.
 
 **Acceptance Scenarios**:
 
-1. **Given** a user is composing with four items attached, **When** they remove one specific item, **Then** only that item is removed and the remaining three stay attached in their existing relative order.
-2. **Given** a user is composing with several items attached, **When** they reorder the items, **Then** the new order is reflected in the composer and is the order readers will see after publishing.
-3. **Given** a user is composing with images attached, **When** they add a GIF, **Then** the GIF is attached alongside the images in the same gallery.
-4. **Given** a user is composing with a GIF attached, **When** they add a static image, **Then** both are attached in the same gallery — order of addition does not restrict which types may be combined.
-5. **Given** a gallery mixing GIFs and static images is published, **When** a reader browses it fullscreen, **Then** each item plays or displays according to its own type, with navigation behaving identically regardless of the mix.
-6. **Given** a user's media-posting permission is revoked, **When** they attempt to add a newly uploaded GIF to a gallery, **Then** it is rejected on the same terms as a newly uploaded image, while re-using an already-stored GIF remains permitted exactly as specified in feature 005.
-7. **Given** a user has reordered a pending gallery, **When** they publish, **Then** the first item in their chosen order becomes the preview image shown in the feed.
+1. **Given** a user is composing with several items attached, **When** they reorder the items, **Then** the new order is reflected in the composer and is the order readers will see after publishing.
+2. **Given** a user is composing with images attached, **When** they add a GIF, **Then** the GIF is attached alongside the images in the same gallery.
+3. **Given** a user is composing with a GIF attached, **When** they add a static image, **Then** both are attached in the same gallery — order of addition does not restrict which types may be combined.
+4. **Given** a gallery mixing GIFs and static images is published, **When** a reader browses it fullscreen, **Then** each item plays or displays according to its own type, with navigation behaving identically regardless of the mix.
+5. **Given** a user's media-posting permission is revoked, **When** they attempt to add a newly uploaded GIF to a gallery, **Then** it is rejected on the same terms as a newly uploaded image, while re-using an already-stored GIF remains permitted exactly as specified in feature 005.
+6. **Given** a user has reordered a pending gallery, **When** they publish, **Then** the first item in their chosen order becomes the preview image shown in the feed.
 
 ---
 
 ### Edge Cases
 
 - **A user selects more files than the limit allows in one action.** The entire action is rejected — nothing from it is attached and any previously pending selection is left untouched — with a Russian explanation of the limit (FR-033).
-- **Some files in a batch upload succeed and others fail** (unsupported type, too large, or a transient storage error). The successful items stay attached; the failed ones are reported individually with the reason for each (FR-034). This differs deliberately from the over-limit case, which is detectable before any upload begins and is therefore rejected wholesale.
+- **Some files in a batch fail client-side pre-validation** (unsupported type or too large). The successfully-validated items become pending; the failed ones are reported individually with the reason for each (FR-034). *(Revised 2026-07-30 — this now applies only to selection-time client validation; see next edge case for submit-time failures.)*
+- **A submit's upload of one or more pending files fails** (a file that slipped past client validation, a transient storage error, or a permission revoked in that instant). Nothing is posted — no shout, no comment, no partial gallery. All pending items and composed text remain intact, the specific failure is explained clearly, and a "Try again" action resubmits the entire batch. *(Added 2026-07-30 — see FR-041.)*
+- **A user removes a pending item while composing.** Only that item is removed; since nothing has been uploaded yet at that point, no server-side deletion is needed — it simply stops being part of the client-held pending set. *(Added 2026-07-30 — see FR-024.)*
 - **A user attaches images and then a GIF during Stages 1–2**, before mixed galleries are enabled. The GIF picker is unavailable while any image is attached, and image attachment is unavailable while a GIF is attached (FR-035). This gate is removed in Stage 3.
 - **A gallery's first item is extremely tall or extremely wide.** The preview area is shaped by the first item's aspect ratio, but must remain bounded by the same maximum preview dimensions that constrain a single-image preview today, so one unusual image cannot dominate the feed.
 - **A user attempts to attach a video to a gallery.** Video is out of scope; it remains on today's single-attachment path and cannot be combined with a gallery.
 - **A user attempts to combine a gallery with a YouTube embed.** Not permitted — the existing mutual exclusivity between an image attachment and a YouTube embed is preserved for galleries (FR-027).
 - **A shout or comment carries a spoiler/NSFW visibility tag with a gallery attached.** The tag applies to the gallery as a whole, not to individual items — every item is concealed until the reader reveals it, and revealing applies to the whole gallery.
-- **The 24-hour post-upload compression runs on a gallery.** Every item in the gallery is compressed on the same schedule and terms as a single attachment, independently of the others.
+- **The 24-hour post-upload compression runs on a gallery.** Every item in the gallery is compressed on the same schedule and terms as a single attachment, independently of the others, starting from its (now submit-time) upload.
 - **A user publishes with zero attached items.** Unchanged from today — a shout or comment still requires either text or media.
 - **A reader on a narrow mobile viewport opens a gallery fullscreen.** Navigation controls remain anchored to the screen edges and reachable; they are never pushed off-screen or overlapped by the displayed item.
 - **An author is soft-deleted or banned after publishing a gallery.** Unchanged from today — existing soft-delete behavior governs visibility of the whole shout or comment, including its gallery.
@@ -192,11 +219,11 @@ gallery contains exactly the four intended items in the intended order.
 - **FR-006**: System MUST preserve a stable, explicit order for the items in a gallery, and MUST present that same order to every reader.
 - **FR-007**: System MUST apply the same file-type and file-size validation rules to each item in a gallery that it applies to a single attached item today.
 - **FR-008**: System MUST apply the existing upload rate limiting to gallery attachments, in both authenticated and unauthenticated states, on the same terms as today's single-item path.
-- **FR-009**: System MUST apply the existing per-user media-posting permission (feature 005) to gallery attachments at the point of upload: every attempt by a restricted user to upload a new item MUST be rejected with the existing Russian-language explanation, and no item may be attached as a result. Because attachment necessarily precedes publishing, a restricted user's shout or comment can never carry newly uploaded media; their text-only publishing remains available and unaffected, exactly as it is today for single media. *(Reworded 2026-07-25 — see Clarifications.)*
+- **FR-009**: System MUST apply the existing per-user media-posting permission (feature 005) to gallery attachments: a restricted user MUST be rejected with the existing Russian-language explanation, and no item may be attached as a result. *(Reworded 2026-07-30 — supersedes the 2026-07-25 wording.)* Because upload is now deferred to submit-time and submission is atomic (FR-041), this rejection is no longer scoped to "upload only" — a restricted user's **entire submission, including its text**, is rejected as a unit when it carries a newly uploaded item, exactly matching the atomicity described in FR-041. Their text-only publishing (with no new upload attempted) remains available and unaffected, exactly as it is today for single media.
 - **FR-010**: System MUST apply the existing 24-hour post-upload compression to every item in a gallery, on the same schedule and terms as a single attachment.
 - **FR-011**: System MUST present all limit, validation, and rejection messages in Russian, with correct declensions and pluralization for the item counts involved.
 - **FR-033**: When a single attach action (multi-select or drag-and-drop) contains more files than the remaining capacity allows, System MUST reject that action in its entirety — attaching none of its files, leaving any existing pending selection unchanged — and MUST explain the limit in Russian.
-- **FR-034**: When some files within an accepted batch fail processing (unsupported type, oversized, or storage error), System MUST retain the successfully processed items as attached and MUST report each failed item individually with the reason for its failure, rather than discarding the whole batch.
+- **FR-034**: When some files within an attach action fail client-side pre-validation (unsupported type or oversized) at selection/drop time, System MUST reject only the failing files individually — reporting the reason for each — while accepting the rest as pending. *(Narrowed 2026-07-30 — this no longer covers upload-transfer failures, since no upload transfer happens until submit; see FR-041 for submit-time failure handling, which is atomic rather than partial.)*
 
 #### Display
 
@@ -207,7 +234,7 @@ gallery contains exactly the four intended items in the intended order.
 - **FR-036**: Users MUST be able to open any individual gallery item at full size by activating its tile, in Stage 1, using the existing single-image viewer with its zoom, pan and dismiss behaviour. Inter-item navigation from within that viewer is NOT required in Stage 1 (see FR-017–FR-023, Stage 2).
 - **FR-016**: System MUST render shouts and comments that carry exactly one attached item exactly as they render today, with no gallery indicator.
 
-#### Fullscreen viewing
+#### Fullscreen viewing (published galleries)
 
 - **FR-017**: Users MUST be able to open a fullscreen viewer for a gallery by activating its inline preview.
 - **FR-018**: System MUST provide forward and backward navigation controls in the fullscreen viewer, anchored to the left and right edges of the screen, present and usable at every viewport size and for every displayed item's aspect ratio.
@@ -217,9 +244,21 @@ gallery contains exactly the four intended items in the intended order.
 - **FR-022**: System MUST NOT offer inter-item navigation when a gallery contains only one item.
 - **FR-023**: System MUST return the reader to their prior scroll position when the fullscreen viewer is dismissed.
 
-#### Composing (Stage 3)
+#### Composing (pending preview) — effective immediately
 
-- **FR-024**: Users MUST be able to remove an individual pending item while composing, without affecting the other pending items.
+*(Section retitled and regrouped 2026-07-30. FR-024 is relocated here from the former "Composing (Stage 3)" grouping, taking effect now rather than in Stage 3. FR-037–FR-041 are new.)*
+
+- **FR-024**: Users MUST be able to remove an individual pending item while composing, without affecting the other pending items. *(No longer Stage 3-gated as of 2026-07-30 — see Clarifications.)*
+- **FR-037**: Users MUST be able to activate any individual pending item to open it in the existing fullscreen viewer, showing that item's local preview, with the same zoom/pan/dismiss behavior available for published items. Inter-item navigation is not required here.
+- **FR-038**: System MUST present pending items in their own bounded container, visually distinct from the composer's text input, styled with a thin divider, laid out as a single horizontal row.
+- **FR-039**: When pending items exceed the width available to display them, the pending-item container MUST scroll horizontally rather than wrapping to additional rows.
+- **FR-040**: System MUST size each pending item preview to a maximum height of 80px, uniformly across both the shout and comment/reply composers. The per-item remove control's own size MUST NOT be reduced to match.
+- **FR-041**: System MUST defer the upload of any newly selected file until the user submits the shout or comment — a file that has only been selected or dropped MUST NOT be transmitted to the server until submission is initiated. At submission, System MUST upload every pending new file and create the shout/comment as a single atomic outcome: if every upload succeeds, the shout/comment is created carrying all of them; if any upload fails for any reason, none of the batch is attached and no shout/comment is created. On failure, System MUST report which file(s) failed and why, MUST preserve all composed text and every pending item unchanged for the user, and MUST offer a retry action that resubmits the complete pending batch without requiring re-attachment.
+
+#### Composing (Stage 3 — reordering and GIF mixing)
+
+*(Narrowed 2026-07-30 — this grouping previously also covered per-item removal, now in effect immediately; see FR-024 above.)*
+
 - **FR-025**: Users MUST be able to reorder pending items while composing, and the resulting order MUST be the order readers see, with the first item becoming the inline preview.
 
 #### Scope boundaries and immutability
@@ -228,7 +267,7 @@ gallery contains exactly the four intended items in the intended order.
 - **FR-035**: During Stages 1 and 2 only, System MUST enforce strict mutual exclusivity between images and GIFs: the GIF picker MUST be unavailable whenever one or more images are attached, and image attachment MUST be unavailable whenever a GIF is attached. This withdraws today's ability to replace a single attached image with a GIF for the duration of those two stages. This requirement expires when FR-026 takes effect in Stage 3.
 - **FR-027**: System MUST NOT allow a gallery to be combined with a YouTube embed — the existing mutual exclusivity between an image attachment and a YouTube embed is preserved.
 - **FR-028**: System MUST exclude video from galleries; video remains on the existing single-attachment path, unchanged by this feature.
-- **FR-029**: System MUST treat a published gallery as immutable — there MUST be no pathway to add, remove, or reorder a gallery's items after publishing, consistent with today's text-only edit behavior.
+- **FR-029**: System MUST treat a published gallery as immutable — there MUST be no pathway to add, remove, or reorder a gallery's items after publishing, consistent with today's text-only edit behavior. *(Unaffected by the 2026-07-30 revision: FR-024's pulled-forward removal applies only to pending, unpublished items — never to a published gallery.)*
 - **FR-030**: System MUST apply a spoiler/NSFW visibility tag to a gallery as a whole rather than to individual items, and MUST preserve the existing rule that such a tag is only meaningful when media is attached.
 - **FR-031**: System MUST behave identically for shouts and comments across every requirement in this specification.
 - **FR-032**: System MUST continue to render all pre-existing single-media content correctly, with no migration-driven change to how it appears.
@@ -238,6 +277,7 @@ gallery contains exactly the four intended items in the intended order.
 - **Gallery**: An ordered collection of one to five media items attached to a single shout or comment. Has a defined first item, which serves as the inline preview. Immutable once published. A gallery of exactly one item is indistinguishable, to a reader, from today's single attachment.
 - **Media item**: An individual image or GIF within a gallery, carrying its own type, dimensions, and stored file. Subject individually to the same validation, size limits, and 24-hour compression as a single attachment today. Its position within its gallery is meaningful and stable.
 - **Attachment order**: The stable sequence of items within a gallery, established at compose time, determining both which item is the preview and the order of fullscreen navigation.
+- **Pending item**: *(Added 2026-07-30.)* A file selected or dropped into the composer but not yet uploaded — exists only client-side, as a locally-held preview, until a successful submit persists it as a Media item. Individually removable and individually viewable in a fullscreen preview before it is ever uploaded. Has no server-side existence and therefore nothing to clean up if the user abandons composing without submitting.
 
 ## Success Criteria *(mandatory)*
 
@@ -253,13 +293,17 @@ gallery contains exactly the four intended items in the intended order.
 - **SC-008**: Every item in a published gallery is compressed within the same 24-hour window that applies to single attachments today, with no item skipped.
 - **SC-009**: Each of the three stages reaches production and is exercised by real users before the following stage's implementation begins.
 - **SC-010**: Introducing galleries causes no horizontal scrolling or layout shift in the feed at any supported viewport size.
+- **SC-011**: *(Added 2026-07-30.)* 100% of submits with at least one failing upload result in no shout/comment being created, with the user's composed text and every pending item left intact and a retry available — zero partial-gallery posts are ever created.
+- **SC-012**: *(Added 2026-07-30.)* 100% of abandoned composer sessions (user never submits) result in zero server-side uploaded files or Media rows, since no upload occurs until submission is initiated.
 
 ## Assumptions
 
 - **Existing content is a one-item gallery.** Pre-existing single-media shouts and comments are treated as galleries of one, so no separate legacy display path is needed and no user-visible change occurs for them.
 - **The five-item limit is uniform.** It applies identically to shouts and comments, and counts all gallery item types together rather than allowing five of each type.
 - **Size limits are per item.** Each attached item is validated against the same per-file size limit that applies to a single attachment today; this specification does not introduce an additional aggregate cap across a gallery.
-- **Composing is append-only in Stages 1 and 2.** Until Stage 3, the only way to change a pending selection is to clear it entirely and start again. This is accepted as a known rough edge during those stages, per explicit direction. Note the interaction with FR-034: a partially failed batch leaves its successful items attached, and during Stages 1–2 the user cannot remove them individually — only clear everything and retry.
+- **Composing gained per-item removal ahead of Stage 3 (2026-07-30).** Reordering remains the only composing action still deferred to Stage 3. *(Revises the prior "append-only in Stages 1 and 2" assumption, which no longer holds for removal.)*
+- **Uploads are deferred to submit-time and a submit is atomic (2026-07-30).** No file is transmitted to the server until the user submits; a submit either uploads and attaches every pending file and creates the shout/comment, or none of it happens and the user can retry. See FR-041.
+- **A retry resubmits the whole pending batch, not just previously-failed files (2026-07-30).** Since every pending file is still held client-side regardless of a failed submit's outcome, there is no cheaper partial-retry to offer, and re-sending everything keeps the atomicity model simple.
 - **Stages 1–2 are a temporary regression for GIF users.** FR-035 withdraws today's ability to swap a single attached image for a GIF. This is a deliberate, time-boxed cost accepted to keep the interim states simple, and it ends when Stage 3 ships.
 - **Fullscreen items are shown uncropped.** Cropping applies only to inline grid tiles; the fullscreen viewer always shows each item complete, letterboxed as needed.
 - **Reader-side navigation is input-agnostic.** The specification requires edge-anchored forward/backward controls; supporting additional input methods (keyboard, touch swipe) is a natural extension and is expected, but the edge controls are the guaranteed baseline on every device.
@@ -269,6 +313,6 @@ gallery contains exactly the four intended items in the intended order.
 
 ## Dependencies
 
-- **Feature 005 (per-user media posting restriction)** — its permission check must be generalized from a single upload to N uploads per submission without changing its semantics.
-- **The existing 24-hour post-upload compression job** — must operate per item across a gallery.
+- **Feature 005 (per-user media posting restriction)** — its permission check must be generalized from a single upload to N uploads per submission without changing its semantics, and (as of 2026-07-30) must be checkable at atomic submit-time rather than at independent upload-time.
+- **The existing 24-hour post-upload compression job** — must operate per item across a gallery, timed from each item's (now submit-time) upload.
 - **The constitution amendment described in the Governance Note above** — must land before or alongside Stage 1's production deployment.

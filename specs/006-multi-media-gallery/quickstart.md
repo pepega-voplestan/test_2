@@ -1,6 +1,6 @@
 # Quickstart: Validating Multi-Media Gallery Attachments
 
-**Feature**: 006-multi-media-gallery | **Date**: 2026-07-25 (revised 2026-07-26)
+**Feature**: 006-multi-media-gallery | **Date**: 2026-07-25 (revised 2026-07-26, 2026-07-30)
 
 How to run and verify each stage. Stages are independently deployable — validate
 and ship one before starting the next (SC-009).
@@ -46,37 +46,67 @@ Expected new coverage:
 | `api/tests/integration/comments.test.js` | Same rules apply identically to comments (FR-031) |
 | `api/tests/integration/feed.test.js` | `gallery` present with 2+ items, **absent** with 1 (FR-016); `gallery[0]` deep-equals `media` (G1); order stable (G2) |
 | `api/tests/integration/upload.test.js` | Unchanged per-file behavior still passes; restricted user (005) still blocked |
-| `web/tests/unit/` | Capacity gate rejects whole action (FR-033); partial failure retains successes (FR-034); GIF gate active (FR-035); Russian plural declensions; grid layout per item count + clamped container ratio (FR-012/FR-014) |
+| `web/tests/unit/` | Capacity gate rejects whole action (FR-033); client-side pre-validation retains valid files (FR-034); GIF gate active (FR-035); Russian plural declensions; grid layout per item count + clamped container ratio (FR-012/FR-014); **(2026-07-30)** no upload call fires before submit; per-item removal (FR-024); pending tile opens Lightbox on its object URL (FR-037); atomic submit blocks all-or-nothing on a failing upload (FR-041); retry reuses already-obtained `mediaId`s without re-uploading (research D16) |
 
 ### Manual
 
-1. Compose a shout, select **3 images at once** → all three appear pending.
+1. Compose a shout, select **3 images at once** → all three appear pending in
+   the bordered, horizontally-scrolling `PendingMediaStrip`, at the unified 80px
+   size — and confirm in devtools' Network tab that **no request to
+   `/upload/media` has fired yet** (2026-07-30: upload is now deferred to
+   submit).
 2. Drag **4 images** onto the composer → same result via drop (FR-004/FR-005).
 3. Try to add **6 total** → nothing is added, existing selection intact, Russian
    limit message shown (FR-033).
-4. Drop a batch containing **one `.txt`** → valid images attach, the `.txt` is
-   reported by name (FR-034).
+4. Drop a batch containing **one `.txt`** → valid images become pending
+   immediately (client-side check, no network call), the `.txt` is reported by
+   name (FR-034).
 5. With an image attached, open the GIF picker → **unavailable** (FR-035).
-6. Publish a 3-image gallery → feed shows **all three** as a grid: one tall tile
-   left, two stacked right (FR-012). No "+N" badge anywhere.
-7. Click the **third** tile → the existing viewer opens on that image, full size,
-   with zoom and drag-to-dismiss working (FR-036). Dismiss returns to the feed.
-8. Post 2-, 4- and 5-image galleries → layouts match the four arrangements in
-   [contracts/gallery-grid.md](./contracts/gallery-grid.md).
-9. Post a gallery whose **first** image is extreme portrait (e.g. 1:4) → the
-   container is clamped, not four times taller than a normal post (FR-014).
-10. Compare a gallery in a **comment** vs a **shout** → the comment grid is
-    visibly shorter (200px vs 300px cap) and otherwise identical (FR-015/FR-031).
-11. **Regression check (SC-006)**: find a pre-existing single-image shout →
+6. **(2026-07-30)** With four items pending, activate the remove control on the
+   **second** one → only it disappears, the other three keep their relative
+   order, and nothing hits the network (FR-024).
+7. **(2026-07-30)** Click one of the pending tiles → the existing `Lightbox`
+   opens on that item's local preview, with the same zoom/pan/dismiss behavior
+   as a published image (FR-037).
+8. **(2026-07-30)** Submit a post with several pending items on a healthy
+   connection → all upload (check Network tab: requests fire only now, at
+   submit, in parallel), then the create request follows, and the composer
+   clears.
+9. **(2026-07-30)** Simulate a failing upload for one file in a multi-item batch
+   (e.g. throttle/block one request in devtools) and submit → **nothing is
+   posted**, the specific failing file is named, all other pending items and any
+   typed text remain exactly as they were, and a "Try again" button is shown
+   (FR-041). Restore the connection and click **Try again** → confirm (Network
+   tab) that files which already succeeded are **not** re-uploaded, only the
+   previously-failing one is retried, and the submission then completes.
+10. Publish a 3-image gallery → feed shows **all three** as a grid: one tall
+    tile left, two stacked right (FR-012). No "+N" badge anywhere.
+11. Click the **third** tile → the existing viewer opens on that image, full
+    size, with zoom and drag-to-dismiss working (FR-036). Dismiss returns to the
+    feed.
+12. Post 2-, 4- and 5-image galleries → layouts match the four arrangements in
+    [contracts/gallery-grid.md](./contracts/gallery-grid.md).
+13. Post a gallery whose **first** image is extreme portrait (e.g. 1:4) → the
+    container is clamped, not four times taller than a normal post (FR-014).
+14. Compare a gallery in a **comment** vs a **shout** → the comment grid is
+    visibly shorter (200px vs 300px cap) and otherwise identical (FR-015/FR-031);
+    confirm the pending `PendingMediaStrip` itself is the **same 80px size in
+    both composers** (FR-040).
+15. **Regression check (SC-006)**: find a pre-existing single-image shout →
     renders exactly as before, with no grid and no change in size.
-12. Set a user's `is_media_allowed = false` in admin → their multi-upload fails
-    entirely with 005's existing message, nothing attaches (FR-009).
+16. Set a user's `is_media_allowed = false` in admin → their submit fails
+    entirely with 005's existing message, nothing attaches, nothing posts
+    (FR-009).
 
 ### Deploy gate
 
 - [ ] Constitution amended (the "Single media per post/comment" constraint)
 - [ ] `CLAUDE.md` / `docs/*` updated **via the `/docs` skill only**
 - [ ] Pre-existing single-media content verified unchanged in production
+- [ ] **(2026-07-30)** No `/upload/media` request observed before submit is
+      clicked, in a manual network trace
+- [ ] **(2026-07-30)** Failed-submit retry verified to skip already-uploaded
+      files (research D16)
 
 ## Stage 2 — Navigating between items
 
@@ -103,19 +133,20 @@ Expected new coverage:
 12. At the narrowest supported mobile width, arrows remain on-screen, reachable,
     and not overlapped by the image (FR-018, SC-005).
 
-## Stage 3 — Curate and mix
+## Stage 3 — Reorder and mix
+
+**Scope note (narrowed 2026-07-30)**: per-item removal moved to Stage 1 — see
+its manual step 6 above. This stage now covers only reordering and GIF mixing.
 
 ### Manual
 
-1. Attach 4 images, **remove the 2nd** → only it is removed, order preserved
-   (FR-024).
-2. **Reorder** so the last becomes first → composer reflects it; after publishing
+1. **Reorder** so the last becomes first → composer reflects it; after publishing
    that item is the preview (FR-025, FR-007 of US3).
-3. Force a failure during remove/reorder → UI **reverts** (Constitution V).
-4. Attach 2 images **plus a GIF** → all in one gallery (FR-026); GIF gate is gone.
-5. Browse the mixed gallery fullscreen → GIF animates, statics display,
+2. Force a failure during reorder → UI **reverts** (Constitution V).
+3. Attach 2 images **plus a GIF** → all in one gallery (FR-026); GIF gate is gone.
+4. Browse the mixed gallery fullscreen → GIF animates, statics display,
    navigation unaffected (US3 #5).
-6. Restricted user (005): uploading a **new** GIF is blocked, but re-selecting an
+5. Restricted user (005): uploading a **new** GIF is blocked, but re-selecting an
    **existing** GIF from "Мои GIF" succeeds (FR-009, SC-007).
 
 ## Cross-stage: the 24-hour compression window

@@ -1,6 +1,6 @@
 # Implementation Plan: Multi-Media Gallery Attachments
 
-**Branch**: `006-multi-media-gallery` | **Date**: 2026-07-25 (revised 2026-07-26) | **Spec**: [spec.md](./spec.md)
+**Branch**: `006-multi-media-gallery` | **Date**: 2026-07-25 (revised 2026-07-26, 2026-07-30) | **Spec**: [spec.md](./spec.md)
 
 > **Revision 2026-07-26 — Stage 1 preview redesign.** Stage 1 has already shipped
 > to the local environment (commits `d85c6bb`, `e844cfa`) and testing exposed a
@@ -11,6 +11,19 @@
 > orchestration or shared hook changes** — this revision is confined to the
 > inline rendering component and the Stage 1/Stage 2 boundary. Design decisions
 > D1–D10 stand unchanged; D11–D13 are added.
+
+> **Revision 2026-07-30 — Composer pending-preview & upload-timing.** Further
+> production feedback on the deployed Stage 1 build. Two changes, both confined
+> to composing (nothing about published-gallery display or the schema changes):
+> (1) per-item removal (FR-024) is pulled forward from Stage 3 into effect now,
+> the pending-item preview gets its own bordered/divided horizontal-scroll
+> container at a unified 80px size, and a pending tile is now clickable into the
+> existing `Lightbox`; (2) upload timing reverses from upload-on-select to
+> upload-on-submit, with the submit becoming atomic — this **directly reverses
+> research D2's rejection of "upload on submit"** (D2 rejected it for lacking a
+> preview and for blocking submit on a slow upload; both objections are resolved
+> differently here — see D14). Design decisions D1, D3–D13 stand unchanged; D2 is
+> superseded by D14; D15–D17 are added.
 
 **Input**: Feature specification from `/specs/006-multi-media-gallery/spec.md`
 
@@ -40,7 +53,19 @@ The existing `Lightbox` component (drag-to-dismiss, pinch/wheel/double-tap zoom,
 EXIF orientation) is reused as-is from **Stage 1**: a grid tile simply opens it on
 that item, which is what makes every image viewable without writing any new
 viewer. Stage 2 then extends the same component with optional inter-item
-navigation rather than building a second one.
+navigation rather than building a second one. As of the 2026-07-30 revision,
+`Lightbox` is also opened from a **pending** (not-yet-uploaded) tile during
+composing, pointed at the file's local object URL instead of a server URL —
+no changes to `Lightbox.tsx` itself are needed for this, since it only ever
+needed a `src` string.
+
+As of the 2026-07-30 revision, file upload no longer happens at selection time.
+`useMediaAttachments.ts` holds selected files client-side (object URL preview
+only) and defers the actual `POST /upload/media` calls until the user submits;
+the submit is atomic — every file must upload successfully before the
+shout/comment is created, otherwise nothing is posted and the whole batch can be
+retried. This is a client-orchestration change only: no new endpoint, no schema
+change (see D14–D16).
 
 ## Technical Context
 
@@ -108,6 +133,33 @@ construction. Two are worth noting explicitly:
   up to 5 image/GIF items", which the grid satisfies more literally than the
   first-item preview did.
 
+**Re-check after the 2026-07-30 composer/upload-timing revision**: still PASS, no
+new violations.
+
+- **Principle IV (Validated, Prisma-Mediated Data Access)**: unaffected — no new
+  endpoint, no schema change. The five-item cap and permission check (feature 005)
+  are still enforced at the same server boundary (`POST /upload/media`,
+  `POST /shouts`/`/comments`); only the client-side *timing* of when that boundary
+  is invoked changes.
+- **Principle V (Optimistic UI + rollback)**: pending-item removal introduced by
+  this revision needs no rollback story — it is pure client-state mutation with no
+  network call (nothing has been uploaded yet), so there is nothing to roll back
+  from. This is a stronger guarantee than the optimistic-with-rollback pattern
+  elsewhere, not a gap in it.
+- **Workflow: Rate-limit auth states**: unaffected in shape — `uploadLimiter`
+  still gates the same endpoint on the same terms; only *when* in the user's
+  session the calls happen changes (see research D15 for the concurrency
+  decision).
+- **New consideration — submission atomicity**: FR-041 requires an all-or-nothing
+  submit. This is enforced by client orchestration in `useMediaAttachments.ts`
+  (only call the create route once every upload has succeeded), not by a new
+  database transaction — there is no multi-row server-side transaction to add,
+  since `helpers/gallery.js` (D1) already writes gallery membership in one
+  create-route call. The one residual gap this leaves — a create-route failure
+  *after* all uploads already succeeded — is the same class of orphaned-`Media`-row
+  risk the codebase already accepts for single-media today; see Complexity
+  Tracking.
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -152,11 +204,12 @@ web/
 ├── components/
 │   ├── ShoutInput.tsx                # shout composer — consumes the shared hook
 │   ├── ShoutCard.tsx                 # reply composer (SEPARATE impl) + gallery preview; opens viewer
-│   ├── Lightbox.tsx                  # Stage 1: reused as-is; Stage 2: + items[]/index navigation
+│   ├── Lightbox.tsx                  # Stage 1: reused as-is; Stage 2: + items[]/index navigation; 2026-07-30: also opened on a pending item's local object URL
 │   ├── GalleryGrid.tsx               # NEW — adaptive grid, replaces GalleryPreview.tsx
+│   ├── PendingMediaStrip.tsx         # NEW (2026-07-30) — bordered/divided horizontal-scroll pending-item preview, shared by both composers; renders remove-X + click-to-Lightbox per tile
 │   └── EmojiPicker.tsx / GifPicker.tsx  # FR-035 gate (Stages 1–2), lifted in Stage 3
 ├── hooks/
-│   └── useMediaAttachments.ts        # NEW — shared pending-list, capacity gate, upload orchestration
+│   └── useMediaAttachments.ts        # NEW — shared pending-list, capacity gate; 2026-07-30: pending files hold only a local object URL until submit, per-item removal (FR-024), and atomic submit-time upload orchestration (FR-041) replace the former per-file upload-on-select behavior
 ├── utils/plural.ts                   # NEW — Russian declension for item counts
 ├── types.ts                          # + GalleryItem[] on Shout/Comment
 └── tests/unit/
@@ -237,8 +290,32 @@ component — see "Revision" at the top of this file.
 - `upload.test.js` extended for the multi-file path in both authenticated and
   unauthenticated states (FR-008, a constitution MUST).
 
+**Also in Stage 1 — composer revision (added 2026-07-30, post-deployment feedback)**
+- `useMediaAttachments.ts` rewritten: selecting/dropping a file no longer calls
+  `POST /upload/media` immediately — it is held client-side as
+  `{ file, objectUrl }` and only uploaded at submit time (FR-041). Client-side
+  pre-validation (type/size) still runs immediately at selection, unchanged
+  (FR-034). Per-item removal (FR-024) is added: removing a pending item is a
+  pure state mutation, no server call, since nothing has been uploaded yet.
+- `PendingMediaStrip.tsx` (NEW): renders the pending list in its own bordered
+  container with a thin divider, single horizontal row, horizontal scroll on
+  overflow (FR-038/FR-039). Each tile is 80px max-height (FR-040, unified across
+  both composers, down from the shipped 160px/96px split) with its own remove
+  control (kept at its current visual size) and opens `Lightbox` on its local
+  object URL when clicked (FR-037). Consumed by both `ShoutInput.tsx` and the
+  reply composer in `ShoutCard.tsx`, per the D9 lesson (one implementation, not
+  two).
+- Submit handler: on submit, upload every pending file (parallel, D15), then —
+  only if every upload succeeded — call `POST /shouts`/`/comments` with the
+  resulting `mediaIds`. On any upload failure, no create call is made; the
+  pending list and composed text are left untouched; a "Try again" action
+  resubmits, reusing any `mediaId` already obtained in the failed attempt
+  rather than re-uploading those files again (D16).
+
 **Deploy gate**: constitution amendment + `/docs` update landed; existing
-single-media content verified visually unchanged (SC-006).
+single-media content verified visually unchanged (SC-006); the 2026-07-30
+composer revision additionally verified for atomic submit failure/retry and
+per-item removal before re-deployment.
 
 ### Stage 2 — Navigate between items (US2, P2)
 
@@ -262,12 +339,14 @@ trip. Correspondingly smaller than originally planned.
 **Deploy gate**: verified on the narrowest supported mobile width (SC-005), and
 zoom/pan/dismiss gestures confirmed non-regressed.
 
-### Stage 3 — Curate and mix (US3, P3)
+### Stage 3 — Reorder and mix (US3, P3)
 
-**Goal**: reorder/remove while composing; GIFs mixable into galleries.
+**Goal**: reorder while composing; GIFs mixable into galleries.
 
-- Remove individual pending item (FR-024) and reorder (FR-025), both optimistic
-  with rollback per Principle V.
+**Scope note (narrowed 2026-07-30)**: per-item removal (FR-024) moved to Stage 1
+as part of the composer revision; this stage now covers only reordering.
+
+- Reorder (FR-025), optimistic with rollback per Principle V.
 - Lift the FR-035 gate; FR-026 takes effect — images and GIFs mix freely.
 - Polish pass: loading/error states, badge styling, transitions.
 
@@ -282,4 +361,5 @@ able to reuse an existing one (FR-009 / SC-007).
 | Constitution Domain Constraint "**Single media per post/comment**" is contradicted | This is the entire feature — the user explicitly directed that the constraint be superseded. | There is no simpler alternative; the constraint *is* the thing being changed. Mitigation is procedural, not technical: amend the constitution (Sync Impact Report + **MAJOR** bump 1.0.0 → 2.0.0, since the constitution reserves MAJOR for redefinitions of binding constraints) and propagate to `CLAUDE.md`/`docs/*` via `/docs`, before Stage 1 reaches production. |
 | `media_id` is **denormalized** — it mirrors the gallery's position-0 item, so the same fact lives in two places | Keeps every existing read path (`enrichFeed`, search, quote resolution, admin, downgrade job) working without modification, which is what makes a small, low-risk Stage 1 possible. | Making the join table the sole source of truth would force every read site to change in Stage 1 — precisely the big-bang change the staged rollout exists to avoid. Risk is contained by making `helpers/gallery.js` the **only** writer of both, so the invariant has exactly one enforcement point. Dropping `media_id` is viable follow-up debt once Stage 3 is stable. |
 | FR-035 (Stage 1–2 GIF/image exclusivity) is enforced **client-side only**, against the usual "backend enforces, frontend gates" rule | It is a temporary UX simplification, not a security or integrity boundary. The data model permits mixed galleries from Stage 1, and Stage 3 legitimizes them deliberately. | Enforcing it server-side would mean writing a validation rule in Stage 1 solely to delete it in Stage 3, and would risk rejecting content that becomes valid mid-rollout. Bypassing the gate produces a mixed gallery — which is a *supported* state, not a corrupt one, so there is no integrity risk. |
-| Abandoned composer uploads leave orphaned `Media` rows and files, now at up to 5× the previous rate | Uploads must be persisted before shout creation because the create route takes ids, not files. | This is **pre-existing** behavior, not introduced here — a single abandoned upload already orphans today. The multiplier is new; a reaping job is the right fix but is out of scope for this feature. Recorded as known debt in `research.md`. |
+| *(Superseded 2026-07-30 — see row below)* Abandoned composer uploads leave orphaned `Media` rows and files, now at up to 5× the previous rate | Uploads must be persisted before shout creation because the create route takes ids, not files. | Resolved by the 2026-07-30 upload-timing revision for the common case (a composer abandoned without ever submitting now uploads nothing at all — see D14). |
+| A submit that fails after some files already uploaded, and is never retried, still orphans those `Media` rows | Atomicity (FR-041) is client-orchestrated, not a server-side transaction — see Constitution Check re-check above. A true transactional guarantee would require either a combined upload+create endpoint or a two-phase commit, both rejected as disproportionate (see research D14). | This residual case is the **same order of magnitude** as the pre-existing single-media orphan risk (one abandoned upload), not the up-to-5× multiplier the original architecture would have produced — D16's retry-reuses-ids behavior prevents *retried* attempts from compounding it further. A reaping job for unreferenced `Media` rows remains the correct long-term fix and stays out of scope here. |

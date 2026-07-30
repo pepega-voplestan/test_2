@@ -4,7 +4,8 @@ import EmojiPicker, { GifPickerSelection } from './EmojiPicker';
 import MentionInput, { MentionInputHandle, effectiveLength } from './MentionInput';
 import PollEditor, { PollPayload, PollEditorHandle } from './PollEditor';
 import { Shout } from '../types';
-import { useMediaAttachments } from '../hooks/useMediaAttachments';
+import { useMediaAttachments, SUBMIT_FAILED_MESSAGE } from '../hooks/useMediaAttachments';
+import PendingMediaStrip from './PendingMediaStrip';
 
 interface ShoutInputProps {
   onShoutCreated: (shout: Shout) => void;
@@ -40,7 +41,6 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   // both behave identically (FR-031, research D9).
   const media = useMediaAttachments({ mediaAllowed: user?.mediaAllowed, logPrefix: 'ShoutInput' });
   const { items: mediaItems, isUploading } = media;
-  const mediaId = mediaItems.length > 0 ? mediaItems[0].mediaId : null;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionInputRef = useRef<MentionInputHandle>(null);
 
@@ -82,7 +82,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
   const charCount = effectiveLength(content, NEWLINE_CHAR_COST);
   const isOverLimit = charCount > SHOUT_MAX_LENGTH;
-  const hasMedia = !!mediaId || !!detectedYtId;
+  const hasMedia = media.hasMedia || !!detectedYtId;
 
   // FR-035 — TEMPORARY, Stages 1–2 only. Mixed image+GIF galleries ship in
   // Stage 3; until then images and GIFs are strictly mutually exclusive.
@@ -94,13 +94,13 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
   // Detect YouTube URLs in content (only when no image is attached)
   useEffect(() => {
-    if (mediaId) {
+    if (media.hasMedia) {
       setDetectedYtId(null);
       return;
     }
     const id = detectYouTubeId(content);
     setDetectedYtId(id);
-  }, [content, mediaId]);
+  }, [content, media.hasMedia]);
 
   // Upload orchestration lives in useMediaAttachments — capacity gate (FR-033),
   // per-file error reporting (FR-034) and the video rule (FR-028) are all there.
@@ -174,12 +174,13 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     }
   };
 
-  // Stage 1 is append-only: the only way to change a selection is to clear it
-  // entirely. Per-item removal arrives in Stage 3 (FR-024).
-  const removeMedia = () => {
-    media.clear();
-    // NSFW and СПОЙЛЕР only make sense with media — clear them
-    if (activeTag === 'nsfw' || activeTag === 'spoiler') setActiveTag(null);
+  // Per-item removal (FR-024, pulled forward from Stage 3 on 2026-07-30).
+  const removeMediaItem = (localId: string) => {
+    media.removeItem(localId);
+    // NSFW and СПОЙЛЕР only make sense with media — clear them if this was the last item.
+    if (mediaItems.length <= 1 && (activeTag === 'nsfw' || activeTag === 'spoiler')) {
+      setActiveTag(null);
+    }
   };
 
   const submitShout = async () => {
@@ -192,15 +193,25 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
 
     setIsSubmitting(true);
     setError(null);
-    console.log('[ShoutInput] Submitting:', content.substring(0, 50), mediaId ? `media=${mediaId}` : detectedYtId ? `yt=${detectedYtId}` : '');
 
     try {
+      // Upload deferred from selection to now (FR-041, research D14). Atomic:
+      // `null` means at least one file failed — nothing is posted, and
+      // media.error/media.failures already show what went wrong so the user
+      // can hit "Отправить" again (which re-enters here and, per research D16,
+      // skips re-uploading whatever already succeeded).
+      const uploadResult = await media.submit();
+      if (!uploadResult) return;
+      const { mediaIds } = uploadResult;
+
+      console.log('[ShoutInput] Submitting:', content.substring(0, 50), mediaIds.length > 0 ? `media=${mediaIds.length}` : detectedYtId ? `yt=${detectedYtId}` : '');
+
       const body: Record<string, unknown> = { content: content.trim() };
-      if (mediaItems.length > 1) {
+      if (mediaIds.length > 1) {
         // Gallery — order of the pending list is the published order (FR-006).
-        body.mediaIds = media.mediaIds;
-      } else if (mediaId) {
-        body.mediaId = mediaId;
+        body.mediaIds = mediaIds;
+      } else if (mediaIds.length === 1) {
+        body.mediaId = mediaIds[0];
       } else if (detectedYtId) {
         const ytMatch = content.match(/https?:\/\/[^\s]+/);
         if (ytMatch) body.youtubeUrl = ytMatch[0];
@@ -281,7 +292,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                               type="button"
                               onClick={() => fileInputRef.current?.click()}
                               disabled={isUploading || imageAttachBlocked || user?.mediaAllowed === false}
-                              className={`p-1 transition-colors ${mediaId ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
+                              className={`p-1 transition-colors ${media.hasMedia ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
                               title={user?.mediaAllowed === false ? 'Вам запрещено прикреплять медиафайлы' : media.isFull ? 'Достигнут лимит в 5 файлов' : media.hasGif ? 'GIF нельзя совмещать с изображениями' : 'Прикрепить изображения (или перетащите)'}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
@@ -385,37 +396,20 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
               </div>
             </div>
 
-            {/* Media preview */}
+            {/* Media preview (2026-07-30: bordered horizontal-scroll strip, unified 80px, per-item remove + click-to-preview) */}
             {mediaItems.length > 0 && (
-              <div className="mt-3 relative inline-block">
-                <div className="flex gap-2 flex-wrap">
-                  {mediaItems.map((it) => (
-                    it.isVideo ? (
-                      <video key={it.mediaId} src={it.previewUrl} className="max-h-40 rounded-lg border border-th-border" muted preload="metadata" />
-                    ) : (
-                      <img key={it.mediaId} src={it.previewUrl} alt="preview" className="max-h-40 rounded-lg border border-th-border" />
-                    )
-                  ))}
-                </div>
+              <div className="relative">
                 {isUploading && (
-                  <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center z-10">
                     <div className="w-6 h-6 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" />
                   </div>
                 )}
-                {!isUploading && (
-                  <button
-                    type="button"
-                    onClick={removeMedia}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-xs"
-                  >
-                    X
-                  </button>
-                )}
+                <PendingMediaStrip items={mediaItems} onRemove={removeMediaItem} disabled={isUploading} />
               </div>
             )}
 
             {/* YouTube auto-detect preview */}
-            {!mediaId && detectedYtId && (
+            {!media.hasMedia && detectedYtId && (
               <div className="mt-3 flex items-center gap-3 bg-th-inset/50 rounded-lg p-2 border border-th-border-2">
                 <img
                   src={`https://img.youtube.com/vi/${detectedYtId}/default.jpg`}
@@ -448,6 +442,16 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
           {media.failures.map((f) => (
             <div key={f.name}>{f.name}: {f.message}</div>
           ))}
+          {media.error === SUBMIT_FAILED_MESSAGE && (
+            <button
+              type="button"
+              onClick={submitShout}
+              disabled={isSubmitting || isUploading}
+              className="mt-1 text-[#0087ff] hover:text-blue-400 font-semibold disabled:opacity-50"
+            >
+              Попробовать снова
+            </button>
+          )}
         </div>
       )}
     </div>

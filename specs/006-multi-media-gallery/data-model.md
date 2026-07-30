@@ -168,3 +168,11 @@ A gallery has no lifecycle of its own — it is written once, at parent creation
 and is immutable thereafter (FR-029). There is no edit pathway, so there are no
 transitions to model. Pending (unpublished) selections live only in client state
 and never reach these tables.
+
+**2026-07-30 revision**: a pending selection is now also individually mutable on
+the client (per-item removal, FR-024) and individually viewable (FR-037), and — 
+unlike before — a pending file has no server-side `Media` row at all until
+submit succeeds (FR-041; see `research.md` D14). None of this touches the schema
+above: it only changes when, during composing, a `Media` row and its gallery
+join rows come into existence — still in one atomic write per parent, at
+creation time.

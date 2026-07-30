@@ -268,11 +268,110 @@ call sites, so a Stage 2 regression cannot be caused by Stage 1 work in the same
 file. The cost is that a Stage 1 reader must dismiss and click another tile to
 see the next image; that was accepted explicitly as the Stage 1/Stage 2 division.
 
+## Revision 2026-07-30 — Composer pending-preview & upload-timing
+
+Added after further production feedback on the deployed Stage 1 build. D1,
+D3–D13 are unaffected. D2 is **superseded** by D14 below.
+
+### D14. Upload moves from selection-time to submit-time — supersedes D2's rejection of this alternative
+
+**Decision**: A selected/dropped file is held client-side (`{ file, objectUrl }`)
+and is never sent to `POST /upload/media` until the user submits the shout or
+comment. At submit, every pending file is uploaded and, only if all succeed, the
+create route is called with the resulting `mediaIds` (FR-041). This is the exact
+alternative D2 rejected — worth stating plainly, since a plan should not silently
+reverse itself.
+
+**Why D2's original rejection no longer applies**: D2 gave two reasons to upload
+on selection instead: (1) "no preview before posting" — no longer true, since the
+pending preview now renders directly from each file's local `objectUrl`, never
+from a server response; there was never a hard requirement that the preview be
+server-hosted, only that one exist. (2) "a slow multi-file upload would block the
+submit action" — still true, but no longer treated as disqualifying: the user
+explicitly weighed this tradeoff and accepted it, on the condition that failure
+is communicated clearly and a retry is one click (FR-041). The perceived-slowness
+complaint that originally motivated upload-on-select (files trickling in during
+composing feels faster) was, in production, outweighed by the orphaned-upload
+cost of that same design — seeing files upload immediately doesn't actually help
+the user if they abandon the composer afterwards anyway.
+
+**Rationale for keeping the existing two-call contract** (rather than inventing a
+combined upload+create endpoint): `POST /upload/media`'s per-file pipeline
+(multer, sharp variants, EXIF stripping, feature-005 permission check, rate
+limiting) is unchanged and fully proven from Stage 1. A combined endpoint would
+have to reimplement multipart handling *and* JSON body validation in the same
+request, duplicate the permission/rate-limit checks in a new code path, and give
+up the clean req/response shape both existing contracts already document
+([shout-comment-create.md](./contracts/shout-comment-create.md),
+[upload-orchestration.md](./contracts/upload-orchestration.md)). Retiming *when*
+the client calls two already-correct endpoints is a strictly smaller change than
+building a third.
+
+**Alternatives considered**:
+- *Combined `multipart` create endpoint accepting raw files and text together.*
+  Rejected: see above — duplicates two already-working validation/permission/
+  rate-limit paths for no behavioral gain, and is a much larger surface to test
+  across both composers and both auth states.
+- *Upload immediately but don't attach until submit (i.e., keep D2, add a
+  separate "detach" step).* Rejected: this is what today's architecture already
+  does and is exactly the source of the orphaned-upload complaint — uploading
+  early buys nothing if the value the user wanted (a fast, working preview) is
+  achievable client-side for free.
+
+### D15. Submit-time uploads run in parallel, not sequentially
+
+**Decision**: When submit fires, all pending files are uploaded concurrently
+(`Promise.all`-style), not one after another.
+
+**Rationale**: A gallery is capped at 5 items (FR-001), so the maximum burst is 5
+concurrent requests — trivial against `uploadLimiter`'s 100/10 min budget (D2's
+existing consequence analysis already covers this). Sequential uploads would
+directly reintroduce the "submit feels slow" cost this revision is meant to
+avoid, multiplied by up to 5 round trips instead of one; parallel upload keeps
+submit latency close to that of the single slowest file rather than the sum of
+all of them.
+
+### D16. Retry reuses `mediaId`s already obtained in a failed attempt
+
+**Decision**: If a submit fails after some files already uploaded successfully,
+a subsequent "Try again" does **not** re-upload those already-succeeded files —
+it reuses their previously-returned `mediaId`s and only (re)attempts the file(s)
+that failed or were never attempted.
+
+**Rationale**: The spec's user-facing guarantee is that retry "resubmits the
+whole batch without requiring re-attachment" — which describes what the user
+does (nothing), not what the network does. Re-uploading already-successful files
+on every retry would silently multiply orphaned `Media` rows with each failed
+attempt, compounding exactly the debt this revision otherwise reduces (see Known
+debt, below). Tracking obtained ids per pending file is a few lines of state in
+`useMediaAttachments.ts` and costs nothing at the API layer.
+
+### D17. Pending-preview UI is a new shared component, not per-composer markup
+
+**Decision**: `PendingMediaStrip.tsx` renders the bordered/divided
+horizontal-scroll pending list (FR-038/FR-039), the unified 80px tiles
+(FR-040), each tile's remove control (FR-024) and its click-to-`Lightbox`
+behavior (FR-037). Both `ShoutInput.tsx` and the reply composer in
+`ShoutCard.tsx` render it, driven by the same `useMediaAttachments.ts` state.
+
+**Rationale**: Directly continues D9's lesson — the two composers are separate
+implementations, and every attachment-UI change that isn't extracted into a
+shared piece has to be built and kept in sync twice, which is exactly what
+produced the FR-031 gap `/speckit-analyze` caught in Stage 1. Building this as
+one new component now is cheaper than building it once, discovering the second
+composer diverges, and reconciling them later.
+
 ## Known debt accepted (not introduced by this feature)
 
-- **Orphaned uploads.** Files uploaded into a composer that is then abandoned are
-  never reclaimed. This exists today for single media; galleries raise the rate up
-  to 5×. A reaping job for unreferenced `Media` rows is the correct fix and is
-  explicitly out of scope here. Worth scheduling after Stage 1 if storage growth
-  is observed.
+- **Orphaned uploads — narrowed by the 2026-07-30 revision.** Previously: files
+  uploaded into a composer that is then abandoned are never reclaimed, at up to
+  5× the pre-existing single-media rate, since every selected file uploaded
+  immediately. As of D14, a composer abandoned **without ever submitting**
+  uploads nothing at all, eliminating that case entirely. The residual case is
+  narrower: a submit that fails after some files already uploaded, and is then
+  abandoned without hitting retry, still orphans those files — but D16 ensures
+  repeated retries never compound this, so the worst case is bounded to
+  roughly the same order of magnitude as today's single-media orphan risk, not
+  a multiple of it. A reaping job for unreferenced `Media` rows remains the
+  correct long-term fix and stays out of scope here.
 - **`media_id` denormalization.** See D1. Removable once Stage 3 is stable.

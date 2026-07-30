@@ -98,6 +98,37 @@ describe('composer parity — FR-035 gate (Stages 1–2 only)', () => {
   });
 });
 
+describe('composer parity — pending-preview & upload-timing revision (2026-07-30)', () => {
+  it('both composers render the shared PendingMediaStrip instead of ad hoc preview markup', () => {
+    expect(shoutInput).toContain("from './PendingMediaStrip'");
+    expect(shoutCard).toContain("from './PendingMediaStrip'");
+    expect(shoutInput).toMatch(/<PendingMediaStrip\b/);
+    expect(shoutCard).toMatch(/<PendingMediaStrip\b/);
+  });
+
+  it('both composers call media.submit() before building the create request (FR-041)', () => {
+    expect(shoutInput).toMatch(/await media\.submit\(\)/);
+    expect(shoutCard).toMatch(/await replyMedia\.submit\(\)/);
+  });
+
+  it('both composers bail out without posting when submit() returns null', () => {
+    expect(shoutInput).toMatch(/if \(!uploadResult\) return/);
+    expect(shoutCard).toMatch(/if \(!uploadResult\) return/);
+  });
+
+  it('both composers expose a "Попробовать снова" retry action tied to the atomic-submit failure', () => {
+    expect(shoutInput).toMatch(/SUBMIT_FAILED_MESSAGE/);
+    expect(shoutCard).toMatch(/SUBMIT_FAILED_MESSAGE/);
+    expect(shoutInput).toContain('Попробовать снова');
+    expect(shoutCard).toContain('Попробовать снова');
+  });
+
+  it('both composers use removeItem for per-item removal, not clear() (FR-024)', () => {
+    expect(shoutInput).toMatch(/media\.removeItem\(/);
+    expect(shoutCard).toMatch(/replyMedia\.removeItem\(/);
+  });
+});
+
 describe('gallery rendering (FR-012, FR-031, FR-036)', () => {
   it('ShoutCard renders GalleryGrid for both shouts and comments', () => {
     expect(shoutCard).toContain("import GalleryGrid from './GalleryGrid'");
