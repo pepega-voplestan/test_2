@@ -404,7 +404,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                     <div className="w-6 h-6 border-2 border-th-text-4 border-t-th-text rounded-full animate-spin" />
                   </div>
                 )}
-                <PendingMediaStrip items={mediaItems} onRemove={removeMediaItem} disabled={isUploading} />
+                <PendingMediaStrip items={mediaItems} onRemove={removeMediaItem} disabled={isUploading} edgeToEdge />
               </div>
             )}
 

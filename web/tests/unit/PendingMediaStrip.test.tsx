@@ -28,30 +28,74 @@ describe('PendingMediaStrip — container layout (FR-038, FR-039)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('lays out items in a single bordered, horizontally-scrolling row', () => {
+  it('lays out items in a full-width horizontally-scrolling row with only a top divider', () => {
     const items = [item({ localId: 'a' }), item({ localId: 'b' }), item({ localId: 'c' })];
     const { container } = render(<PendingMediaStrip items={items} onRemove={vi.fn()} />);
     const strip = container.firstElementChild as HTMLElement;
-    expect(strip.className).toMatch(/border/);
-    expect(strip.className).toMatch(/overflow-x-auto/);
-    expect(strip.className).not.toMatch(/flex-wrap/);
+    const classes = strip.className.split(/\s+/);
+    expect(classes).toContain('border-t');
+    // Only a top divider — no side/bottom border or box chrome (a color
+    // modifier like border-th-border is fine; a bare all-sides `border` or a
+    // rounded corner is not).
+    expect(classes).not.toContain('border');
+    expect(classes).not.toContain('border-b');
+    expect(classes).not.toContain('border-l');
+    expect(classes).not.toContain('border-r');
+    expect(classes.some((c) => c.startsWith('rounded'))).toBe(false);
+    expect(classes).toContain('overflow-x-auto');
+    expect(classes).not.toContain('flex-wrap');
+  });
+
+  it('does not cancel ambient padding by default, so the divider matches its immediate container\'s width', () => {
+    const { container } = render(<PendingMediaStrip items={[item()]} onRemove={vi.fn()} />);
+    const strip = container.firstElementChild as HTMLElement;
+    const classes = strip.className.split(/\s+/);
+    expect(classes).not.toContain('-mx-4');
+  });
+
+  it('cancels a p-4 ancestor\'s horizontal padding when edgeToEdge is set, so the divider reaches the true edges of the composer box', () => {
+    const { container } = render(<PendingMediaStrip items={[item()]} onRemove={vi.fn()} edgeToEdge />);
+    const strip = container.firstElementChild as HTMLElement;
+    const classes = strip.className.split(/\s+/);
+    expect(classes).toContain('-mx-4');
+    expect(classes).toContain('px-4');
   });
 });
 
-describe('PendingMediaStrip — sizing (FR-040)', () => {
-  it('renders every tile at the unified 80px max-height regardless of context', () => {
+describe('PendingMediaStrip — sizing and ratio (FR-040)', () => {
+  it('renders every tile in a uniform 80×80 square box regardless of context or the item\'s own aspect ratio', () => {
     const items = [item({ localId: 'a' }), item({ localId: 'b', isVideo: true })];
     render(<PendingMediaStrip items={items} onRemove={vi.fn()} />);
     const img = screen.getByAltText('preview');
-    expect(img.className).toMatch(/max-h-20/);
     const video = document.querySelector('video') as HTMLElement;
-    expect(video.className).toMatch(/max-h-20/);
+    // The outer tile wrapper (grandparent of the media, parent of the letterbox
+    // clipping div) carries the fixed box size.
+    for (const el of [img.parentElement?.parentElement as HTMLElement, video.parentElement?.parentElement as HTMLElement]) {
+      expect(el.className).toMatch(/w-20/);
+      expect(el.className).toMatch(/h-20/);
+    }
   });
 
-  it('keeps the remove control at its existing visible size', () => {
+  it('fits the media inside its box without cropping or stretching, letterboxing thin/short items', () => {
+    render(<PendingMediaStrip items={[item()]} onRemove={vi.fn()} />);
+    const img = screen.getByAltText('preview');
+    expect(img.className).toMatch(/object-contain/);
+  });
+
+  it('fills letterbox gaps with the page\'s own darkest background token', () => {
+    render(<PendingMediaStrip items={[item()]} onRemove={vi.fn()} />);
+    const clip = screen.getByAltText('preview').parentElement as HTMLElement;
+    expect(clip.className).toMatch(/bg-th-page/);
+    expect(clip.className).toMatch(/overflow-hidden/);
+  });
+
+  it('keeps the remove control at its existing visible size, on a wrapper that does not clip it', () => {
     render(<PendingMediaStrip items={[item()]} onRemove={vi.fn()} />);
     const button = screen.getByRole('button');
     expect(button.className).toMatch(/w-6 h-6/);
+    // The button's own parent (the outer w-20 h-20 tile wrapper) must NOT
+    // clip content, or the button's negative-offset position gets cut off.
+    expect(button.parentElement?.className).not.toMatch(/overflow-hidden/);
   });
 });
 

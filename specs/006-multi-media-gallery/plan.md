@@ -299,7 +299,8 @@ component — see "Revision" at the top of this file.
   pure state mutation, no server call, since nothing has been uploaded yet.
 - `PendingMediaStrip.tsx` (NEW): renders the pending list in its own bordered
   container with a thin divider, single horizontal row, horizontal scroll on
-  overflow (FR-038/FR-039). Each tile is 80px max-height (FR-040, unified across
+  overflow (FR-038/FR-039). Each tile is a uniform 80×80 square with letterboxed
+  contents on a `th-page` background (FR-040, revised same-day 2026-07-30; unified across
   both composers, down from the shipped 160px/96px split) with its own remove
   control (kept at its current visual size) and opens `Lightbox` on its local
   object URL when clicked (FR-037). Consumed by both `ShoutInput.tsx` and the

@@ -127,6 +127,11 @@ describe('composer parity — pending-preview & upload-timing revision (2026-07-
     expect(shoutInput).toMatch(/media\.removeItem\(/);
     expect(shoutCard).toMatch(/replyMedia\.removeItem\(/);
   });
+
+  it('ShoutInput cancels its form\'s p-4 so the divider reaches the box edges; ShoutCard\'s reply form has no padding to cancel', () => {
+    expect(shoutInput).toMatch(/<PendingMediaStrip\b[^>]*\bedgeToEdge\b/);
+    expect(shoutCard).not.toMatch(/<PendingMediaStrip\b[^>]*\bedgeToEdge\b/);
+  });
 });
 
 describe('gallery rendering (FR-012, FR-031, FR-036)', () => {
