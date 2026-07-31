@@ -613,3 +613,28 @@ split without either blocking the other.
 - `CLAUDE.md` and `docs/*.md` are modified **only** through the `/docs` skill — as of 2026-07-31 this applies to **two** corrections: the original "Single media per post/comment" amendment (T003) and the follow-up "images/GIFs" → "images" narrowing (T112)
 - Galleries are **images-only, permanently**, as of 2026-07-31 (T109, T110) — video was always excluded (FR-028); GIFs (either an uploaded animated file or a Giphy-picker reference) now are too, unconditionally, with no future stage that re-enables them
 - Commit after each task or logical group; stop at any checkpoint to validate
+
+---
+
+## Phase 7: Convergence
+
+**Why**: A mobile UI/UX review of the deployed Stage 1 build (post-1d) surfaced
+three gaps between shipped code and already-stated spec intent, all confined to
+mobile touch ergonomics in the composer and carousel. Two additional review
+findings were evaluated and deliberately **not** appended here: a request to
+change the >5-photo selection from reject-all to partial-accept contradicts the
+explicit, clarified FR-033 decision (Session 2026-07-25) rather than closing a
+gap — reopening it requires `/speckit-clarify`, not convergence; and the
+`Lightbox.tsx` close-button size is out of this feature's scope, since
+`plan.md` (research D13/D20) explicitly reuses `Lightbox.tsx` unchanged.
+
+- [ ] T113 [P] [US1] Enlarge the pending-item remove control's tap target in `web/components/PendingMediaStrip.tsx` (currently 24×24px `w-6 h-6` at `-top-2 -right-2`, roughly half overlapping the 80×80 tile) to a full ≥44px hit area via padding, without enlarging the visible icon, so removal registers reliably on mobile per FR-024 (partial)
+- [ ] T114 [P] [US1] Guard against a tap on the remove control being swallowed by an in-progress horizontal scroll/fling on the pending-item strip's `overflow-x-auto` container in `web/components/PendingMediaStrip.tsx` — this is the diagnosed root cause of the reported "add-photo button stays disabled after removing a mid-list item" defect: the removal tap is lost, `items.length` never actually decreases, and the add button is correctly (not stalely) still showing capacity-full (FR-024, partial)
+- [ ] T115 [US1] Add a regression test in `web/tests/unit/PendingMediaStrip.test.tsx` asserting the remove control's hit area meets a ≥44px minimum and that a tap immediately following a scroll event on the strip still triggers `removeItem` (FR-024, partial)
+- [ ] T116 [US1] Add horizontal pointer-swipe-to-navigate on the carousel tile in `web/components/GalleryCarousel.tsx` (`onPointerDown`/`onPointerUp` tracking `clientX` delta + velocity threshold, `touchAction: 'pan-y'` to preserve vertical page scroll; a zero-movement pointer sequence must still resolve as tile activation, not a swipe), fulfilling the spec's Assumptions section framing that touch swipe is "a natural extension" expected beyond the guaranteed arrow-control baseline (spec.md Assumptions: "Carousel navigation controls are input-agnostic", partial)
+- [ ] T117 [P] [US1] Enlarge the carousel's prev/next arrow buttons in `web/components/GalleryCarousel.tsx` from 32×32px (`w-8 h-8`) to a ≥44px tap target, improving mobile usability per SC-005 ("reachable and usable... at the narrowest supported mobile width") (SC-005, partial)
+- [ ] T118 [US1] Extend `web/tests/unit/GalleryCarousel.test.tsx` with pointer-swipe navigation coverage — a left/right swipe past the distance/velocity threshold triggers `goNext`/`goPrev`, and existing click/keyboard tile-activation assertions still pass unchanged (SC-005, partial)
+- [ ] T119 [P] [US1] Align the reply composer's attach/spoiler icon buttons in `web/components/ShoutCard.tsx` (~lines 1828-1843, currently ~20×20px) with the existing `minWidth:44,minHeight:36` convention already used by the same file's `clearReplyTo` button, for consistency with FR-031's identical-behavior intent across both composers (FR-031, unrequested — inconsistent touch-target sizing between composers, not itself a numerically stated requirement)
+- [ ] T120 [P] [US1] Add `break-words` (or equivalent) to the upload-failure filename list in `web/components/ShoutInput.tsx` (~444-446) and `web/components/ShoutCard.tsx` (~1876) so a long unbroken filename cannot overflow the error box on narrow mobile viewports, keeping FR-034's per-file failure reporting legible (FR-034, partial)
+
+**Checkpoint**: pending-item removal is reliable on mobile; the carousel supports swipe navigation with adequately sized fallback controls; composer touch-target sizing and failure-message legibility are consistent across both composers. Not gated on a production redeploy of its own — bundles into the next Stage 1 polish deploy.

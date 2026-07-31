@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PendingMediaStrip from '../../components/PendingMediaStrip';
 import type { PendingItem } from '../../hooks/useMediaAttachments';
@@ -89,13 +89,62 @@ describe('PendingMediaStrip — sizing and ratio (FR-040)', () => {
     expect(clip.className).toMatch(/overflow-hidden/);
   });
 
-  it('keeps the remove control at its existing visible size, on a wrapper that does not clip it', () => {
+  it('keeps the remove control\'s visible circle at its existing size, on a wrapper that does not clip it', () => {
     render(<PendingMediaStrip items={[item()]} onRemove={vi.fn()} />);
     const button = screen.getByRole('button');
-    expect(button.className).toMatch(/w-6 h-6/);
+    // The visible circle (an inner span, 2026-07-31 revision) stays 24×24 —
+    // FR-040 requires the control's own visible size not shrink.
+    expect(button.firstElementChild?.className).toMatch(/w-6 h-6/);
     // The button's own parent (the outer w-20 h-20 tile wrapper) must NOT
     // clip content, or the button's negative-offset position gets cut off.
     expect(button.parentElement?.className).not.toMatch(/overflow-hidden/);
+  });
+});
+
+describe('PendingMediaStrip — remove control tap target (FR-024, Phase 7 convergence)', () => {
+  it('has a 44×44 hit area even though the visible circle stays 24×24', () => {
+    render(<PendingMediaStrip items={[item()]} onRemove={vi.fn()} />);
+    const button = screen.getByRole('button');
+    expect(button.className).toMatch(/w-11 h-11/);
+  });
+
+  it('still removes the item on a plain tap (no movement, no scroll)', async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+    render(<PendingMediaStrip items={[item({ localId: 'a' })]} onRemove={onRemove} />);
+    await user.click(screen.getByRole('button'));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith('a');
+  });
+
+  it('skips removal when the pointerup follows significant horizontal movement (a drag/scroll gesture, not a tap)', () => {
+    const onRemove = vi.fn();
+    render(<PendingMediaStrip items={[item({ localId: 'a' })]} onRemove={onRemove} />);
+    const button = screen.getByRole('button');
+    fireEvent.pointerDown(button, { clientX: 100 });
+    fireEvent.pointerUp(button, { clientX: 130 }); // 30px > TAP_MOVE_THRESHOLD
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it('skips removal when the strip itself scrolled between pointerdown and pointerup (a tap that lands mid-scroll)', () => {
+    const onRemove = vi.fn();
+    const { container } = render(<PendingMediaStrip items={[item({ localId: 'a' })]} onRemove={onRemove} />);
+    const strip = container.firstElementChild as HTMLElement;
+    const button = screen.getByRole('button');
+    fireEvent.pointerDown(button, { clientX: 100 });
+    Object.defineProperty(strip, 'scrollLeft', { value: 40, configurable: true });
+    fireEvent.pointerUp(button, { clientX: 100 });
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it('still removes the item via keyboard activation (Enter), which has no pointer coordinates', async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+    render(<PendingMediaStrip items={[item({ localId: 'a' })]} onRemove={onRemove} />);
+    screen.getByRole('button').focus();
+    await user.keyboard('{Enter}');
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith('a');
   });
 });
 
