@@ -174,3 +174,10 @@ describe('gallery rendering — single-item carousel (FR-012, FR-031, FR-036, re
     expect(shoutCard).not.toMatch(/comment\.gallery\[galleryIndex\]\.animated/);
   });
 });
+
+describe('upload-failure filenames wrap on narrow viewports (FR-034, Phase 7 convergence)', () => {
+  it('both composers apply word-break to the per-file failure list', () => {
+    expect(shoutInput).toMatch(/media\.failures\.map[\s\S]{0,80}break-words/);
+    expect(shoutCard).toMatch(/replyMedia\.failures\.map[\s\S]{0,120}break-words/);
+  });
+});
