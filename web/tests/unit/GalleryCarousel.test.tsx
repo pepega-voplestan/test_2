@@ -23,6 +23,12 @@ const tile = () => screen.getByTestId('gallery-carousel-tile');
 const prevButton = () => screen.getByTestId('gallery-carousel-prev');
 const nextButton = () => screen.getByTestId('gallery-carousel-next');
 const indicator = () => screen.getByTestId('gallery-carousel-indicator');
+// The plain `tile().querySelector('img')` only reliably means "the current
+// image" while no drag is in progress — once a pointerdown mounts the
+// prev/next neighbor panels, the DOM has 3 <img>s and querySelector returns
+// whichever is first in source order, not necessarily the current one. This
+// helper is unambiguous in both states.
+const currentImg = () => screen.getByTestId('gallery-carousel-current-img');
 
 describe('GalleryCarousel — renders nothing for 0/1 items (FR-016, FR-032)', () => {
   it('renders null for an empty gallery', () => {
@@ -285,6 +291,31 @@ describe('GalleryCarousel — pointer-swipe navigation (SC-005, Phase 7 converge
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('flushes an interrupted swipe immediately when a new gesture starts before it settles, instead of dropping it', () => {
+    // Regression: swiping a couple of times quickly and then tapping to open
+    // used to sometimes need a second tap on mobile. Root cause — a new
+    // gesture's pointerdown used to just cancel the previous swipe's pending
+    // settle timer, dropping its index commit and leaving the track visually
+    // mid-transition; the tap that followed then had to reconcile that stale
+    // state before a *second* tap actually worked. The fix flushes the
+    // pending commit synchronously instead of dropping it.
+    const onOpen = vi.fn();
+    render(<GalleryCarousel items={items(3)} maxHeight={300} onOpen={onOpen} />);
+
+    // First swipe commits to index 1, but its settle timer hasn't fired yet —
+    // no timers are advanced here, matching a real quick swipe-then-tap.
+    fireEvent.pointerDown(tile(), { clientX: 200 });
+    fireEvent.pointerUp(tile(), { clientX: 100 });
+
+    // Immediately tap to open, before the swipe above settles.
+    fireEvent.pointerDown(tile(), { clientX: 50 });
+    fireEvent.pointerUp(tile(), { clientX: 50 });
+    fireEvent.click(tile());
+
+    expect(onOpen).toHaveBeenCalledWith(1);
+    expect(currentImg()).toHaveAttribute('src', '/media/m1/960.webp');
   });
 
   it('does not open the viewer when the pointer sequence was a swipe', () => {

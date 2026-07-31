@@ -63,13 +63,13 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
   const startX = useRef(0);
   const startTime = useRef(0);
   const frameWidth = useRef(0);
-  const settleTimer = useRef<number | null>(null);
+  const settleTimer = useRef<{ id: number; flush: () => void } | null>(null);
 
   // Cancels a pending settle timeout if the carousel unmounts mid-animation
   // (e.g. the reader navigates away right after swiping), so it never fires
   // setState on an unmounted component.
   useEffect(() => () => {
-    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current.id);
   }, []);
 
   // 0 or 1 items is the single-image path's job; rendering nothing here keeps
@@ -92,8 +92,16 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
   };
 
   const onTilePointerDown = (e: React.PointerEvent) => {
+    // A new gesture (including a plain tap) starting before the previous
+    // swipe's settle animation finished used to just cancel that pending
+    // timer outright, silently dropping its index commit and leaving the
+    // track mid-transition — the reported "first tap after a quick swipe
+    // doesn't open the image" bug. Flushing it immediately instead means the
+    // interrupted swipe always finishes committing before the new gesture's
+    // own state (startX, frameWidth, didSwipe) gets set up.
     if (settleTimer.current !== null) {
-      window.clearTimeout(settleTimer.current);
+      window.clearTimeout(settleTimer.current.id);
+      settleTimer.current.flush();
       settleTimer.current = null;
     }
     dragging.current = true;
@@ -119,19 +127,21 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
       didSwipe.current = true;
       const advancing = dx < 0;
       applyTrackTransform(advancing ? -width : width, true);
-      settleTimer.current = window.setTimeout(() => {
+      const commit = () => {
         if (advancing) goNext();
         else goPrev();
         applyTrackTransform(0, false);
         setNeighborsMounted(false);
         settleTimer.current = null;
-      }, SETTLE_MS);
+      };
+      settleTimer.current = { id: window.setTimeout(commit, SETTLE_MS), flush: commit };
     } else {
       applyTrackTransform(0, true);
-      settleTimer.current = window.setTimeout(() => {
+      const finish = () => {
         setNeighborsMounted(false);
         settleTimer.current = null;
-      }, SETTLE_MS);
+      };
+      settleTimer.current = { id: window.setTimeout(finish, SETTLE_MS), flush: finish };
     }
   };
 
@@ -145,10 +155,11 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
     if (!dragging.current) return;
     dragging.current = false;
     applyTrackTransform(0, true);
-    settleTimer.current = window.setTimeout(() => {
+    const finish = () => {
       setNeighborsMounted(false);
       settleTimer.current = null;
-    }, SETTLE_MS);
+    };
+    settleTimer.current = { id: window.setTimeout(finish, SETTLE_MS), flush: finish };
   };
 
   return (
@@ -188,6 +199,7 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
             </div>
           )}
           <img
+            data-testid="gallery-carousel-current-img"
             src={current.url}
             alt=""
             loading="lazy"
