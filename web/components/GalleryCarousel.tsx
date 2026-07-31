@@ -1,10 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { GalleryItem } from '../types';
 
 /** Minimum horizontal drag distance (px) that counts as a swipe rather than a tap. */
 const SWIPE_DISTANCE_THRESHOLD = 40;
 /** Minimum drag velocity (px/ms) that counts as a swipe even under the distance threshold. */
 const SWIPE_VELOCITY_THRESHOLD = 0.5;
+/** How long the "finish the page turn" / "spring back" animation takes. */
+const SETTLE_MS = 260;
+const SETTLE_TRANSITION = `transform ${SETTLE_MS}ms cubic-bezier(.2,.8,.3,1)`;
 
 interface GalleryCarouselProps {
   items: GalleryItem[];
@@ -39,13 +42,35 @@ interface GalleryCarouselProps {
  * tile activation — `didSwipe` only gets set once the threshold is crossed,
  * and the tile's `onClick` bails out when it was. The arrow buttons are
  * bumped to a 44px touch target (previously 32px) as the fallback control.
+ *
+ * The drag visually tracks the finger (2026-08-01 revision): while dragging,
+ * the adjacent item is mounted off-frame and both images move together via a
+ * single `transform` on the track wrapper, applied imperatively (not React
+ * state) so it stays smooth at pointer-move frequency — the same technique
+ * `Lightbox.tsx` already uses for its own drag. Crossing the threshold
+ * animates the track the rest of the way (`SETTLE_MS`, matching Lightbox's
+ * transition curve) and only then commits the index change, so the slide
+ * completes visually before the data model — and the now-current image's
+ * neighbors — update underneath it.
  */
 const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onOpen }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [neighborsMounted, setNeighborsMounted] = useState(false);
+  const tileRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const didSwipe = useRef(false);
   const startX = useRef(0);
   const startTime = useRef(0);
+  const frameWidth = useRef(0);
+  const settleTimer = useRef<number | null>(null);
+
+  // Cancels a pending settle timeout if the carousel unmounts mid-animation
+  // (e.g. the reader navigates away right after swiping), so it never fires
+  // setState on an unmounted component.
+  useEffect(() => () => {
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+  }, []);
 
   // 0 or 1 items is the single-image path's job; rendering nothing here keeps
   // pre-existing single-media content byte-identical (FR-016, FR-032).
@@ -53,28 +78,77 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
 
   const length = items.length;
   const current = items[currentIndex];
+  const prevIndex = (currentIndex - 1 + length) % length;
+  const nextIndex = (currentIndex + 1) % length;
 
   const goPrev = () => setCurrentIndex((i) => (i - 1 + length) % length);
   const goNext = () => setCurrentIndex((i) => (i + 1) % length);
 
+  const applyTrackTransform = (dx: number, animate: boolean) => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.style.transition = animate ? SETTLE_TRANSITION : 'none';
+    track.style.transform = `translateX(${dx}px)`;
+  };
+
   const onTilePointerDown = (e: React.PointerEvent) => {
+    if (settleTimer.current !== null) {
+      window.clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
     dragging.current = true;
     didSwipe.current = false;
     startX.current = e.clientX;
     startTime.current = Date.now();
+    frameWidth.current = tileRef.current?.clientWidth ?? 0;
+    setNeighborsMounted(true);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const onTilePointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    const dx = e.clientX - startX.current;
+    const width = frameWidth.current || 1;
+    applyTrackTransform(Math.max(-width, Math.min(width, dx)), false);
+  };
+
+  const endDrag = (dx: number, elapsed: number) => {
+    const width = frameWidth.current || 1;
+    const velocity = Math.abs(dx) / Math.max(elapsed, 1);
+    if (Math.abs(dx) > SWIPE_DISTANCE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD) {
+      didSwipe.current = true;
+      const advancing = dx < 0;
+      applyTrackTransform(advancing ? -width : width, true);
+      settleTimer.current = window.setTimeout(() => {
+        if (advancing) goNext();
+        else goPrev();
+        applyTrackTransform(0, false);
+        setNeighborsMounted(false);
+        settleTimer.current = null;
+      }, SETTLE_MS);
+    } else {
+      applyTrackTransform(0, true);
+      settleTimer.current = window.setTimeout(() => {
+        setNeighborsMounted(false);
+        settleTimer.current = null;
+      }, SETTLE_MS);
+    }
   };
 
   const onTilePointerUp = (e: React.PointerEvent) => {
     if (!dragging.current) return;
     dragging.current = false;
-    const dx = e.clientX - startX.current;
-    const elapsed = Math.max(Date.now() - startTime.current, 1);
-    const velocity = Math.abs(dx) / elapsed;
-    if (Math.abs(dx) > SWIPE_DISTANCE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD) {
-      didSwipe.current = true;
-      if (dx < 0) goNext();
-      else goPrev();
-    }
+    endDrag(e.clientX - startX.current, Date.now() - startTime.current);
+  };
+
+  const onTilePointerCancel = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    applyTrackTransform(0, true);
+    settleTimer.current = window.setTimeout(() => {
+      setNeighborsMounted(false);
+      settleTimer.current = null;
+    }, SETTLE_MS);
   };
 
   return (
@@ -85,12 +159,15 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
       style={{ maxHeight: `${maxHeight}px`, maxWidth: `${maxHeight}px` }}
     >
       <div
+        ref={tileRef}
         data-testid="gallery-carousel-tile"
         role="button"
         tabIndex={0}
         aria-label={`Изображение ${currentIndex + 1} из ${length}`}
         onPointerDown={onTilePointerDown}
+        onPointerMove={onTilePointerMove}
         onPointerUp={onTilePointerUp}
+        onPointerCancel={onTilePointerCancel}
         onClick={() => {
           if (didSwipe.current) return;
           onOpen?.(currentIndex);
@@ -104,13 +181,25 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
         style={{ touchAction: 'pan-y' }}
         className="w-full h-full cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0087ff]"
       >
-        <img
-          src={current.url}
-          alt=""
-          loading="lazy"
-          draggable={false}
-          className="w-full h-full object-contain"
-        />
+        <div ref={trackRef} data-testid="gallery-carousel-track" className="relative w-full h-full" style={{ willChange: 'transform' }}>
+          {neighborsMounted && (
+            <div className="absolute inset-0" style={{ transform: 'translateX(-100%)' }}>
+              <img src={items[prevIndex].url} alt="" draggable={false} className="w-full h-full object-contain" />
+            </div>
+          )}
+          <img
+            src={current.url}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+          {neighborsMounted && (
+            <div className="absolute inset-0" style={{ transform: 'translateX(100%)' }}>
+              <img src={items[nextIndex].url} alt="" draggable={false} className="w-full h-full object-contain" />
+            </div>
+          )}
+        </div>
       </div>
 
       <button
