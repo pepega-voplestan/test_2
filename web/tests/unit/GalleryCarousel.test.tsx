@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GalleryCarousel from '../../components/GalleryCarousel';
 import type { GalleryItem } from '../../types';
@@ -166,5 +166,88 @@ describe('GalleryCarousel — tile activation (FR-036)', () => {
     render(<GalleryCarousel items={items(3)} maxHeight={300} />);
     expect(tile()).toHaveAccessibleName();
     expect(tile().tabIndex).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('GalleryCarousel — arrow touch target (SC-005, Phase 7 convergence)', () => {
+  it('sizes the prev/next buttons to a 44px touch target', () => {
+    render(<GalleryCarousel items={items(3)} maxHeight={300} />);
+    expect(prevButton().className).toMatch(/w-11 h-11/);
+    expect(nextButton().className).toMatch(/w-11 h-11/);
+  });
+});
+
+describe('GalleryCarousel — pointer-swipe navigation (SC-005, Phase 7 convergence)', () => {
+  it('advances to the next item on a leftward swipe past the distance threshold', () => {
+    render(<GalleryCarousel items={items(3)} maxHeight={300} />);
+    fireEvent.pointerDown(tile(), { clientX: 200 });
+    fireEvent.pointerUp(tile(), { clientX: 100 }); // 100px left, past the 40px threshold
+    expect(tile().querySelector('img')).toHaveAttribute('src', '/media/m1/960.webp');
+  });
+
+  it('goes to the previous item on a rightward swipe past the distance threshold', () => {
+    render(<GalleryCarousel items={items(3)} maxHeight={300} />);
+    fireEvent.pointerDown(tile(), { clientX: 100 });
+    fireEvent.pointerUp(tile(), { clientX: 200 }); // 100px right
+    expect(tile().querySelector('img')).toHaveAttribute('src', '/media/m2/960.webp'); // wraps to last
+  });
+
+  it('loops past the last item on a swipe, same as the arrow controls', () => {
+    render(<GalleryCarousel items={items(3)} maxHeight={300} />);
+    fireEvent.pointerDown(tile(), { clientX: 200 });
+    fireEvent.pointerUp(tile(), { clientX: 100 });
+    fireEvent.pointerDown(tile(), { clientX: 200 });
+    fireEvent.pointerUp(tile(), { clientX: 100 });
+    fireEvent.pointerDown(tile(), { clientX: 200 });
+    fireEvent.pointerUp(tile(), { clientX: 100 }); // 3rd swipe past the last item
+    expect(tile().querySelector('img')).toHaveAttribute('src', '/media/m0/960.webp');
+  });
+
+  it('does not treat a slow small movement below the distance/velocity threshold as a swipe', () => {
+    // A synchronous pointerdown→pointerup with no elapsed time would make even
+    // a 1px movement register as an infinite-velocity "swipe" — advance fake
+    // time to simulate a real (slow, small) drag, which is what this case
+    // is meant to guard against (e.g. an unsteady tap, not an intentional swipe).
+    vi.useFakeTimers();
+    try {
+      render(<GalleryCarousel items={items(3)} maxHeight={300} />);
+      fireEvent.pointerDown(tile(), { clientX: 100 });
+      vi.advanceTimersByTime(300);
+      fireEvent.pointerUp(tile(), { clientX: 110 }); // 10px over 300ms — under both thresholds
+      expect(tile().querySelector('img')).toHaveAttribute('src', '/media/m0/960.webp');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats a fast small flick above the velocity threshold as a swipe even under the distance threshold', () => {
+    vi.useFakeTimers();
+    try {
+      render(<GalleryCarousel items={items(3)} maxHeight={300} />);
+      fireEvent.pointerDown(tile(), { clientX: 100 });
+      vi.advanceTimersByTime(20);
+      fireEvent.pointerUp(tile(), { clientX: 80 }); // 20px leftward over 20ms = 1px/ms, past the 0.5 velocity threshold
+      expect(tile().querySelector('img')).toHaveAttribute('src', '/media/m1/960.webp'); // advances forward
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not open the viewer when the pointer sequence was a swipe', () => {
+    const onOpen = vi.fn();
+    render(<GalleryCarousel items={items(3)} maxHeight={300} onOpen={onOpen} />);
+    fireEvent.pointerDown(tile(), { clientX: 200 });
+    fireEvent.pointerUp(tile(), { clientX: 100 });
+    fireEvent.click(tile());
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('still opens the viewer on a plain tap (pointer sequence with no movement)', () => {
+    const onOpen = vi.fn();
+    render(<GalleryCarousel items={items(3)} maxHeight={300} onOpen={onOpen} />);
+    fireEvent.pointerDown(tile(), { clientX: 100 });
+    fireEvent.pointerUp(tile(), { clientX: 100 });
+    fireEvent.click(tile());
+    expect(onOpen).toHaveBeenCalledWith(0);
   });
 });
