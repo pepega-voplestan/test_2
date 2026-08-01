@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { GalleryItem } from '../types';
 
 /** Minimum horizontal drag distance (px) that counts as a swipe rather than a tap. */
@@ -86,6 +86,21 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
     if (settleTimer.current !== null) window.clearTimeout(settleTimer.current.id);
   }, []);
 
+  // Resetting the track's own transform to neutral used to happen inline in
+  // commit() (see endDrag), right after calling goNext()/goPrev() — but that
+  // setState is async, so the imperative DOM mutation could land before React
+  // re-rendered the new current image, visibly flashing the OLD image at the
+  // neutral (fully on-frame) position for a frame. useLayoutEffect fires
+  // synchronously after the DOM already reflects the new currentIndex but
+  // before the browser paints, so by the time the transform resets, the
+  // correct image is already what's underneath it.
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(0px)';
+  }, [currentIndex]);
+
   // 0 or 1 items is the single-image path's job; rendering nothing here keeps
   // pre-existing single-media content byte-identical (FR-016, FR-032).
   if (!items || items.length < 2) return null;
@@ -144,9 +159,11 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
       const advancing = dx < 0;
       applyTrackTransform(advancing ? -width : width, true);
       const commit = () => {
+        // No applyTrackTransform(0, false) here — the neutral-position reset
+        // is handled by the useLayoutEffect above, keyed on currentIndex, so
+        // it can never land before the new image does (see that effect).
         if (advancing) goNext();
         else goPrev();
-        applyTrackTransform(0, false);
         setNeighborsMounted(false);
         settleTimer.current = null;
       };
