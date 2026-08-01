@@ -1827,16 +1827,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                           <EmojiPicker size="sm" onSelect={insertEmoji} onSelectGif={user?.mediaAllowed !== false && !replyDetectedYtId && !replyGifBlocked ? handleCommentGifSelect : undefined} />
                           <button type="button" onClick={() => replyFileInputRef.current?.click()}
                             disabled={isReplyUploading || replyImageBlocked || user?.mediaAllowed === false}
-                            className={`flex items-center justify-center transition-colors ${replyMedia.hasMedia ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
-                            style={{ minWidth: 44, minHeight: 36, WebkitTapHighlightColor: 'transparent' }}
+                            className={`p-0.5 transition-colors ${replyMedia.hasMedia ? 'text-[#0087ff]' : 'text-th-text-4 hover:text-th-text-2'} disabled:opacity-40`}
                             title={user?.mediaAllowed === false ? 'Вам запрещено прикреплять медиафайлы' : replyMedia.isFull ? 'Достигнут лимит в 5 файлов' : replyMedia.hasGif ? 'GIF нельзя совмещать с изображениями' : 'Прикрепить изображения (или перетащите)'}>
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                             </svg>
                           </button>
                           <button type="button" onClick={() => mentionInputRef.current?.wrapSpoiler()}
-                            className="flex items-center justify-center text-th-text-4 hover:text-th-text-2 transition-colors"
-                            style={{ minWidth: 44, minHeight: 36, WebkitTapHighlightColor: 'transparent' }}
+                            className="p-0.5 text-th-text-4 hover:text-th-text-2 transition-colors"
                             title="Спойлер (||текст||)">
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
