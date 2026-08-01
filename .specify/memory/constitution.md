@@ -1,30 +1,45 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (template / unversioned) → 1.0.0
-Rationale: Initial ratification. First concrete constitution replacing the
-unfilled template. MAJOR bump to 1.0.0 establishes the baseline governance set.
+Version change: 2.0.0 → 3.0.0
+Rationale: MAJOR bump. The "Bounded media galleries per post/comment" Domain
+Constraint (established in v2.0.0) is narrowed, not merely clarified: it
+previously permitted "an ordered gallery of up to five image/GIF items,"
+explicitly allowing GIFs as gallery members. That permission is now withdrawn —
+a gallery may only contain images. A gallery configuration that was
+constitutionally valid under v2.0.0 (multiple GIFs, or a GIF mixed with
+images) is no longer valid under v3.0.0, which is the backward-incompatibility
+per this document's own Versioning rule ("MAJOR for backward-incompatible
+principle removals or redefinitions").
 
-Modified principles:
-  - [PRINCIPLE_1_NAME] → I. Session-Based Authentication Only
-  - [PRINCIPLE_2_NAME] → II. Russian-Language UI Integrity
-  - [PRINCIPLE_3_NAME] → III. Soft-Delete & Data Preservation (NON-NEGOTIABLE)
-  - [PRINCIPLE_4_NAME] → IV. Validated, Prisma-Mediated Data Access
-  - [PRINCIPLE_5_NAME] → V. Optimistic UI with Guaranteed Rollback
+Driven by: specs/006-multi-media-gallery (Multi-Media Gallery Attachments),
+2026-07-31 revision (published-gallery carousel & permanent GIF exclusion).
 
-Added sections:
-  - Domain & Content Constraints (was [SECTION_2_NAME])
-  - Development Workflow & Quality Gates (was [SECTION_3_NAME])
+Modified sections:
+  - Domain & Content Constraints → "Bounded media galleries per post/comment"
+    narrowed from "an ordered gallery of up to five image/GIF items" to "an
+    ordered gallery of up to five images" — GIFs (and video, unchanged) are
+    excluded from any gallery of 2+ items. A single GIF attachment (not part
+    of a gallery) is unaffected.
+
+Unchanged: all five Core Principles (I–V), every other Domain Constraint, the
+five-item ceiling, the gallery/YouTube exclusivity, publish-time immutability,
+and the entire Development Workflow & Quality Gates section.
 
 Removed sections: none
 
 Templates requiring updates:
-  - ✅ .specify/templates/plan-template.md (uses dynamic Constitution Check gate;
-       no hardcoded principles — remains aligned)
+  - ✅ .specify/templates/plan-template.md (dynamic Constitution Check gate; no
+       hardcoded principles — remains aligned)
   - ✅ .specify/templates/spec-template.md (no constitution coupling)
   - ✅ .specify/templates/tasks-template.md (no constitution coupling)
 
-Follow-up TODOs: none. Ratification date set to initial adoption date.
+Runtime guidance requiring propagation:
+  - CLAUDE.md "Bounded media gallery per post/comment" bullet → updated via the
+    /docs skill (never edited directly), tracked as task T112.
+  - docs/api.md, docs/web.md → updated via /docs if they mention GIF galleries.
+
+Follow-up TODOs: none.
 -->
 
 # Vopley.net Constitution
@@ -90,9 +105,18 @@ silently desync the client from server truth and erode data trust.
 These invariants are enforced backend-first and MUST be gated on the frontend as
 a secondary guard:
 
-- **Single media per post/comment**: a shout or comment carries an image OR a
-  YouTube embed, never both. The backend enforces this; the frontend MUST gate
-  selection accordingly.
+- **Bounded media galleries per post/comment**: a shout or comment carries
+  EITHER an ordered gallery of up to five images OR a single YouTube embed —
+  never both. The five-item ceiling and the gallery/YouTube exclusivity are
+  enforced backend-first; the frontend MUST gate selection accordingly. Video
+  remains a single, non-gallery attachment. Galleries are immutable once
+  published: there is no edit-time pathway to add, remove, or reorder items.
+  GIFs MUST NOT appear in a gallery of 2+ items, from either an uploaded
+  animated file or a Giphy-picker reference — a single GIF attachment (not
+  part of a gallery) is unaffected and continues to work as it always has.
+  *(Redefined in v2.0.0; prior to that a post carried at most one image.
+  Narrowed in v3.0.0 — v2.0.0 explicitly permitted GIFs as gallery members;
+  that permission is withdrawn.)*
 - **Single-level comments**: no nested replies. `parent_id` on shouts is legacy
   and MUST NOT be repurposed for threading.
 - **One pinned shout maximum**: pinning is admin-managed and prepended only to
@@ -137,4 +161,4 @@ conflict. All changes are governed as follows:
   and justified in the plan's Complexity Tracking section, or the design MUST be
   revised to comply.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-23 | **Last Amended**: 2026-06-23
+**Version**: 3.0.0 | **Ratified**: 2026-06-23 | **Last Amended**: 2026-07-31

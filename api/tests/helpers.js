@@ -85,6 +85,10 @@ const TABLES = [
   "notification",
   "commentLike",
   "shoutLike",
+  // Gallery join rows must go before `media` (FK is RESTRICT on delete) and
+  // before their parents (feature 006).
+  "commentMedia",
+  "shoutMedia",
   "comment",
   "gifFavorite",
   "userGif",

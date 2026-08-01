@@ -68,7 +68,6 @@ router.get("/users/:id/shouts", asyncHandler(async (req, res) => {
     where: { user_id: profileId, parent_id: null, is_deleted: 0 },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
-      media: true,
     },
     orderBy: { created_at: "desc" },
     take: limit + 1,

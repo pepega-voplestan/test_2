@@ -105,8 +105,8 @@ describe("Comments routes", () => {
       expect(res.status).toBe(200);
 
       const prisma = getTestPrisma();
-      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
-      expect(comment.media_id).toBe(media.id);
+      const row = await prisma.commentMedia.findFirst({ where: { comment_id: res.body.id, position: 0 } });
+      expect(row.media_id).toBe(media.id);
     });
 
     it("allows a media-restricted user to attach a giphy-referenced mediaId (not physically stored on our server)", async () => {
@@ -122,8 +122,8 @@ describe("Comments routes", () => {
       expect(res.status).toBe(200);
 
       const prisma = getTestPrisma();
-      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
-      expect(comment.media_id).toBe(media.id);
+      const row = await prisma.commentMedia.findFirst({ where: { comment_id: res.body.id, position: 0 } });
+      expect(row.media_id).toBe(media.id);
     });
 
     it("allows a media-restricted user to submit youtubeUrl (not physically stored on our server)", async () => {
@@ -138,9 +138,9 @@ describe("Comments routes", () => {
       expect(res.status).toBe(200);
 
       const prisma = getTestPrisma();
-      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
-      expect(comment.media_id).toBeTruthy();
-      const media = await prisma.media.findUnique({ where: { id: comment.media_id } });
+      const row = await prisma.commentMedia.findFirst({ where: { comment_id: res.body.id, position: 0 } });
+      expect(row).toBeTruthy();
+      const media = await prisma.media.findUnique({ where: { id: row.media_id } });
       expect(media.media_type).toBe("youtube");
     });
 
@@ -158,7 +158,8 @@ describe("Comments routes", () => {
       const prisma = getTestPrisma();
       const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
       expect(comment.content).toBe("Just text, no media");
-      expect(comment.media_id).toBeNull();
+      const row = await prisma.commentMedia.findFirst({ where: { comment_id: res.body.id } });
+      expect(row).toBeNull();
     });
 
     it("still auto-converts a YouTube link in content for a media-restricted user", async () => {
@@ -173,9 +174,9 @@ describe("Comments routes", () => {
       expect(res.status).toBe(200);
 
       const prisma = getTestPrisma();
-      const comment = await prisma.comment.findUnique({ where: { id: res.body.id } });
-      expect(comment.media_id).toBeTruthy();
-      const media = await prisma.media.findUnique({ where: { id: comment.media_id } });
+      const row = await prisma.commentMedia.findFirst({ where: { comment_id: res.body.id, position: 0 } });
+      expect(row).toBeTruthy();
+      const media = await prisma.media.findUnique({ where: { id: row.media_id } });
       expect(media.media_type).toBe("youtube");
     });
 
@@ -330,6 +331,139 @@ describe("Comments routes", () => {
       const prisma = getTestPrisma();
       const deleted = await prisma.comment.findUnique({ where: { id: comment.id } });
       expect(deleted.is_deleted).toBe(1);
+    });
+  });
+
+  // ── Multi-media galleries (feature 006, Stage 1) ───────────────────────────
+  // FR-031: comments must behave identically to shouts. These mirror the
+  // gallery rules asserted in shouts.test.js.
+
+  describe("POST /api/v1/shouts/:id/replies — galleries", () => {
+    async function makeImages(userId, n) {
+      const ids = [];
+      for (let i = 0; i < n; i++) {
+        const m = await createMedia({ userId, mediaUrl: `uploads/test/c-img${i}.webp` });
+        ids.push(m.id);
+      }
+      return ids;
+    }
+
+    async function setup() {
+      const user = await createUser({ username: "alice", email: "alice@test.local" });
+      const shout = await createShout({ userId: user.id });
+      const agent = await authenticatedAgent(user);
+      return { user, shout, agent };
+    }
+
+    it("accepts a gallery of 5 images on a comment", async () => {
+      const { user, shout, agent } = await setup();
+      const ids = await makeImages(user.id, 5);
+
+      const res = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({
+        content: "five",
+        mediaIds: ids,
+      });
+      expect(res.status).toBe(200);
+
+      const rows = await getTestPrisma().commentMedia.findMany({
+        where: { comment_id: res.body.id },
+        orderBy: { position: "asc" },
+      });
+      expect(rows.map((r) => r.media_id)).toEqual(ids);
+    });
+
+    it("rejects 6 images on a comment (R2)", async () => {
+      const { user, shout, agent } = await setup();
+      const ids = await makeImages(user.id, 6);
+
+      const res = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({
+        content: "six",
+        mediaIds: ids,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Можно прикрепить не более 5 файлов");
+      expect(await getTestPrisma().commentMedia.count()).toBe(0);
+    });
+
+    it("rejects duplicates and unknown ids on a comment (R4, R6)", async () => {
+      const { user, shout, agent } = await setup();
+      const [a] = await makeImages(user.id, 1);
+
+      const dup = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({ content: "dup", mediaIds: [a, a],
+      });
+      expect(dup.status).toBe(400);
+
+      const ghost = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({ content: "ghost",
+        mediaIds: [a, "11111111-2222-3333-4444-555555555555"],
+      });
+      expect(ghost.status).toBe(400);
+    });
+
+    // 2026-07-31 revision (research D19): a Giphy-picker GIF (media_type
+    // "giphy") was always rejected server-side. An uploaded animated GIF file
+    // is stored as media_type "image" with its animated-ness only in
+    // media_meta, so it slipped past that same check until this fix — proving
+    // FR-031 parity with the equivalent shouts.test.js assertion.
+    it("rejects an uploaded animated GIF file in a comment gallery, closing the media_meta gap (R5)", async () => {
+      const { user, shout, agent } = await setup();
+      const [img] = await makeImages(user.id, 1);
+      const uploadedGif = await createMedia({
+        userId: user.id,
+        mediaType: "image",
+        mediaUrl: "uploads/test/c-animated.webp",
+        mediaMeta: JSON.stringify({ w: 320, h: 240, size: 2048, mime: "image/gif", animated: true }),
+      });
+
+      const res = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({
+        content: "gif", mediaIds: [img, uploadedGif.id],
+      });
+      expect(res.status).toBe(400);
+      expect(await getTestPrisma().commentMedia.count()).toBe(0);
+    });
+
+    it("still rejects a Giphy-picker GIF (media_type \"giphy\") in a comment gallery (R5)", async () => {
+      const { user, shout, agent } = await setup();
+      const [img] = await makeImages(user.id, 1);
+      const giphyGif = await createMedia({ userId: user.id, mediaType: "giphy", mediaUrl: "https://giphy.com/c-test.gif" });
+
+      const res = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({
+        content: "gif", mediaIds: [img, giphyGif.id],
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("returns gallery in the create response when 2+ items (G1)", async () => {
+      const { user, shout, agent } = await setup();
+      const ids = await makeImages(user.id, 2);
+
+      const res = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({ content: "two", mediaIds: ids,
+      });
+      expect(res.body.gallery).toHaveLength(2);
+      expect(res.body.gallery[0]).toEqual(res.body.media);
+    });
+
+    it("omits gallery for a single item (FR-016)", async () => {
+      const { user, shout, agent } = await setup();
+      const [only] = await makeImages(user.id, 1);
+
+      const res = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({ content: "one", mediaId: only,
+      });
+      expect(res.body.gallery).toBeUndefined();
+      expect(res.body.media).toBeDefined();
+    });
+
+    it("does not accept mediaIds on comment edit (FR-029)", async () => {
+      const { user, shout, agent } = await setup();
+      const ids = await makeImages(user.id, 2);
+      const created = await agent.post(`/api/v1/shouts/${shout.id}/replies`).send({ content: "orig", mediaIds: ids,
+      });
+      const commentId = created.body.id;
+
+      const extra = await createMedia({ userId: user.id, mediaUrl: "uploads/test/c-extra.webp" });
+      await agent.put(`/api/v1/comments/${commentId}`).send({ content: "edited", mediaIds: [extra.id] });
+
+      const rows = await getTestPrisma().commentMedia.findMany({ where: { comment_id: commentId } });
+      expect(rows).toHaveLength(2);
     });
   });
 });

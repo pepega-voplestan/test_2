@@ -34,7 +34,7 @@ make prod             # Docker production (ports 80/443)
 - **Session auth only** — never suggest JWT or localStorage for auth state
 - **Russian UI** — all user-visible strings in Russian with correct declensions; never introduce English-language UI copy
 - **Soft-delete everywhere** — `is_deleted=1` (user), `is_deleted=2` (banned); never hard-delete user content except notifications (14-day TTL)
-- **Single media per post/comment** — image OR YouTube, not both; backend enforces, frontend must gate
+- **Bounded media gallery per post/comment** — an ordered gallery of up to 5 images OR one YouTube embed, never both; backend enforces the cap and the exclusivity, frontend gates as secondary guard. GIFs (uploaded or Giphy-sourced) and video are never part of a gallery — a single GIF or video attachment outside a gallery is unaffected. Galleries are immutable once published (no edit-time add/remove/reorder). *(Constitution v3.0.0. Shipping in stages — Stage 1 shipped, see `specs/006-multi-media-gallery/`; remaining Stage 3 work is reordering pending items while composing only.)*
 - **Single-level comments** — no nested replies; `parent_id` on shouts is legacy/unused
 - **Optimistic UI + rollback** — likes, deletes, poll votes update immediately, revert on error
 - **One pinned shout max** — admin-managed; prepended only to "new" tab first page

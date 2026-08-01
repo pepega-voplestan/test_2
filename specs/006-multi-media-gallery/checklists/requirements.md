@@ -1,0 +1,181 @@
+# Specification Quality Checklist: Multi-Media Gallery Attachments
+
+**Purpose**: Validate specification completeness and quality before proceeding to planning
+**Created**: 2026-07-25
+**Feature**: [spec.md](../spec.md)
+
+## Content Quality
+
+- [x] No implementation details (languages, frameworks, APIs)
+- [x] Focused on user value and business needs
+- [x] Written for non-technical stakeholders
+- [x] All mandatory sections completed
+
+## Requirement Completeness
+
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
+- [x] Success criteria are measurable
+- [x] Success criteria are technology-agnostic (no implementation details)
+- [x] All acceptance scenarios are defined
+- [x] Edge cases are identified
+- [x] Scope is clearly bounded
+- [x] Dependencies and assumptions identified
+
+## Feature Readiness
+
+- [x] All functional requirements have clear acceptance criteria
+- [x] User scenarios cover primary flows
+- [x] Feature meets measurable outcomes defined in Success Criteria
+- [x] No implementation details leak into specification
+
+## Notes
+
+- Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
+
+### Validation result
+
+**All items pass** as of 2026-07-25, on the second iteration.
+
+The three [NEEDS CLARIFICATION] markers raised in the first iteration were
+resolved by the user and recorded in the spec's Clarifications section
+(Session 2026-07-25), with corresponding requirements added:
+
+1. Over-limit selection in a single action → reject the whole action (FR-033).
+2. Partial batch failure → keep successes, report each failure (FR-034).
+3. Interim GIF/image interaction during Stages 1–2 → strict mutual exclusivity
+   from the first attached image (FR-035), expiring when FR-026 takes effect.
+
+Requirements are numbered FR-001 through FR-035 with no gaps or duplicates.
+
+### Post-analysis revision (2026-07-25)
+
+`/speckit-analyze` was run against the completed spec, plan and tasks. It raised
+1 critical, 4 high and 14 medium/low findings. All were resolved:
+
+- **C1 (critical)** — the comment composer is a separate implementation in
+  `ShoutCard.tsx` with no drag-and-drop; every composer task had targeted
+  `ShoutInput.tsx` alone, making FR-031 unimplementable. Resolved by extracting
+  `useMediaAttachments.ts` (research D9) and adding both-composer tasks.
+- **C2/D10** — create-response and SSE DTOs are built inline and bypass
+  `enrichFeed()`; `gallery` would have been missing from live-appended content.
+- **C3** — FR-008 (upload rate limiting, both auth states) had no task, despite
+  being a constitution MUST.
+- **I1** — FR-009 reworded to describe upload-time rejection, matching the actual
+  architecture. Recorded in Clarifications.
+- **N1** — constitution bump corrected from MINOR to **MAJOR** (2.0.0), per the
+  constitution's own rule reserving MAJOR for redefinitions.
+- **A1/A2** — FR-014's vestigial crop clause removed; FR-013 now specifies that
+  the indicator counts *additional* items.
+- Remaining medium/low items (stale paths, `ShoutMedia` type-name collision,
+  video-in-batch rule, per-item compression test, immutability guard) folded into
+  the revised plan, contracts and tasks.
+
+Task count grew 58 → 70.
+
+### Stage 1 preview redesign (2026-07-26)
+
+Re-validated after the post-deployment scope change (Clarifications, Session
+2026-07-26). **Still 16/16 passing** — no item changed state.
+
+The change replaces the first-item-only preview with an adaptive grid rendering
+every item, and makes each tile open the existing single-image viewer in Stage 1.
+It closes a genuine spec defect: as previously written, items 2..N were
+unviewable by anyone for the whole of Stage 1.
+
+Requirements are now FR-001…FR-036, with **FR-013 retained as a tombstone**
+(removed, not renumbered) so existing references in plan.md, tasks.md and the
+contracts do not silently retarget a different requirement.
+
+Downstream artifacts are now stale and must be regenerated: `plan.md` (Stage 1
+frontend scope, `GalleryPreview` design), `tasks.md` (T030/T037 and the Stage 2
+boundary), and `contracts/gallery-dto.md` (its consumer-expectations section
+still describes reading `gallery.length` only for a badge).
+
+### Governance flag (not a spec defect)
+
+The spec's Governance Note records that this feature supersedes the
+constitution's "Single media per post/comment" Domain Constraint, which requires
+a constitution amendment rather than a plan-level deviation. Tracked in the spec
+under Dependencies; carry it into `/speckit-plan`.
+
+### Composer preview & upload-timing revision (2026-07-30)
+
+Re-validated after production feedback on the deployed Stage 1 build (Clarifications,
+Session 2026-07-30). **Still passing on the first iteration** — no
+[NEEDS CLARIFICATION] markers were needed; all open questions raised during scoping
+had reasonable defaults (documented as Assumptions) and were resolved directly with
+the user rather than left as markers, per the "maximum 3, only when no reasonable
+default exists" guidance — none of the three candidate open points (retry scope,
+upload concurrency, single- vs two-call upload contract) met that bar: retry scope
+had an unambiguous default (whole batch, since nothing partially uploaded exists to
+reconcile), and upload concurrency / API contract shape are implementation choices
+correctly deferred to `/speckit-plan`, not spec-level ambiguities.
+
+The change pulls FR-024 (per-item removal while composing) forward out of Stage 3
+into immediate effect, adds pending-item fullscreen preview (FR-037) and container/
+sizing requirements (FR-038–FR-040), and reverses upload timing from
+upload-on-select to upload-on-submit with atomic all-or-nothing semantics (FR-041).
+FR-009 and FR-034 are reworded/narrowed accordingly, and User Story 3 is retitled and
+narrowed to reordering + GIF mixing only, since removal no longer belongs to it.
+
+Requirements are now FR-001…FR-041 with FR-013 still retained as a tombstone.
+
+Downstream artifacts are now stale and must be regenerated: `plan.md` (composer
+architecture — upload timing moved off the select-time path, pending-item viewer
+wiring), `tasks.md` (Stage 1 composer tasks, the now-narrowed Stage 3 boundary), and
+`contracts/gallery-dto.md` if it describes the upload-then-create request sequence.
+
+### Published-gallery carousel & permanent GIF exclusion (2026-07-31)
+
+Re-validated after further production feedback (Clarifications, Session
+2026-07-31). **Still passing on the first iteration** — no
+[NEEDS CLARIFICATION] markers were needed; both open design points (carousel
+frame sizing, and what happens to the previously-planned Stage 2) were resolved
+directly with the user before writing the spec, and the migration question
+was answered by explaining no schema or data migration is needed at all — this
+is validation logic only, same shape as the existing R1–R6 write-contract rules.
+
+This is the largest single revision to published-gallery behavior so far:
+
+- **FR-012 rewritten, not just revised**: the adaptive grid (itself only five
+  days old in production) is retired entirely in favor of a single-item
+  carousel. FR-014 is rewritten to match — the frame is now a fixed 1:1 square
+  independent of any item's ratio, letterboxed with `th-page`, deliberately
+  mirroring the composer's pending-preview tiles (FR-040) instead of the grid's
+  old "clamped to the first item" approach.
+- **FR-017–FR-023 tombstoned as a block** (following the FR-013 precedent) —
+  Stage 2's separate fullscreen looping viewer is dropped outright, since the
+  new inline carousel already delivers that value; two of the seven turned out
+  to have never been gallery-specific to begin with (FR-020, FR-023 just
+  restated the existing single-image Lightbox's baseline behavior) and needed
+  no replacement at all.
+- **FR-026 tombstoned**: GIF-mixing in galleries (previously Stage 3's other
+  deliverable) is reversed permanently, not deferred. FR-035 is rewritten to be
+  a permanent rule instead of an expiring one, and is strengthened to close a
+  real gap the original wording missed — nothing previously stopped multiple
+  GIFs from stacking into an all-GIF gallery, only cross-type mixing was
+  blocked.
+- **Governance re-opened**: the already-landed constitution amendment (v2.0.0)
+  and `CLAUDE.md` both say "up to 5 images/GIFs" — now inaccurate. A follow-up
+  `/docs`-mediated correction is required before this revision reaches
+  production, tracked in the Governance Note and Dependencies.
+- User Story 2 is retired in place (not deleted) with a pointer to where its
+  value now lives in User Story 1; User Story 3 drops "and mix in GIFs" from
+  its title and loses 4 of its 6 acceptance scenarios, which were entirely
+  about GIF mixing.
+
+Requirements are now FR-001…FR-044, with FR-013, FR-017–FR-023, and FR-026 all
+retained as tombstones — eight retired requirements is the most this spec has
+carried at once, but every one of them is still referenced by number from
+`plan.md`/`tasks.md`/historical Clarifications, so renumbering would silently
+break those references rather than clarify anything.
+
+Downstream artifacts are now stale and must be regenerated: `plan.md` (drop the
+Stage 2 section entirely, rewrite the Stage 1 frontend section for the
+carousel component, revise the Constitution Check for the second `/docs`
+correction), `tasks.md` (retire Phase 4's US2 tasks, rewrite Phase 1b/whatever
+comes next for the carousel, narrow the remaining Stage 3 phase further),
+`contracts/gallery-grid.md` (describes a grid that no longer exists — likely
+needs replacing with a `gallery-carousel.md` contract), and `contracts/
+gallery-dto.md` if it references grid-consumption expectations.

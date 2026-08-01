@@ -340,7 +340,9 @@ export async function setupAdmin() {
         },
       },
 
-      // ── Media: read-only, resolves media_id references from Shouts/Comments ──
+      // ── Media: read-only. Ownership is via shout_media/comment_media (feature 006) —
+      // there is no direct Shout/Comment relation to this model, so AdminJS shows no
+      // automatic "belongs to" back-reference here; check the join tables directly. ──
       {
         resource: { model: getModelByName("Media"), client: prisma },
         options: {

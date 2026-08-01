@@ -234,3 +234,22 @@ export function buildMedia(mediaObj) {
   }
   return undefined;
 }
+
+/**
+ * Build the `gallery` DTO array from ordered join rows (feature 006).
+ *
+ * Each item goes through buildMedia(), so items inherit `orientation` /
+ * `animated` / `gif` handling identically to the single-media `media` field —
+ * there are no gallery-specific per-item fields.
+ *
+ * Returns undefined for 0 or 1 items: a one-item gallery is indistinguishable
+ * from today's single attachment, so the field is omitted entirely and legacy
+ * payloads stay byte-identical (contract G3, FR-016, FR-032).
+ *
+ * @param {{ media: object }[]} rows  join rows ordered by position ASC
+ */
+export function buildGallery(rows) {
+  if (!Array.isArray(rows) || rows.length <= 1) return undefined;
+  const items = rows.map((r) => buildMedia(r.media)).filter(Boolean);
+  return items.length > 1 ? items : undefined;
+}

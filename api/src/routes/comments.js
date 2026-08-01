@@ -6,7 +6,8 @@ import { broadcast, broadcastToUser } from "../sse.js";
 import { asyncHandler, utcTimestamp, resolveQuoteText } from "../helpers/common.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { commentSchema, editCommentSchema, COMMENT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
-import { extractYouTubeId, fetchYouTubeMeta, buildMedia } from "../helpers/media.js";
+import { extractYouTubeId, fetchYouTubeMeta, buildMedia, buildGallery } from "../helpers/media.js";
+import { attachMedia, resolveMediaIds, isMultiItemEligible, attachmentLimitMessage } from "../helpers/attachments.js";
 
 const router = Router();
 
@@ -19,6 +20,11 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   const parsed = commentSchema.safeParse(req.body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
+    // Gallery cap is checked first: a too_big on `mediaIds` is about attachment
+    // count, not characters, and must not borrow the length message.
+    if (issue?.path?.[0] === "mediaIds") {
+      return res.status(400).json({ error: attachmentLimitMessage() });
+    }
     if (issue?.code === "custom" || issue?.code === "too_big") return res.status(400).json({ error: `Максимум ${COMMENT_MAX_LENGTH} символов` });
     return res.status(400).json({ error: "Ответ не может быть пустым" });
   }
@@ -31,14 +37,22 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   if (!parent)
     return res.status(404).json({ error: "Запись не найдена" });
 
-  const { content, mediaId, youtubeUrl, replyToId } = parsed.data;
+  const { content, mediaId, mediaIds, youtubeUrl, replyToId } = parsed.data;
+
+  // R1: the two attachment shapes are mutually exclusive
+  if (mediaId && mediaIds) {
+    return res.status(400).json({ error: "Некорректный запрос" });
+  }
+
+  const galleryIds = resolveMediaIds({ mediaId, mediaIds });
 
   // Must have content or media
-  if (!content.trim() && !mediaId && !youtubeUrl) {
+  if (!content.trim() && !galleryIds && !youtubeUrl) {
     return res.status(400).json({ error: "Нужен текст или медиа" });
   }
 
-  if (mediaId && youtubeUrl) {
+  // R3: cannot have both a gallery and YouTube
+  if (galleryIds && youtubeUrl) {
     return res.status(400).json({ error: "Можно прикрепить или изображение, или видео" });
   }
 
@@ -47,7 +61,17 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
   if (replyToId) {
     referencedComment = await prisma.comment.findUnique({
       where: { id: replyToId },
-      select: { id: true, shout_id: true, is_deleted: true, content: true, user: { select: { id: true, username: true } }, media: { select: { media_type: true } } },
+      select: {
+        id: true,
+        shout_id: true,
+        is_deleted: true,
+        content: true,
+        user: { select: { id: true, username: true } },
+        galleryItems: {
+          where: { position: 0 },
+          select: { media: { select: { media_type: true } } },
+        },
+      },
     });
     if (!referencedComment || referencedComment.shout_id !== shoutId) {
       return res.status(400).json({ error: "Комментарий для цитирования не найден" });
@@ -56,21 +80,38 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
 
   let finalMediaId = null;
   let mediaDto = undefined;
+  let galleryDto = undefined;
+  let attachedIds = null;
 
-  if (mediaId) {
-    // Attaching an already-existing Media row is never gated by is_media_allowed —
-    // only *creating* new physically-stored media is (upload.js, gifs.js's
-    // personal-upload route). A restricted user may still reuse media they (or,
-    // per existing behavior, anyone) uploaded before the restriction was applied.
-    const mediaRow = await prisma.media.findUnique({
-      where: { id: mediaId },
+  if (galleryIds) {
+    // R6: no duplicates within one gallery
+    if (new Set(galleryIds).size !== galleryIds.length) {
+      return res.status(400).json({ error: "Нельзя прикрепить один файл дважды" });
+    }
+
+    // R4/R5. Attaching an already-existing Media row is never gated by
+    // is_media_allowed — only *creating* new physically-stored media is
+    // (upload.js, gifs.js's personal-upload route). A restricted user may still
+    // reuse media they uploaded before the restriction was applied.
+    const rows = await prisma.media.findMany({
+      where: { id: { in: galleryIds } },
       select: { id: true, media_type: true, media_url: true, media_meta: true },
     });
-    if (!mediaRow) {
+    if (rows.length !== galleryIds.length) {
       return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
     }
-    finalMediaId = mediaId;
-    mediaDto = buildMedia(mediaRow);
+    if (galleryIds.length > 1 && !rows.every((r) => isMultiItemEligible(r.media_type, r.media_meta))) {
+      return res.status(400).json({ error: "В галерею можно добавить только изображения" });
+    }
+
+    // Preserve request order — findMany does not guarantee it.
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = galleryIds.map((gid) => byId.get(gid));
+
+    attachedIds = galleryIds;
+    finalMediaId = galleryIds[0];
+    mediaDto = buildMedia(ordered[0]);
+    galleryDto = buildGallery(ordered.map((m) => ({ media: m })));
   } else if (youtubeUrl) {
     const videoId = extractYouTubeId(youtubeUrl);
     if (!videoId) {
@@ -88,6 +129,7 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
       },
     });
     mediaDto = buildMedia({ media_type: "youtube", media_url: videoId, media_meta: JSON.stringify(ytMeta) });
+    attachedIds = [finalMediaId];
   } else if (content) {
     // Auto-detect YouTube URL in content — unaffected by is_media_allowed,
     // since YouTube is a reference, not media physically stored on our server.
@@ -105,29 +147,41 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
         },
       });
       mediaDto = buildMedia({ media_type: "youtube", media_url: videoId, media_meta: JSON.stringify(ytMeta) });
+      attachedIds = [finalMediaId];
     }
   }
 
   const id = crypto.randomUUID();
-  const comment = await prisma.comment.create({
-    data: {
-      id,
-      shout_id: shoutId,
-      user_id: req.session.user.id,
-      content,
-      media_id: finalMediaId,
-      reply_to: replyToId ?? null,
-    },
+  // The attachment list shares the comment's transaction — every case (gallery,
+  // video, YouTube) goes through the same call, there is no separate
+  // single-attachment write path.
+  await prisma.$transaction(async (tx) => {
+    await tx.comment.create({
+      data: {
+        id,
+        shout_id: shoutId,
+        user_id: req.session.user.id,
+        content,
+        reply_to: replyToId ?? null,
+      },
+    });
+    if (attachedIds) {
+      await attachMedia(tx, "comment", id, attachedIds);
+    }
+  });
+
+  const comment = await prisma.comment.findUnique({
+    where: { id },
     include: {
       user: { select: { username: true, avatar: true, is_banned: true } },
-      media: true,
+      galleryItems: { include: { media: true }, orderBy: { position: "asc" } },
     },
   });
 
   const quote = referencedComment
     ? referencedComment.is_deleted > 0
       ? { text: "Комментарий удалён", deleted: true, author: null }
-      : { ...resolveQuoteText(referencedComment.content, referencedComment.media), deleted: false, author: { id: referencedComment.user.id, name: referencedComment.user.username } }
+      : { ...resolveQuoteText(referencedComment.content, referencedComment.galleryItems[0]?.media), deleted: false, author: { id: referencedComment.user.id, name: referencedComment.user.username } }
     : null;
 
   const commentDto = {
@@ -145,7 +199,9 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     likedBy: [],
     replyToId: replyToId ?? null,
     quote,
-    ...(comment.media ? { media: buildMedia(comment.media) } : {}),
+    ...(comment.galleryItems[0] ? { media: buildMedia(comment.galleryItems[0].media) } : {}),
+    // Also emitted here so SSE-delivered comments carry the gallery (research D10).
+    ...(galleryDto ? { gallery: galleryDto } : {}),
   };
 
   console.log(`[Comments] Comment ${id} on shout ${shoutId} by ${req.session.user.name}, media=${finalMediaId || "none"}`);
@@ -267,7 +323,14 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     console.log(`[Comments] Sent reply notification for comment ${id} to quoted comment author ${replyCommentAuthorId}`);
   }
 
-  res.json({ ok: true, id, ...(mediaDto ? { media: mediaDto } : {}), ...(quote ? { quote } : {}) });
+  res.json({
+    ok: true,
+    id,
+    ...(mediaDto ? { media: mediaDto } : {}),
+    // Mirrors the SSE payload so both delivery paths satisfy contract G1.
+    ...(galleryDto ? { gallery: galleryDto } : {}),
+    ...(quote ? { quote } : {}),
+  });
 }));
 
 /* edit comment content (author only, within 1 minute of creation) */
