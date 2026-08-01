@@ -5,6 +5,16 @@ import type { GalleryItem } from '../types';
 const SWIPE_DISTANCE_THRESHOLD = 40;
 /** Minimum drag velocity (px/ms) that counts as a swipe even under the distance threshold. */
 const SWIPE_VELOCITY_THRESHOLD = 0.5;
+/**
+ * Floor (px) the velocity branch requires before it can fire at all. Velocity
+ * is dx/elapsed, and elapsed can be a couple of ms for a fast real tap — a tap
+ * landing right after a swipe, while the hand hasn't fully settled, can carry
+ * a few px of jitter that alone spikes past SWIPE_VELOCITY_THRESHOLD even
+ * though it's not an intentional swipe. This floor is well under an
+ * intentional flick's travel (see the velocity-branch test, which uses 20px),
+ * so real flicks are unaffected.
+ */
+const SWIPE_MIN_JITTER_DISTANCE = 10;
 /** How long the "finish the page turn" / "spring back" animation takes. */
 const SETTLE_MS = 260;
 const SETTLE_TRANSITION = `transform ${SETTLE_MS}ms cubic-bezier(.2,.8,.3,1)`;
@@ -127,7 +137,9 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
   const endDrag = (dx: number, elapsed: number) => {
     const width = frameWidth.current || 1;
     const velocity = Math.abs(dx) / Math.max(elapsed, 1);
-    if (Math.abs(dx) > SWIPE_DISTANCE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD) {
+    const isSwipe = Math.abs(dx) > SWIPE_MIN_JITTER_DISTANCE
+      && (Math.abs(dx) > SWIPE_DISTANCE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD);
+    if (isSwipe) {
       didSwipe.current = true;
       const advancing = dx < 0;
       applyTrackTransform(advancing ? -width : width, true);

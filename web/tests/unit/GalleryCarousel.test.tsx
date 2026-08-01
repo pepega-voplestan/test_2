@@ -263,6 +263,19 @@ describe('GalleryCarousel — pointer-swipe navigation (SC-005, Phase 7 converge
     }
   });
 
+  it('does not treat a near-instant tiny jitter (e.g. a real tap landing right after a swipe) as a swipe', async () => {
+    // With no jitter floor, a 3px movement over ~0ms elapsed produces a
+    // near-infinite velocity and would spuriously cross SWIPE_VELOCITY_THRESHOLD
+    // — exactly the "tap right after a swipe sometimes doesn't open fullscreen"
+    // regression this guards against.
+    const onOpen = vi.fn();
+    render(<GalleryCarousel items={items(3)} maxHeight={300} onOpen={onOpen} />);
+    fireEvent.pointerDown(tile(), { clientX: 100 });
+    fireEvent.pointerUp(tile(), { clientX: 103 });
+    fireEvent.click(tile());
+    expect(onOpen).toHaveBeenCalledWith(0);
+  });
+
   it('mounts the adjacent item and visibly tracks the finger while dragging, before any threshold is crossed', () => {
     render(<GalleryCarousel items={items(3)} maxHeight={300} />);
     fireEvent.pointerDown(tile(), { clientX: 200 });
