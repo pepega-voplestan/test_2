@@ -49,15 +49,18 @@ Jobs registered idempotently via `upsertJobScheduler` (safe on restart). Dev con
 ## Backup & Restore
 
 ```sh
-./scripts/backup.sh prod           # timestamped tarballs in ./backups/
-./scripts/backup.sh prod --upload  # + rclone to Google Drive
-./scripts/restore.sh prod          # latest (prompts for confirmation, stops containers)
+./scripts/backup.sh prod                     # timestamped tarballs in ./backups/
+./scripts/backup.sh prod --upload             # + rclone to Google Drive
+./scripts/backup.sh prod --no-media           # skip the media archive (database/session data only)
+./scripts/restore.sh prod                     # latest (prompts for confirmation, stops containers)
 ./scripts/restore.sh prod TIMESTAMP
 ```
 
-Keeps last 3 snapshots (configurable via `KEEP` in script). DB backed up via the `db-backup` worker job (PostgreSQL dump, daily at 02:00 UTC).
+Keeps last 3 snapshots per type (configurable via `KEEP` in script), rotated locally, on the DO volume, and on the rclone remote. `--no-media` is fully independent of `--upload` and combinable with it. `restore.sh` tolerates a missing media archive for a timestamp (treats it as a valid `--no-media` backup) and restores the database only, leaving `/media` untouched.
 
-Makefile shortcuts: `make backup`, `make backup-upload`, `make restore`.
+Makefile shortcuts: `make backup`, `make backup-upload`, `make backup-no-media`, `make restore`.
+
+**`scripts/backup.sh`'s "database" step is currently dead code in production.** It runs `sqlite3 .backup` against `/data/app.db` and `/data/sessions.sqlite` inside the `api` container — remnants from before the Postgres/Redis migration. Neither file exists anymore: Postgres runs in its own `postgres` container/volume (not the `api` container's `/data` mount), and sessions live in Redis via `connect-redis` (see `api/src/app.js`). The step silently logs "not found, skipping" for both and produces a near-empty `{prefix}-appdata-*.tar.gz`. The **actual** database backup is the `db-backup` worker job (PostgreSQL dump, daily at 02:00 UTC, see Background Jobs above) — `backup.sh` today only meaningfully backs up media. Worth fixing (either wire it to a real `pg_dump`/`pg_basebackup`, or drop the step and rely solely on the worker job) — flagged here rather than fixed, since it changes backup behavior and should be a deliberate decision.
 
 ## Known Tech Debt
 
@@ -65,7 +68,7 @@ Makefile shortcuts: `make backup`, `make backup-upload`, `make restore`.
 - No Prettier / auto-formatter (ESLint active, no style enforcement)
 - No React error boundaries
 - Tailwind loaded via CDN (not bundled)
-- Legacy inline media columns on `shouts` table (`media_type`, `media_url`, `media_meta`) — to be removed
+- `scripts/backup.sh`'s database-backup step is dead code (targets removed SQLite files) — see Backup & Restore above
 - Planned notification types `shout_like`/`comment_like` not yet implemented
 - `components/` directory has no test files (contexts + hooks are covered)
 - `workers/` has a Vitest suite for `original-downgrade` (`workers/tests/`, run via `npm test` in `workers/`); other jobs are untested. Not yet wired into the root `make test` targets.

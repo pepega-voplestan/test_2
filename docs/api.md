@@ -136,18 +136,24 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - Relations: `receivedNotifications`, `sentNotifications`, `ignoredByMe`, `ignoredByOthers`, `socials`
 
 **Shout** (`shouts`)
-- `id` (UUID), `user_id`→users, `parent_id` (legacy, unused), `content`, `media_id`→media?, `visibility_tag` (""|spoiler|nsfw|politics), `is_pinned` (0/1), `is_deleted` (0/1/2), `created_at`
+- `id` (UUID), `user_id`→users, `parent_id` (legacy, unused), `content`, `visibility_tag` (""|spoiler|nsfw|politics), `is_pinned` (0/1), `is_deleted` (0/1/2), `created_at`
 - Optional one-to-one `poll` relation
-- Legacy columns (to remove): `media_type`, `media_url`, `media_meta`
+- Media lives entirely in `ShoutMedia` (see below) — there is no `media_id`/`media_type`/`media_url`/`media_meta` column on this table (feature 006 migration removed them)
 - Indices: `(parent_id, created_at)`, `(created_at)`
 
 **Comment** (`comments`)
-- `id`, `shout_id`→shouts, `user_id`→users, `content`, `media_id`→media?, `reply_to`→comments? (self-referential "CommentReplies"; SET NULL on delete), `is_deleted`, `created_at`
+- `id`, `shout_id`→shouts, `user_id`→users, `content`, `reply_to`→comments? (self-referential "CommentReplies"; SET NULL on delete), `is_deleted`, `created_at`
+- Media lives entirely in `CommentMedia` (see below), same as Shout
 - Indices: `(shout_id, created_at)`, `(user_id)`
 
 **Media** (`media`)
 - `id`, `user_id`→users, `media_type` (image|youtube), `media_url` (relative path or video ID), `media_meta` (JSON), `created_at`
 - `media_meta` JSON: `{w, h, size, mime, animated}`. Original-quality JPG/PNG additionally carry `{orig: "original.<ext>", uploaded_at, converted, orientation?}` until downgraded (see Original-Quality Uploads).
+
+**ShoutMedia** (`shout_media`) / **CommentMedia** (`comment_media`) — feature 006
+- Composite PK `(shout_id, position)` / `(comment_id, position)`, plus `media_id`→media, `@@unique([shout_id, media_id])`
+- The **only** place a shout's/comment's attachment(s) live — a single image/video/YouTube/GIF is a one-row list here, a gallery is a 2–5-row list, position 0 is always the preview item. Written only by `helpers/attachments.js` — never insert into these tables from anywhere else.
+- Cap of 5 images per gallery, and images/YouTube/GIF/video are mutually exclusive within one shout or comment, enforced server-side in `helpers/attachments.js` (frontend gates are a secondary guard only). Immutable once published — no endpoint adds/removes/reorders rows after creation.
 
 **ShoutLike** (`shout_likes`) — composite PK `(shout_id, user_id)`, cascade deletes
 
@@ -237,7 +243,7 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 - `visibility_tag` (`""`, `"spoiler"`, `"nsfw"`, `"politics"`) — mutually exclusive. Spoiler/NSFW require media attached: backend strips tag if no media.
 - **@mentions**: serialized as `@[username:userId]` tokens. Character counting normalizes `@[name:id]` → `@name` before limit check.
 - Mention notifications to mentioned users; reply notifications to shout author (unless commenter = author, or already received mention for that comment).
-- Media in `media` table, referenced by `shouts.media_id` or `comments.media_id`. One attachment per shout/comment (image OR YouTube, not both).
+- Media in `media` table, attached via the ordered `ShoutMedia`/`CommentMedia` join tables (feature 006) — never a direct FK column on `shouts`/`comments`. Up to 5 images form a gallery, or a single YouTube/GIF/video attachment; never mixed. See ShoutMedia/CommentMedia under Models above.
 - **Polls**: 2–7 options (max 144 chars each), single or multi-select (`multi` flag). One-time voting (400 on re-vote). Constants: `POLL_MAX_OPTIONS = 7`, `POLL_OPTION_MAX_LENGTH = 144`.
 - **Pinned shouts**: one at a time (`is_pinned=1`), fetched separately and prepended to first page of "new" tab only. Admin-managed.
 - **Ignored users**: max 3; filtered client-side via `IgnoredUsersContext`; fetched on login.

@@ -66,6 +66,7 @@ make prod             # Docker production (ports 80/443)
 | Add a new social platform | `api/src/helpers/socials.js` + `web/components/ProfileSocials.tsx` |
 | Add a new notification type | `api/src/routes/comments.js` or `shouts.js` + `web/context/NotificationsContext.tsx` |
 | Add a new embed type | `web/components/ShoutCard.tsx` — `extractEmbeds()` |
+| Change gallery/attachment behavior | `web/hooks/useMediaAttachments.ts` (shared client state, both composers) + `api/src/helpers/attachments.js` (server-side enforcement, sole writer of `ShoutMedia`/`CommentMedia`) |
 | Add a new admin resource | `api/src/admin.js` |
 | Add a new background job | `workers/src/jobs/` + register in `workers/src/index.ts` |
 | Change char counting logic | `api/src/helpers/common.js` + `web/tests/unit/effectiveLength.test.ts` |

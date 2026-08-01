@@ -8,8 +8,8 @@ web/
 │   ├── Header.tsx              # Auth, navigation, theme toggle, search (auth-only), notification dropdown; logo hides on mobile while search open
 │   ├── AuthModal.tsx           # Login/register/password-reset modal (multi-step, email verification)
 │   ├── ShoutFeed.tsx           # Feed: new/popular/announcements tabs, SSE updates; popular has dual sort
-│   ├── ShoutInput.tsx          # Composer: media, emoji, polls, drag-drop, Ctrl+Enter; spoiler/nsfw require media
-│   ├── ShoutCard.tsx           # Shout display: comments, likes, delete, inline edit (60s window with countdown); inline embeds; collapsible pinned shout (eye icon, localStorage)
+│   ├── ShoutInput.tsx          # Composer: gallery (up to 5 images via PendingMediaStrip), emoji/GIF, polls, drag-drop, Ctrl+Enter; spoiler/nsfw require media
+│   ├── ShoutCard.tsx           # Shout display: comments, likes, delete, inline edit (60s window with countdown); inline embeds; collapsible pinned shout (eye icon, localStorage); reply composer mirrors ShoutInput's media handling via useMediaAttachments
 │   ├── ShoutPage.tsx           # Single shout detail view (#/shout/:id)
 │   ├── MentionInput.tsx        # contenteditable composer with @mention autocomplete; ref handle: clear/focus/scrollIntoView/insertText/insertMention/wrapSpoiler/populate
 │   ├── NotificationDropdown.tsx # Bell + unread badge + hover-to-read list + infinite scroll
@@ -17,9 +17,12 @@ web/
 │   ├── ProfilePage.tsx         # Profile view/edit + social links
 │   ├── ProfileSocials.tsx      # Social icons grid (copy-to-clipboard) + modal editor
 │   ├── AvatarUpload.tsx        # Drag-drop avatar upload with preview
-│   ├── EmojiPicker.tsx         # 500+ emojis, 13 categories, Russian+English search, sticky headers
+│   ├── EmojiPicker.tsx         # 500+ emojis, 13 categories, Russian+English search, sticky headers; GIF tab embeds GifPicker when onSelectGif is passed
+│   ├── GifPicker.tsx           # Giphy search/trending + favorites + own uploaded GIFs ("Мои GIF"); tab inside EmojiPicker, both composers
 │   ├── PollEditor.tsx          # Poll creation: 2-7 options, multi-select toggle, validation
 │   ├── PollBlock.tsx           # Poll display/voting: progress bars, vote counts, optimistic updates
+│   ├── GalleryCarousel.tsx     # Published gallery viewer (2+ images): one item at a time, pointer-swipe with finger-tracking drag, looping arrows (hidden on coarse-pointer/touch devices), position indicator; renders null for 0-1 items (single-image path handles that)
+│   ├── PendingMediaStrip.tsx   # Composer preview strip for not-yet-uploaded gallery items: 80px tiles, per-item remove (pointer-based tap-vs-scroll gesture detection), click-to-Lightbox
 │   └── Lightbox.tsx            # Fullscreen image: drag-dismiss, pinch/scroll zoom, pan, scroll lock
 ├── context/
 │   ├── AuthContext.tsx         # useAuth()
@@ -32,11 +35,13 @@ web/
 │   ├── useRoute.ts             # Hash-based routing
 │   ├── useSSE.ts               # Thin wrapper around SSEContext.subscribe
 │   ├── useScrollLock.ts        # Scroll lock utility (used by Lightbox, Header logout dialog, SearchDropdown)
-│   └── useMentionUsers.ts      # Module-level singleton cache for mention list
+│   ├── useMentionUsers.ts      # Module-level singleton cache for mention list
+│   ├── useGifPicker.ts         # Giphy search/trending/favorites/own-GIF state for GifPicker.tsx
+│   └── useMediaAttachments.ts  # Shared pending-gallery state for both composers (feature 006): addFiles/addExisting/removeItem/submit/clear, 5-item cap, image/GIF/video exclusivity; upload deferred to submit(), atomic (all-or-nothing mediaIds)
 ├── tests/
 │   ├── setup.ts                # DOM mocks (matchMedia, scrollTo)
 │   ├── helpers.tsx             # renderWithProviders()
-│   └── unit/effectiveLength.test.ts
+│   └── unit/                   # effectiveLength, plural, GalleryCarousel, Lightbox, PendingMediaStrip, useMediaAttachments, composerParity, ShoutFeed, ShoutPage
 ├── public/                     # favicon.svg, manifest.json, robots.txt, sitemap.xml, social icons (steam.svg, xbox.svg, playstation.svg, epicgames.png, boosty.png, retroachievements.png, battlenet.webp, exophase-com-icon.png, backloggd-icon-filled-256.webp, myshows.png)
 ├── App.tsx, index.tsx, types.ts, index.html
 ├── vite.config.ts              # Dev proxy: /api and /media → localhost:3000
@@ -90,10 +95,14 @@ These apply to every new UI/UX element. iOS Safari has repeatedly caused regress
 - **Pointer events** — always use pointer events (not separate mouse/touch handlers) for drag/swipe; Lightbox is the reference implementation
 - **`-webkit-tap-highlight-color: transparent`** — set on interactive elements to remove the blue flash on tap
 - **Backdrop blur** — `-webkit-backdrop-filter` needed alongside `backdrop-filter`
+- **Custom pointer-gesture tracking needs `onPointerCancel`, not just `onPointerUp`** — iOS fires `pointercancel` (never `pointerup`) when a touch is interrupted, e.g. backgrounding the tab mid-tap. Any handler that only resets its gesture-start ref on `pointerup` can get stuck reading a stale start point on the next real tap and misclassify it as a drag. `GalleryCarousel.tsx`'s drag handler is the reference implementation (has both `onPointerCancel` and `setPointerCapture`); `PendingMediaStrip.tsx`'s remove control was fixed to match after shipping without it.
+- **Tap-vs-swipe velocity math needs a minimum-distance floor** — classifying a gesture as a swipe via `distance > threshold || velocity > threshold` (velocity = dx/elapsed) is unsafe without also requiring `dx` past a small floor (e.g. 10px) first. A few px of natural jitter on a fast real tap, combined with a tiny `elapsed`, can spike the velocity term past threshold from pure arithmetic and get misclassified as a swipe — this is exactly what caused "swipe then immediately tap doesn't open fullscreen" on `GalleryCarousel.tsx` (`SWIPE_MIN_JITTER_DISTANCE`).
+- **An async `setState` immediately followed by a synchronous imperative DOM mutation can flash stale content** — if a callback calls e.g. `setCurrentIndex(...)` and then, on the next line, imperatively mutates a ref'd DOM node (`el.style.transform = ...`), the mutation can land before React re-renders with the new state, briefly showing old content at the new position. Fix: move the imperative step into a `useLayoutEffect` keyed on the state that must land first, so it only runs once the DOM already reflects the update (`GalleryCarousel.tsx`'s swipe-settle reset).
 
 ### Touch targets
 - Minimum 44×44px tap target for all interactive elements (Apple HIG)
 - Icon buttons without labels need explicit padding — don't rely on icon size alone
+- **Detecting touch vs. mouse/trackpad**: `window.matchMedia('(pointer: coarse)').matches` is the established convention (`EmojiPicker.tsx`, `GifPicker.tsx`, `GalleryCarousel.tsx`) — used both to size tap targets differently per input type and to hide mouse-only fallback controls (e.g. `GalleryCarousel`'s arrow buttons) on touch devices that already have an equivalent gesture (swipe). The inverse, `(hover: hover) and (pointer: fine)`, is used in `SearchDropdown.tsx` where the check needs to be about mouse presence specifically.
 
 ### Composer / ShoutInput on mobile
 - Emoji picker positioning must account for virtual keyboard height
