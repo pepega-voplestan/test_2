@@ -56,6 +56,10 @@ interface GalleryCarouselProps {
 const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onOpen }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [neighborsMounted, setNeighborsMounted] = useState(false);
+  // Touch devices already have swipe (above) — the arrow buttons are a
+  // mouse/trackpad fallback and just eat space on mobile. Same
+  // matchMedia('(pointer: coarse)') convention as EmojiPicker/GifPicker.
+  const [coarsePointer] = useState(() => window.matchMedia('(pointer: coarse)').matches);
   const tileRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -214,28 +218,32 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
         </div>
       </div>
 
-      <button
-        type="button"
-        data-testid="gallery-carousel-prev"
-        aria-label="Предыдущее изображение"
-        onClick={goPrev}
-        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-colors"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        data-testid="gallery-carousel-next"
-        aria-label="Следующее изображение"
-        onClick={goNext}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-colors"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-        </svg>
-      </button>
+      {!coarsePointer && (
+        <>
+          <button
+            type="button"
+            data-testid="gallery-carousel-prev"
+            aria-label="Предыдущее изображение"
+            onClick={goPrev}
+            className="absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            data-testid="gallery-carousel-next"
+            aria-label="Следующее изображение"
+            onClick={goNext}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </>
+      )}
 
       <div
         data-testid="gallery-carousel-indicator"

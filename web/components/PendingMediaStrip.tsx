@@ -68,6 +68,10 @@ const PendingMediaStrip: React.FC<PendingMediaStripProps> = ({ items, onRemove, 
 
   const handleRemovePointerDown = (e: React.PointerEvent) => {
     pointerStart.current = { x: e.clientX, scrollLeft: stripRef.current?.scrollLeft ?? 0 };
+    // Without capture, a touch that drifts off this button before lifting can
+    // resolve its pointerup on a different element (or none), leaving
+    // pointerStart set and this control silently stuck ignoring the next tap.
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
   const handleRemovePointerUp = (e: React.PointerEvent, localId: string) => {
@@ -78,6 +82,14 @@ const PendingMediaStrip: React.FC<PendingMediaStripProps> = ({ items, onRemove, 
     const scrolled = Math.abs((stripRef.current?.scrollLeft ?? 0) - start.scrollLeft);
     if (movedX > TAP_MOVE_THRESHOLD || scrolled > TAP_SCROLL_THRESHOLD) return;
     onRemove(localId);
+  };
+
+  // iOS fires pointercancel (never pointerup) when a touch is interrupted —
+  // e.g. the tab backgrounded mid-tap. Without this, pointerStart stays set
+  // from the aborted gesture and can make the *next* genuine tap misread as
+  // a drag (its movedX/scrolled is measured against the stale start point).
+  const handleRemovePointerCancel = () => {
+    pointerStart.current = null;
   };
 
   return (
@@ -110,6 +122,7 @@ const PendingMediaStrip: React.FC<PendingMediaStripProps> = ({ items, onRemove, 
               aria-label="Удалить"
               onPointerDown={handleRemovePointerDown}
               onPointerUp={(e) => handleRemovePointerUp(e, it.localId)}
+              onPointerCancel={handleRemovePointerCancel}
               onClick={(e) => {
                 if (e.detail === 0) onRemove(it.localId);
               }}

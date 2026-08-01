@@ -163,53 +163,60 @@ export function useMediaAttachments({ mediaAllowed, logPrefix = 'Media' }: Optio
         return;
       }
 
-      const current = itemsRef.current;
-
-      if (current.some((i) => i.isVideo)) {
-        setError('Видео нельзя совмещать с другими файлами');
-        return;
-      }
-
-      // FR-028: a lone video with nothing attached keeps today's single-attachment
-      // path. In any other combination video is not gallery-eligible.
-      const loneVideo = files.length === 1 && isVideoFile(files[0]) && current.length === 0;
-
-      // FR-033 capacity gate.
-      if (!loneVideo && current.length + files.length > GALLERY_MAX_ITEMS) {
-        setError(
-          `Можно прикрепить не более ${pluralize(GALLERY_MAX_ITEMS, FILE_FORMS)}`
-        );
-        return;
-      }
-
-      const accepted: PendingItem[] = [];
-      const rejected: FileFailure[] = [];
-
-      for (const file of files) {
-        if (!ALLOWED_MIME.includes(file.type)) {
-          rejected.push({ name: file.name, message: 'Недопустимый формат' });
-        } else if (isVideoFile(file) && !loneVideo) {
-          rejected.push({ name: file.name, message: 'Видео нельзя добавить в галерею' });
-        } else if (file.size > MEDIA_MAX_MB * 1024 * 1024) {
-          rejected.push({ name: file.name, message: `Больше ${MEDIA_MAX_MB} МБ` });
-        } else {
-          const objectUrl = URL.createObjectURL(file);
-          accepted.push({
-            localId: makeLocalId(),
-            file,
-            previewUrl: objectUrl,
-            objectUrl,
-            isVideo: isVideoFile(file),
-            isGif: file.type === 'image/gif',
-          });
+      // The video-mixing check, the lone-video rule and the capacity gate all
+      // depend on the current item count — read from `prev` inside the
+      // updater rather than the `itemsRef` snapshot taken at call time. Two
+      // `change` events landing before a render commits (e.g. a webview
+      // deferring the low-priority render pass while backgrounded) would
+      // otherwise let both reads see the same stale, too-low count and both
+      // pass a gate that should only have let one of them through.
+      setItems((prev) => {
+        if (prev.some((i) => i.isVideo)) {
+          setError('Видео нельзя совмещать с другими файлами');
+          return prev;
         }
-      }
 
-      if (accepted.length > 0) {
-        setItems((prev) => [...prev, ...accepted].slice(0, GALLERY_MAX_ITEMS));
+        // FR-028: a lone video with nothing attached keeps today's single-attachment
+        // path. In any other combination video is not gallery-eligible.
+        const loneVideo = files.length === 1 && isVideoFile(files[0]) && prev.length === 0;
+
+        // FR-033 capacity gate.
+        if (!loneVideo && prev.length + files.length > GALLERY_MAX_ITEMS) {
+          setError(
+            `Можно прикрепить не более ${pluralize(GALLERY_MAX_ITEMS, FILE_FORMS)}`
+          );
+          return prev;
+        }
+
+        const accepted: PendingItem[] = [];
+        const rejected: FileFailure[] = [];
+
+        for (const file of files) {
+          if (!ALLOWED_MIME.includes(file.type)) {
+            rejected.push({ name: file.name, message: 'Недопустимый формат' });
+          } else if (isVideoFile(file) && !loneVideo) {
+            rejected.push({ name: file.name, message: 'Видео нельзя добавить в галерею' });
+          } else if (file.size > MEDIA_MAX_MB * 1024 * 1024) {
+            rejected.push({ name: file.name, message: `Больше ${MEDIA_MAX_MB} МБ` });
+          } else {
+            const objectUrl = URL.createObjectURL(file);
+            accepted.push({
+              localId: makeLocalId(),
+              file,
+              previewUrl: objectUrl,
+              objectUrl,
+              isVideo: isVideoFile(file),
+              isGif: file.type === 'image/gif',
+            });
+          }
+        }
+
+        setFailures(rejected);
+        if (accepted.length === 0) return prev;
+
         console.log(`[${logPrefix}] ${accepted.length} item(s) pending`);
-      }
-      setFailures(rejected);
+        return [...prev, ...accepted].slice(0, GALLERY_MAX_ITEMS);
+      });
     },
     [mediaAllowed, logPrefix]
   );
