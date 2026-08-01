@@ -1,4 +1,4 @@
-.PHONY: prod local down down-local logs logs-local rebuild rebuild-local backup backup-upload backup-dev restore restore-dev deploy deploy-local db-pull db-pull-local test test-web test-all test-docker test-coverage test-web-coverage ensure-htpasswd install
+.PHONY: prod local down down-local logs logs-local rebuild rebuild-local backup backup-upload backup-no-media backup-dev restore restore-dev deploy deploy-local db-pull db-pull-local test test-web test-all test-docker test-coverage test-web-coverage ensure-htpasswd install
 
 # Ensure .htpasswd exists (nginx auth_basic requires a valid file, otherwise /admin returns 500)
 ensure-htpasswd:
@@ -48,6 +48,10 @@ backup:
 # Backup production + upload to Google Drive
 backup-upload:
 	./scripts/backup.sh prod --upload
+
+# Backup production database/session data only, skipping the media archive
+backup-no-media:
+	./scripts/backup.sh prod --no-media
 
 # Backup development volumes (database + media)
 backup-dev:

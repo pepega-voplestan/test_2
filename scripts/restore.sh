@@ -41,14 +41,21 @@ if [ ! -f "$APPDATA_FILE" ]; then
     echo "ERROR: Database backup not found: $APPDATA_FILE"
     exit 1
 fi
+# A missing media archive is expected for a --no-media backup (scripts/backup.sh)
+# rather than a broken one, since the two are independent steps — skip restoring
+# media instead of failing the whole restore.
+HAS_MEDIA=true
 if [ ! -f "$MEDIA_FILE" ]; then
-    echo "ERROR: Media backup not found: $MEDIA_FILE"
-    exit 1
+    HAS_MEDIA=false
 fi
 
 echo "=== Restore ($PREFIX) from $TIMESTAMP ==="
 echo "  Database: $APPDATA_FILE ($(du -h "$APPDATA_FILE" | cut -f1))"
-echo "  Media:    $MEDIA_FILE ($(du -h "$MEDIA_FILE" | cut -f1))"
+if [ "$HAS_MEDIA" = true ]; then
+    echo "  Media:    $MEDIA_FILE ($(du -h "$MEDIA_FILE" | cut -f1))"
+else
+    echo "  Media:    none for this timestamp (looks like a --no-media backup) — existing /media will be left untouched"
+fi
 echo ""
 
 read -p "This will OVERWRITE current data. Continue? [y/N] " -n 1 -r
@@ -70,11 +77,15 @@ docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
     "$SERVICE" -c "rm -rf /data/* && tar xzf /backup/${PREFIX}-appdata-${TIMESTAMP}.tar.gz -C /data"
 
 # Restore media
-echo "Restoring media..."
-docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
-    --entrypoint sh \
-    -v "$(pwd)/$BACKUP_DIR:/backup" \
-    "$SERVICE" -c "rm -rf /media/* && tar xzf /backup/${PREFIX}-media-${TIMESTAMP}.tar.gz -C /media"
+if [ "$HAS_MEDIA" = true ]; then
+    echo "Restoring media..."
+    docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
+        --entrypoint sh \
+        -v "$(pwd)/$BACKUP_DIR:/backup" \
+        "$SERVICE" -c "rm -rf /media/* && tar xzf /backup/${PREFIX}-media-${TIMESTAMP}.tar.gz -C /media"
+else
+    echo "Skipping media restore (no media backup for this timestamp)."
+fi
 
 echo ""
 echo "Restore complete. Start the app with: make ${ENV}"

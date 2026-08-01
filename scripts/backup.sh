@@ -3,14 +3,22 @@ set -euo pipefail
 
 # Backup Docker volumes (database + media) for Vopli app
 # Uses sqlite3 .backup for consistent hot snapshots of the database
-# Usage: ./scripts/backup.sh [prod|dev] [--upload]
+# Usage: ./scripts/backup.sh [prod|dev] [--upload] [--no-media]
 #   --upload: sync backups to rclone remote (requires rclone configured with "gdrive" remote)
+#   --no-media: skip the media archive entirely (database/session data only)
 
 ENV="${1:-prod}"
 UPLOAD=false
+NO_MEDIA=false
 for arg in "$@"; do
     [ "$arg" = "--upload" ] && UPLOAD=true
+    [ "$arg" = "--no-media" ] && NO_MEDIA=true
 done
+
+# Types actually backed up this run — drives every rotation loop below so
+# skipping media never leaves a stale "media" pass rotating nothing.
+BACKUP_TYPES="appdata"
+[ "$NO_MEDIA" = false ] && BACKUP_TYPES="appdata media"
 
 BACKUP_DIR="./backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -64,11 +72,15 @@ docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
     '
 
 # --- Media backup ---
-echo "Backing up media..."
-docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
-    --entrypoint sh \
-    -v "$(pwd)/$BACKUP_DIR:/backup" \
-    "$SERVICE" -c "tar czf /backup/${PREFIX}-media-${TIMESTAMP}.tar.gz -C /media ."
+if [ "$NO_MEDIA" = false ]; then
+    echo "Backing up media..."
+    docker compose -f "$COMPOSE_FILE" $ENV_FILE run --rm --no-deps \
+        --entrypoint sh \
+        -v "$(pwd)/$BACKUP_DIR:/backup" \
+        "$SERVICE" -c "tar czf /backup/${PREFIX}-media-${TIMESTAMP}.tar.gz -C /media ."
+else
+    echo "Skipping media backup (--no-media)"
+fi
 
 echo ""
 echo "Backup complete:"
@@ -77,7 +89,7 @@ ls -lh "$BACKUP_DIR/${PREFIX}-"*"-${TIMESTAMP}.tar.gz"
 # --- Rotation: keep only the last $KEEP backups per type ---
 echo ""
 echo "Rotating old backups (keeping last $KEEP)..."
-for TYPE in appdata media; do
+for TYPE in $BACKUP_TYPES; do
     FILES=$(ls -1t "$BACKUP_DIR/${PREFIX}-${TYPE}-"*.tar.gz 2>/dev/null || true)
     COUNT=$(echo "$FILES" | grep -c . || true)
     if [ "$COUNT" -gt "$KEEP" ]; then
@@ -94,12 +106,14 @@ if [ "$ENV" != "dev" ] && [ -d "$DO_VOLUME_DIR" ]; then
     echo "Copying to DO volume ($DO_VOLUME_DIR)..."
     mkdir -p "$DO_VOLUME_DIR"
     cp "$BACKUP_DIR/${PREFIX}-appdata-${TIMESTAMP}.tar.gz" "$DO_VOLUME_DIR/"
-    cp "$BACKUP_DIR/${PREFIX}-media-${TIMESTAMP}.tar.gz" "$DO_VOLUME_DIR/"
+    if [ "$NO_MEDIA" = false ]; then
+        cp "$BACKUP_DIR/${PREFIX}-media-${TIMESTAMP}.tar.gz" "$DO_VOLUME_DIR/"
+    fi
     echo "  Copied OK"
 
     # Rotate DO volume backups
     echo "Rotating DO volume backups (keeping last $KEEP)..."
-    for TYPE in appdata media; do
+    for TYPE in $BACKUP_TYPES; do
         FILES=$(ls -1t "$DO_VOLUME_DIR/${PREFIX}-${TYPE}-"*.tar.gz 2>/dev/null || true)
         COUNT=$(echo "$FILES" | grep -c . || true)
         if [ "$COUNT" -gt "$KEEP" ]; then
@@ -130,7 +144,7 @@ if [ "$UPLOAD" = true ]; then
 
     # Rotate remote too: delete old backups beyond $KEEP
     echo "Rotating remote backups (keeping last $KEEP)..."
-    for TYPE in appdata media; do
+    for TYPE in $BACKUP_TYPES; do
         REMOTE_FILES=$(rclone lsf "${RCLONE_REMOTE}:${RCLONE_PATH}/${PREFIX}/" \
             --include "${PREFIX}-${TYPE}-*.tar.gz" 2>/dev/null | sort -r || true)
         REMOTE_COUNT=$(echo "$REMOTE_FILES" | grep -c . || true)
