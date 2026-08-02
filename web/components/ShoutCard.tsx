@@ -1699,7 +1699,7 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
                   {isMediaOnlyHidden && hasMediaContent ? (
                     /* --- NSFW / Spoiler: always blur actual media, not placeholders --- */
-                    <div className="relative rounded-lg overflow-hidden mb-2 inline-block max-w-full">
+                    <div className="relative rounded-lg overflow-hidden mb-2 max-w-full">
                       <div className="blur-xl select-none pointer-events-none" aria-hidden="true">
                         {renderActualMedia()}
                       </div>
