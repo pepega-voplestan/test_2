@@ -112,6 +112,35 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(6).max(200),
 });
 
+// ── Email domain whitelist (feature 007) ─────────────────────────────────────
+// New emails may only enter the system — at registration AND at email change —
+// if their domain is on this static allow-list. This list is the single source
+// of truth: to change the permitted domains, edit it here and redeploy.
+// Backend-authoritative guard; see specs/007-email-whitelist. Not a Zod schema
+// because the two flows return distinct Russian messages; runs after each flow's
+// Zod `.email()` format validation.
+export const ALLOWED_EMAIL_DOMAINS = new Set([
+  "ya.ru", "ukr.net", "mail.ru", "bk.ru", "yandex.ru", "yandex.com",
+  "rambler.ru", "gmail.com", "list.ru", "inbox.ru", "lenta.ru", "icloud.com",
+  "outlook.com", "hotmail.com", "live.com", "i.ua", "meta.ua", "yahoo.com",
+]);
+
+/**
+ * True iff `email`'s domain is on the approved allow-list. Case-insensitive,
+ * exact full-domain match (no subdomain/superstring acceptance). Returns false
+ * when no `@` is present. Assumes `email` already passed Zod `.email()` format
+ * validation.
+ * @param {string} email
+ * @returns {boolean}
+ */
+export function isAllowedEmailDomain(email) {
+  if (typeof email !== "string") return false;
+  const normalized = email.trim().toLowerCase();
+  const at = normalized.lastIndexOf("@");
+  if (at === -1) return false;
+  return ALLOWED_EMAIL_DOMAINS.has(normalized.slice(at + 1));
+}
+
 import { SOCIAL_TYPES } from "./socials.js";
 
 export const socialTypeSchema = z.enum(SOCIAL_TYPES);

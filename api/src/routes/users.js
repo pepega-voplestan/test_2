@@ -5,7 +5,7 @@ import { requireAuth, hashPassword, verifyPassword } from "../auth.js";
 import { sendVerificationEmail } from "../email.js";
 import { asyncHandler, utcTimestamp, avatarFor } from "../helpers/common.js";
 import {
-  profileUpdateSchema, emailChangeSchema, verifyCodeSchema,
+  profileUpdateSchema, emailChangeSchema, verifyCodeSchema, isAllowedEmailDomain,
   generateCode, CODE_EXPIRY_MINUTES, CODE_MAX_ATTEMPTS,
 } from "../helpers/validation.js";
 import { enrichFeed } from "../helpers/feed.js";
@@ -202,6 +202,12 @@ router.post("/users/:id/email/send-code", requireAuth, asyncHandler(async (req, 
 
   const { email } = parsed.data;
   console.log(`[Profile] Email change send-code for user ${currentUserId} → ${email}`);
+
+  // Feature 007: reject non-whitelisted email domains before any code is sent.
+  if (!isAllowedEmailDomain(email)) {
+    console.log(`[Profile] Email change blocked: domain not allowed for "${email}"`);
+    return res.status(400).json({ error: "Этот почтовый сервис не поддерживается" });
+  }
 
   // Check if this email is already taken
   const existsEmail = await prisma.user.findFirst({

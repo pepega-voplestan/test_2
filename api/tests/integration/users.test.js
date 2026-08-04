@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import supertest from "supertest";
 import { request, authenticatedAgent, cleanDb, disconnectDb, getTestPrisma, getApp } from "../helpers.js";
 import { createUser, createShout, createVerificationCode } from "../fixtures/index.js";
+import { sendVerificationEmail } from "../../src/email.js";
 
 describe("Users routes", () => {
   beforeEach(async () => {
@@ -265,13 +266,15 @@ describe("Users routes", () => {
     });
 
     it("returns 409 when email is already taken by another user", async () => {
+      // Target a whitelisted domain so the request passes the domain gate and
+      // reaches the uniqueness check (feature 007).
       const alice = await createUser({ username: "alice", email: "alice@test.local" });
-      await createUser({ username: "bob", email: "bob@test.local" });
+      await createUser({ username: "bob", email: "bob@gmail.com" });
       const agent = await authenticatedAgent(alice);
 
       const res = await agent
         .post(`/api/v1/users/${alice.id}/email/send-code`)
-        .send({ email: "bob@test.local" });
+        .send({ email: "bob@gmail.com" });
       expect(res.status).toBe(409);
     });
 
@@ -281,14 +284,37 @@ describe("Users routes", () => {
 
       const res = await agent
         .post(`/api/v1/users/${alice.id}/email/send-code`)
-        .send({ email: "newalice@test.local" });
+        .send({ email: "newalice@gmail.com" });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
 
       const code = await getTestPrisma().verificationCode.findFirst({
-        where: { email: "newalice@test.local", purpose: "email_change", used: 0 },
+        where: { email: "newalice@gmail.com", purpose: "email_change", used: 0 },
       });
       expect(code).not.toBeNull();
+    });
+
+    // ── Email domain whitelist (feature 007) ──────────────────────────────
+    it("returns 400 for a non-approved domain and leaves the current email unchanged", async () => {
+      const alice = await createUser({ username: "alice", email: "alice@test.local" });
+      const agent = await authenticatedAgent(alice);
+
+      const res = await agent
+        .post(`/api/v1/users/${alice.id}/email/send-code`)
+        .send({ email: "alice@example.com" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Этот почтовый сервис не поддерживается");
+
+      // No code created, no email sent, and the stored email is untouched (FR-014).
+      const code = await getTestPrisma().verificationCode.findFirst({
+        where: { email: "alice@example.com", purpose: "email_change" },
+      });
+      expect(code).toBeNull();
+      expect(sendVerificationEmail).not.toHaveBeenCalled();
+
+      const stored = await getTestPrisma().user.findUnique({ where: { id: alice.id } });
+      expect(stored.email).toBe("alice@test.local");
     });
   });
 

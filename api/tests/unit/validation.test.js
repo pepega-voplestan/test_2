@@ -12,6 +12,8 @@ import {
   verifyCodeSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  ALLOWED_EMAIL_DOMAINS,
+  isAllowedEmailDomain,
 } from "../../src/helpers/validation.js";
 
 describe("effectiveCharCount", () => {
@@ -280,5 +282,65 @@ describe("resetPasswordSchema", () => {
       newPassword: "short",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+
+// ── Email domain whitelist (feature 007) ─────────────────────────────────────
+// Static, in-code allow-list (no env var). To change the permitted domains, edit
+// ALLOWED_EMAIL_DOMAINS in helpers/validation.js.
+describe("email domain whitelist — ALLOWED_EMAIL_DOMAINS", () => {
+  it("contains exactly the 18 documented domains (FR-006)", () => {
+    expect(ALLOWED_EMAIL_DOMAINS.size).toBe(18);
+    for (const d of [
+      "ya.ru", "ukr.net", "mail.ru", "bk.ru", "yandex.ru", "yandex.com",
+      "rambler.ru", "gmail.com", "list.ru", "inbox.ru", "lenta.ru", "icloud.com",
+      "outlook.com", "hotmail.com", "live.com", "i.ua", "meta.ua", "yahoo.com",
+    ]) {
+      expect(ALLOWED_EMAIL_DOMAINS.has(d)).toBe(true);
+    }
+  });
+});
+
+describe("email domain whitelist — isAllowedEmailDomain", () => {
+  it("accepts an approved domain (FR-003)", () => {
+    expect(isAllowedEmailDomain("someone@gmail.com")).toBe(true);
+    expect(isAllowedEmailDomain("a@yandex.ru")).toBe(true);
+  });
+
+  it("is case-insensitive (FR-004)", () => {
+    expect(isAllowedEmailDomain("USER@GMAIL.COM")).toBe(true);
+    expect(isAllowedEmailDomain("User@Gmail.Com")).toBe(true);
+  });
+
+  it("tolerates surrounding whitespace", () => {
+    expect(isAllowedEmailDomain("  user@gmail.com  ")).toBe(true);
+  });
+
+  it("rejects unlisted subdomains (FR-005)", () => {
+    expect(isAllowedEmailDomain("user@mail.gmail.com")).toBe(false);
+  });
+
+  it("rejects look-alike and superstring domains (FR-005)", () => {
+    expect(isAllowedEmailDomain("user@notgmail.com")).toBe(false);
+    expect(isAllowedEmailDomain("user@gmail.com.evil.net")).toBe(false);
+  });
+
+  it("rejects a plainly non-approved domain", () => {
+    expect(isAllowedEmailDomain("user@example.com")).toBe(false);
+    expect(isAllowedEmailDomain("user@test.local")).toBe(false);
+  });
+
+  it("returns false when no @ is present or input is not a string", () => {
+    expect(isAllowedEmailDomain("not-an-email")).toBe(false);
+    expect(isAllowedEmailDomain("")).toBe(false);
+    expect(isAllowedEmailDomain(null)).toBe(false);
+    expect(isAllowedEmailDomain(undefined)).toBe(false);
+  });
+
+  it("matches on the domain after the last @ only", () => {
+    // Zod guards real input; this is defensive. The final segment is the domain.
+    expect(isAllowedEmailDomain("weird@x@gmail.com")).toBe(true);
+    expect(isAllowedEmailDomain("weird@x@example.com")).toBe(false);
   });
 });

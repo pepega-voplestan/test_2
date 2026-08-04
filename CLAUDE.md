@@ -40,6 +40,8 @@ make prod             # Docker production (ports 80/443)
 - **One pinned shout max** — admin-managed; prepended only to "new" tab first page
 - **Prisma for all DB access** — raw SQL only for migrations or extreme edge cases
 - **Zod for all input validation** — schemas in `helpers/validation.js`, shared across routes
+- **Design-first, tests second** — design components for correctness and clarity on their own merits; never shape production code primarily for test convenience. A test-only seam is OK only if it doesn't compromise the design. *(Constitution v3.1.0 §VI)*
+- **Minimal, meaningful comments** — comments must be sparse and explain the non-obvious (WHY, invariants, gotchas); no comments that restate the code. Prefer self-explanatory names. *(Constitution v3.1.0 §VII)*
 
 ## Common Mistakes to Avoid
 
@@ -85,5 +87,5 @@ make prod             # Docker production (ports 80/443)
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/003-original-quality-uploads/plan.md
+at specs/007-email-whitelist/plan.md
 <!-- SPECKIT END -->
