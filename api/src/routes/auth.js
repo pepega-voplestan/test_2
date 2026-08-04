@@ -6,7 +6,7 @@ import { sendVerificationEmail } from "../email.js";
 import { asyncHandler, avatarFor } from "../helpers/common.js";
 import {
   sendCodeSchema, verifyCodeSchema, loginSchema,
-  forgotPasswordSchema, resetPasswordSchema,
+  forgotPasswordSchema, resetPasswordSchema, isAllowedEmailDomain,
   generateCode, CODE_EXPIRY_MINUTES, CODE_MAX_ATTEMPTS,
 } from "../helpers/validation.js";
 
@@ -31,6 +31,12 @@ router.post("/auth/register/send-code", asyncHandler(async (req, res) => {
 
   const { username, password, email } = parsed.data;
   console.log(`[Auth] Register send-code attempt: ${username} (${email})`);
+
+  // Feature 007: reject non-whitelisted email domains before any code is sent.
+  if (!isAllowedEmailDomain(email)) {
+    console.log(`[Auth] Register blocked: email domain not allowed for "${email}"`);
+    return res.status(400).json({ error: "Регистрация доступна только для адресов популярных почтовых сервисов" });
+  }
 
   const existsUser = await prisma.user.findUnique({
     where: { username },

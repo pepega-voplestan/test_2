@@ -3,6 +3,15 @@ import bcrypt from "bcryptjs";
 import supertest from "supertest";
 import { request, getApp, cleanDb, disconnectDb, getTestPrisma } from "../helpers.js";
 import { createUser, createVerificationCode } from "../fixtures/index.js";
+import { sendVerificationEmail } from "../../src/email.js";
+
+// The 18 production default domains — asserted to be absent from rejection
+// messages (FR-007 non-disclosure).
+const WHITELIST_DOMAINS = [
+  "ya.ru", "ukr.net", "mail.ru", "bk.ru", "yandex.ru", "yandex.com",
+  "rambler.ru", "gmail.com", "list.ru", "inbox.ru", "lenta.ru", "icloud.com",
+  "outlook.com", "hotmail.com", "live.com", "i.ua", "meta.ua", "yahoo.com",
+];
 
 describe("Auth routes", () => {
   beforeEach(async () => {
@@ -41,19 +50,21 @@ describe("Auth routes", () => {
     });
 
     it("returns 409 when username is already taken", async () => {
-      await createUser({ username: "alice", email: "alice@test.local" });
+      // Use a whitelisted domain so the request passes the domain gate and
+      // reaches the uniqueness check (feature 007).
+      await createUser({ username: "alice", email: "alice@gmail.com" });
       const res = await (await request())
         .post("/api/v1/auth/register/send-code")
-        .send({ username: "alice", password: "pass123", email: "other@test.local" });
+        .send({ username: "alice", password: "pass123", email: "other@gmail.com" });
       expect(res.status).toBe(409);
       expect(res.body.error).toMatch(/имя пользователя/i);
     });
 
     it("returns 409 when email is already taken", async () => {
-      await createUser({ username: "alice", email: "alice@test.local" });
+      await createUser({ username: "alice", email: "dup@gmail.com" });
       const res = await (await request())
         .post("/api/v1/auth/register/send-code")
-        .send({ username: "newuser", password: "pass123", email: "alice@test.local" });
+        .send({ username: "newuser", password: "pass123", email: "dup@gmail.com" });
       expect(res.status).toBe(409);
       expect(res.body.error).toMatch(/email/i);
     });
@@ -61,17 +72,48 @@ describe("Auth routes", () => {
     it("returns 200 and creates a verification code record for valid data", async () => {
       const res = await (await request())
         .post("/api/v1/auth/register/send-code")
-        .send({ username: "alice", password: "pass123", email: "alice@test.local" });
+        .send({ username: "alice", password: "pass123", email: "alice@gmail.com" });
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
 
       // Verification code should exist in DB
       const prisma = getTestPrisma();
       const code = await prisma.verificationCode.findFirst({
-        where: { email: "alice@test.local", purpose: "register", used: 0 },
+        where: { email: "alice@gmail.com", purpose: "register", used: 0 },
       });
       expect(code).not.toBeNull();
       expect(code.payload).toContain("alice");
+    });
+
+    // ── Email domain whitelist (feature 007) ──────────────────────────────
+    it("returns 400 and creates no code / sends no email for a non-approved domain", async () => {
+      const res = await (await request())
+        .post("/api/v1/auth/register/send-code")
+        .send({ username: "mallory", password: "pass123", email: "mallory@example.com" });
+
+      expect(res.status).toBe(400);
+      // Russian message, and it must NOT disclose the whitelist (FR-007).
+      expect(res.body.error).toBe("Регистрация доступна только для адресов популярных почтовых сервисов");
+      for (const domain of WHITELIST_DOMAINS) {
+        expect(res.body.error).not.toContain(domain);
+      }
+
+      // No side effects: no verification code row, no email sent (FR-002, SC-003).
+      const code = await getTestPrisma().verificationCode.findFirst({
+        where: { email: "mallory@example.com", purpose: "register" },
+      });
+      expect(code).toBeNull();
+      expect(sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-approved domain before the username/email-taken checks", async () => {
+      // Even with an otherwise-taken username, the domain block wins.
+      await createUser({ username: "alice", email: "alice@test.local" });
+      const res = await (await request())
+        .post("/api/v1/auth/register/send-code")
+        .send({ username: "alice", password: "pass123", email: "alice@example.com" });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/популярных почтовых сервисов/);
     });
   });
 
@@ -216,6 +258,18 @@ describe("Auth routes", () => {
         .send({ login: "alice@test.local", password: user._rawPassword });
       expect(res.status).toBe(200);
       expect(res.body.user.name).toBe("alice");
+    });
+
+    // Feature 007: the whitelist gates only new emails entering the system; an
+    // existing account whose stored email is on a non-approved domain must still
+    // be able to sign in (FR-013, SC-005).
+    it("lets an existing user on a non-approved domain sign in", async () => {
+      const legacy = await createUser({ username: "legacy", email: "legacy@example.com" });
+      const res = await (await request())
+        .post("/api/v1/auth/login")
+        .send({ login: "legacy", password: legacy._rawPassword });
+      expect(res.status).toBe(200);
+      expect(res.body.user.name).toBe("legacy");
     });
   });
 

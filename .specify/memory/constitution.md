@@ -1,43 +1,39 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 2.0.0 → 3.0.0
-Rationale: MAJOR bump. The "Bounded media galleries per post/comment" Domain
-Constraint (established in v2.0.0) is narrowed, not merely clarified: it
-previously permitted "an ordered gallery of up to five image/GIF items,"
-explicitly allowing GIFs as gallery members. That permission is now withdrawn —
-a gallery may only contain images. A gallery configuration that was
-constitutionally valid under v2.0.0 (multiple GIFs, or a GIF mixed with
-images) is no longer valid under v3.0.0, which is the backward-incompatibility
-per this document's own Versioning rule ("MAJOR for backward-incompatible
-principle removals or redefinitions").
+Version change: 3.0.0 → 3.1.0
+Rationale: MINOR bump. Two new Core Principles are ADDED — VI (Design-First,
+Tests Second) and VII (Minimal, Meaningful Comments). No existing principle is
+removed or redefined and no prior guidance is narrowed, so this is additive
+under the Versioning rule ("MINOR for new or materially expanded
+principles/sections").
 
-Driven by: specs/006-multi-media-gallery (Multi-Media Gallery Attachments),
-2026-07-31 revision (published-gallery carousel & permanent GIF exclusion).
+Driven by: specs/007-email-whitelist (Email Domain Whitelist). Two lessons were
+codified: (1) the whitelist was deliberately implemented as a static in-code
+list rather than an environment variable whose main benefit was test
+convenience — design chosen over test ergonomics; (2) comment density on the
+new code was flagged as too high.
 
 Modified sections:
-  - Domain & Content Constraints → "Bounded media galleries per post/comment"
-    narrowed from "an ordered gallery of up to five image/GIF items" to "an
-    ordered gallery of up to five images" — GIFs (and video, unchanged) are
-    excluded from any gallery of 2+ items. A single GIF attachment (not part
-    of a gallery) is unaffected.
+  - Core Principles → ADDED "VI. Design-First, Tests Second" and
+    "VII. Minimal, Meaningful Comments".
 
-Unchanged: all five Core Principles (I–V), every other Domain Constraint, the
-five-item ceiling, the gallery/YouTube exclusivity, publish-time immutability,
-and the entire Development Workflow & Quality Gates section.
+Unchanged: Core Principles I–V, all Domain & Content Constraints, the entire
+Development Workflow & Quality Gates section, and Governance.
 
 Removed sections: none
 
 Templates requiring updates:
-  - ✅ .specify/templates/plan-template.md (dynamic Constitution Check gate; no
-       hardcoded principles — remains aligned)
+  - ✅ .specify/templates/plan-template.md (Constitution Check gate is dynamic —
+       "[Gates determined based on constitution file]"; no hardcoded principle
+       list, remains aligned)
   - ✅ .specify/templates/spec-template.md (no constitution coupling)
   - ✅ .specify/templates/tasks-template.md (no constitution coupling)
 
 Runtime guidance requiring propagation:
-  - CLAUDE.md "Bounded media gallery per post/comment" bullet → updated via the
-    /docs skill (never edited directly), tracked as task T112.
-  - docs/api.md, docs/web.md → updated via /docs if they mention GIF galleries.
+  - ✅ CLAUDE.md "Core Principles (Non-Negotiables)" list → the two new
+    principles were added via the /docs skill (CLAUDE.md is never edited
+    directly).
 
 Follow-up TODOs: none.
 -->
@@ -100,6 +96,32 @@ is PROHIBITED.
 Rationale: Optimistic updates keep the app responsive, but without rollback they
 silently desync the client from server truth and erode data trust.
 
+### VI. Design-First, Tests Second
+
+Components MUST be designed for correctness, clarity, and sound architecture on
+their own merits. Shaping or altering production code PRIMARILY to make tests
+easier to write is PROHIBITED — tests adapt to a well-designed component, not the
+other way around. A test-only seam or hook is permitted ONLY when it does not
+compromise the production design; when design quality and testability conflict,
+fix the design first, then adapt the tests.
+
+Rationale: Test-convenience that leaks into production shape yields abstractions
+that serve the suite rather than the product, accreting complexity and
+misleading future readers about why the code is structured as it is. Sound design
+is testable design; the reverse is not guaranteed.
+
+### VII. Minimal, Meaningful Comments
+
+Comments MUST be sparse and MUST carry non-obvious information — the WHY,
+invariants, gotchas, and constraints the code cannot express on its own. Comments
+that merely restate what the code already says are PROHIBITED. Prefer
+self-explanatory names and structure over narration; when a comment is warranted,
+make it earn its place.
+
+Rationale: High comment density dilutes signal, drifts out of sync with the code
+it describes, and buries the few comments that genuinely matter. Meaningful-only
+comments keep the codebase readable and trustworthy.
+
 ## Domain & Content Constraints
 
 These invariants are enforced backend-first and MUST be gated on the frontend as
@@ -161,4 +183,4 @@ conflict. All changes are governed as follows:
   and justified in the plan's Complexity Tracking section, or the design MUST be
   revised to comply.
 
-**Version**: 3.0.0 | **Ratified**: 2026-06-23 | **Last Amended**: 2026-07-31
+**Version**: 3.1.0 | **Ratified**: 2026-06-23 | **Last Amended**: 2026-08-04

@@ -218,6 +218,28 @@ PostgreSQL 16. Managed via Prisma. `prisma migrate deploy` on Docker startup. Al
 | `WORKERS_PORT` | `3001` | Workers service port |
 | `BULL_BOARD_BASE_PATH` | `/workers` | Bull Board UI path |
 
+### Email domain whitelist (feature 007)
+
+New emails may only enter the system if their domain is on a **static, in-code
+allow-list**: `ALLOWED_EMAIL_DOMAINS` in `helpers/validation.js` (the single
+source of truth — to change the permitted domains, edit that list and redeploy;
+there is no env var). Enforced backend-first via `isAllowedEmailDomain()`,
+called in `routes/auth.js` (`register/send-code`) and `routes/users.js`
+(`email/send-code`) **before** any verification code is sent — so a disallowed
+address never receives an email or creates a `VerificationCode`.
+
+- **Allowed domains (18)**: `ya.ru`, `ukr.net`, `mail.ru`, `bk.ru`, `yandex.ru`,
+  `yandex.com`, `rambler.ru`, `gmail.com`, `list.ru`, `inbox.ru`, `lenta.ru`,
+  `icloud.com`, `outlook.com`, `hotmail.com`, `live.com`, `i.ua`, `meta.ua`,
+  `yahoo.com`.
+- **Matching**: case-insensitive, exact full-domain only — subdomains are not
+  implied (`user@mail.gmail.com` and `user@gmail.com.evil.net` are rejected).
+- **Gotcha**: the whitelist gates only emails *entering* the system
+  (registration + email change). It never affects **login** of existing
+  accounts — a user whose stored email is on a non-approved domain can still
+  sign in. Rejection messages are Russian and deliberately do not disclose the
+  list.
+
 ## Backend Code Conventions
 
 - ES Modules (`"type": "module"`); `dotenv/config` only in `server.js`
