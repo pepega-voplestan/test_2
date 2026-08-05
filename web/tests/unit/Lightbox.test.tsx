@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import Lightbox from '../../components/Lightbox';
+import type { GalleryItem } from '../../types';
 
 afterEach(cleanup);
 
@@ -109,5 +111,242 @@ describe('Lightbox — ghost-click trap does not outlive its target', () => {
 
     // Every subsequent click lands; the trap fired at most once.
     expect(onNext).toHaveBeenCalledTimes(3);
+  });
+});
+
+/**
+ * Gallery mode (D20 reversed 2026-08-05 — see specs/006-multi-media-gallery/
+ * research.md): Lightbox pages between items itself, mirroring
+ * GalleryCarousel's looping/swipe/arrows/indicator UX, while dismiss/zoom/pan
+ * and the ghost-click trap above keep working unmodified.
+ */
+
+/** Build `n` gallery items; `orientation` lets a test vary it per index. */
+function items(n: number, opts: { orientation?: (i: number) => number | undefined } = {}): GalleryItem[] {
+  return Array.from({ length: n }, (_, i) => ({
+    type: 'image' as const,
+    url: `/media/m${i}/960.webp`,
+    thumb: `/media/m${i}/320.webp`,
+    full: `/media/m${i}/1600.webp`,
+    width: 800,
+    height: 600,
+    orientation: opts.orientation?.(i),
+  }));
+}
+
+const overlay = () => document.querySelector('.fixed.inset-0') as HTMLElement;
+const currentImg = () => screen.getByAltText('attachment');
+const wrapper = () => currentImg().parentElement as HTMLElement;
+const prevButton = () => screen.getByTestId('lightbox-prev');
+const nextButton = () => screen.getByTestId('lightbox-next');
+const indicator = () => screen.getByTestId('lightbox-indicator');
+
+describe('Lightbox — gallery mode: paging and looping', () => {
+  it('opens on startIndex and pages forward via the next arrow, looping past the end', async () => {
+    const user = userEvent.setup();
+    render(<Lightbox items={items(3)} startIndex={1} onClose={vi.fn()} />);
+    expect(currentImg()).toHaveAttribute('src', '/media/m1/1600.webp');
+    expect(indicator()).toHaveTextContent('2 / 3');
+
+    await user.click(nextButton());
+    expect(currentImg()).toHaveAttribute('src', '/media/m2/1600.webp');
+    await user.click(nextButton()); // past the last → wraps to the first
+    expect(currentImg()).toHaveAttribute('src', '/media/m0/1600.webp');
+    expect(indicator()).toHaveTextContent('1 / 3');
+  });
+
+  it('pages backward via the prev arrow, looping before the start', async () => {
+    const user = userEvent.setup();
+    render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+    await user.click(prevButton());
+    expect(currentImg()).toHaveAttribute('src', '/media/m2/1600.webp');
+  });
+
+  it('pages with Left/Right arrow keys, looping the same way as the on-screen arrows', async () => {
+    const user = userEvent.setup();
+    render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+    await user.keyboard('{ArrowRight}');
+    expect(currentImg()).toHaveAttribute('src', '/media/m1/1600.webp');
+    await user.keyboard('{ArrowLeft}');
+    await user.keyboard('{ArrowLeft}'); // before the first → wraps to the last
+    expect(currentImg()).toHaveAttribute('src', '/media/m2/1600.webp');
+  });
+});
+
+describe('Lightbox — gallery mode: arrows and indicator', () => {
+  it('renders prev/next arrows and a position indicator for 2+ items', () => {
+    render(<Lightbox items={items(2)} startIndex={0} onClose={vi.fn()} />);
+    expect(prevButton()).toBeInTheDocument();
+    expect(nextButton()).toBeInTheDocument();
+    expect(indicator()).toHaveTextContent('1 / 2');
+  });
+
+  it('renders none of them for a single-item gallery', () => {
+    render(<Lightbox items={items(1)} startIndex={0} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('lightbox-prev')).toBeNull();
+    expect(screen.queryByTestId('lightbox-next')).toBeNull();
+    expect(screen.queryByTestId('lightbox-indicator')).toBeNull();
+  });
+
+  it('fades the arrows and indicator out immediately once a swipe-dismiss commits, instead of leaving them static for the full 300ms exit', () => {
+    render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+    fireEvent.pointerDown(overlay(), { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(overlay(), { button: 0, clientX: 100, clientY: 300 }); // dy=200, past DISMISS_THRESHOLD, locks vertical
+    fireEvent.pointerUp(overlay(), { button: 0, clientX: 100, clientY: 300 });
+
+    expect(prevButton().className).toMatch(/opacity-0/);
+    expect(nextButton().className).toMatch(/opacity-0/);
+    expect(indicator().className).toMatch(/opacity-0/);
+  });
+});
+
+describe('Lightbox — gallery mode: pointer-swipe navigation', () => {
+  // Mirrors GalleryCarousel.test.tsx's own swipe suite — same thresholds,
+  // same fake-timer settle pattern, driven at the overlay instead of a tile.
+  it('advances on a leftward swipe past the distance threshold', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+      fireEvent.pointerDown(overlay(), { button: 0, clientX: 200 });
+      fireEvent.pointerUp(overlay(), { button: 0, clientX: 100 }); // 100px left, past the 40px threshold
+      await act(async () => { vi.advanceTimersByTime(500); });
+      expect(currentImg()).toHaveAttribute('src', '/media/m1/1600.webp');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('goes to the previous item on a rightward swipe, looping before the start', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+      fireEvent.pointerDown(overlay(), { button: 0, clientX: 100 });
+      fireEvent.pointerUp(overlay(), { button: 0, clientX: 200 }); // 100px right
+      await act(async () => { vi.advanceTimersByTime(500); });
+      expect(currentImg()).toHaveAttribute('src', '/media/m2/1600.webp'); // wraps to last
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not treat a slow small movement below the distance/velocity threshold as a swipe', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+      fireEvent.pointerDown(overlay(), { button: 0, clientX: 100 });
+      vi.advanceTimersByTime(300);
+      fireEvent.pointerUp(overlay(), { button: 0, clientX: 110 }); // 10px over 300ms — under both thresholds
+      await act(async () => { vi.advanceTimersByTime(500); });
+      expect(currentImg()).toHaveAttribute('src', '/media/m0/1600.webp');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats a fast small flick above the velocity threshold as a swipe even under the distance threshold', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+      fireEvent.pointerDown(overlay(), { button: 0, clientX: 100 });
+      vi.advanceTimersByTime(20);
+      fireEvent.pointerUp(overlay(), { button: 0, clientX: 80 }); // 20px over 20ms = 1px/ms, past the 0.5 velocity threshold
+      await act(async () => { vi.advanceTimersByTime(500); });
+      expect(currentImg()).toHaveAttribute('src', '/media/m1/1600.webp');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Lightbox — gallery mode: dominant-axis disambiguation', () => {
+  it('a mostly-vertical drag dismisses without paging', () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      render(<Lightbox items={items(3)} startIndex={0} onClose={onClose} />);
+      fireEvent.pointerDown(overlay(), { button: 0, clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(overlay(), { button: 0, clientX: 105, clientY: 250 }); // dy=150 >> dx=5, locks vertical
+      fireEvent.pointerUp(overlay(), { button: 0, clientX: 105, clientY: 250 });
+      expect(currentImg()).toHaveAttribute('src', '/media/m0/1600.webp'); // no page change
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(onClose).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a mostly-horizontal drag pages without dismissing', () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      render(<Lightbox items={items(3)} startIndex={0} onClose={onClose} />);
+      fireEvent.pointerDown(overlay(), { button: 0, clientX: 200, clientY: 100 });
+      fireEvent.pointerMove(overlay(), { button: 0, clientX: 100, clientY: 105 }); // dx=100 >> dy=5, locks horizontal
+      fireEvent.pointerUp(overlay(), { button: 0, clientX: 100, clientY: 105 });
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(currentImg()).toHaveAttribute('src', '/media/m1/1600.webp');
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Lightbox — gallery mode: zoom resets on index change', () => {
+  it('resets zoom to 1x after paging to a new item', async () => {
+    const user = userEvent.setup();
+    render(<Lightbox items={items(2)} startIndex={0} onClose={vi.fn()} />);
+
+    // Two rapid clicks on the backdrop simulate the double-tap-to-zoom gesture.
+    fireEvent.click(overlay());
+    fireEvent.click(overlay());
+    expect(wrapper().style.transform).toContain('scale(2.5)');
+
+    await user.click(nextButton());
+    expect(wrapper().style.transform).not.toContain('2.5');
+  });
+});
+
+describe('Lightbox — gallery mode: orientation re-applies per item', () => {
+  it("applies each item's own EXIF orientation transform as the index changes", async () => {
+    const user = userEvent.setup();
+    const gallery = items(2, { orientation: (i) => (i === 0 ? 6 : undefined) });
+    render(<Lightbox items={gallery} startIndex={0} onClose={vi.fn()} />);
+    expect(currentImg().style.transform).toBe('rotate(90deg)');
+
+    await user.click(nextButton());
+    expect(currentImg().style.transform).toBe('');
+  });
+});
+
+describe('Lightbox — gallery mode: ghost-click trap still works when paging is present', () => {
+  function GalleryHarness({ onNext }: { onNext: () => void }) {
+    const [open, setOpen] = useState(true);
+    return (
+      <div>
+        <button onClick={onNext}>next tile</button>
+        {open && <Lightbox items={items(3)} startIndex={0} onClose={() => setOpen(false)} />}
+      </div>
+    );
+  }
+
+  it('swallows the ghost click that trails closing a gallery-mode Lightbox', () => {
+    const onNext = vi.fn();
+    render(<GalleryHarness onNext={onNext} />);
+    const overlayEl = overlay();
+    fireEvent.pointerDown(overlayEl, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(overlayEl, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByText('next tile'));
+    expect(onNext).not.toHaveBeenCalled();
+  });
+});
+
+describe('Lightbox — single-image mode is unaffected', () => {
+  it('renders no gallery affordances when items is omitted', () => {
+    render(<Lightbox src="/media/a/1600.webp" onClose={vi.fn()} />);
+    expect(screen.queryByTestId('lightbox-prev')).toBeNull();
+    expect(screen.queryByTestId('lightbox-next')).toBeNull();
+    expect(screen.queryByTestId('lightbox-indicator')).toBeNull();
+    expect(screen.queryByTestId('lightbox-track')).toBeNull();
   });
 });

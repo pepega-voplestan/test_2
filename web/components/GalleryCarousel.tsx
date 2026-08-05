@@ -138,13 +138,19 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
     startX.current = e.clientX;
     startTime.current = Date.now();
     frameWidth.current = tileRef.current?.clientWidth ?? 0;
-    setNeighborsMounted(true);
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
   const onTilePointerMove = (e: React.PointerEvent) => {
     if (!dragging.current) return;
     const dx = e.clientX - startX.current;
+    // Neighbors mount lazily, on the first real movement past the jitter
+    // floor, not on pointerdown — a plain tap that opens the fullscreen
+    // viewer never drags at all, and used to still speculatively fetch both
+    // neighbors' preview images for a track it was about to unmount unused.
+    if (!neighborsMounted && Math.abs(dx) > SWIPE_MIN_JITTER_DISTANCE) {
+      setNeighborsMounted(true);
+    }
     const width = frameWidth.current || 1;
     applyTrackTransform(Math.max(-width, Math.min(width, dx)), false);
   };
@@ -276,7 +282,7 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
 
       <div
         data-testid="gallery-carousel-indicator"
-        className="absolute bottom-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-th-card/70 text-xs text-th-text tabular-nums"
+        className="absolute bottom-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-full bg-th-card/70 text-lg sm:text-xs text-th-text tabular-nums"
       >
         {currentIndex + 1} / {length}
       </div>
