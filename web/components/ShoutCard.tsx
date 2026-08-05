@@ -910,8 +910,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {galleryIndex !== null && comment.gallery?.[galleryIndex] && (
             <Lightbox
-              src={comment.gallery[galleryIndex].full}
-              orientation={comment.gallery[galleryIndex].orientation}
+              items={comment.gallery}
+              startIndex={galleryIndex}
               onClose={() => setGalleryIndex(null)}
             />
           )}
@@ -1411,8 +1411,8 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
       {galleryIndex !== null && shout.gallery?.[galleryIndex] && (
         <Lightbox
-          src={shout.gallery[galleryIndex].full}
-          orientation={shout.gallery[galleryIndex].orientation}
+          items={shout.gallery}
+          startIndex={galleryIndex}
           onClose={() => setGalleryIndex(null)}
         />
       )}

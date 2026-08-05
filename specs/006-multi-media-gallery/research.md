@@ -495,6 +495,21 @@ history.
   disfavor building for a hypothetical future requirement with no current
   caller.
 
+**Reversed 2026-08-05**: Overturned per explicit user request. The
+"marginal benefit" this decision weighed against turned out to matter in
+practice: fullscreen is where readers actually look at gallery images
+closely, and being unable to page there without dismissing and re-swiping
+the inline carousel read as a missing feature, not a deduplicated one.
+`Lightbox.tsx` now takes optional `items`/`startIndex` props (gallery mode)
+and replicates `GalleryCarousel`'s looping/swipe/arrows/indicator UX at
+full-screen scale, layered onto its existing zoom/pan/dismiss gesture model
+via dominant-axis drag disambiguation (a horizontal-vs-vertical drag locks
+to paging or dismissing once movement crosses a small threshold; pan-while-
+zoomed keeps first priority, unchanged). Single-image callers
+(`PendingMediaStrip.tsx`, `ProfilePage.tsx`'s avatar viewer, and the
+non-gallery `shout.media`/`comment.media` paths) pass no `items` and are
+unaffected. See tasks T041–T049, reinstated in modified form below.
+
 ## Known debt accepted (not introduced by this feature)
 
 - **Orphaned uploads — narrowed by the 2026-07-30 revision.** Previously: files

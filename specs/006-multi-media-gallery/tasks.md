@@ -58,6 +58,16 @@ a production deployment stage.
 > multi-item galleries, but uploaded animated GIF files were not — Phase 1d
 > includes a real, small server-side fix for that gap (research D19), not just
 > a doc correction.
+>
+> **Revised again 2026-08-05** — D20 is overturned per explicit user request
+> (research.md addendum under D20). Phase 4 (US2) is **reinstated in modified
+> form**: `Lightbox.tsx` gains gallery-mode paging (looping, edge-anchored
+> arrows, position indicator, keyboard Left/Right, swipe), layered onto its
+> existing zoom/pan/dismiss gesture model via dominant-axis drag
+> disambiguation, rather than the standalone nav layer originally envisioned.
+> `GalleryCarousel.tsx` (Phase 1d) is unchanged — it still owns inline
+> paging separately; this only changes what happens once a reader opens a
+> gallery item fullscreen.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -83,7 +93,7 @@ installs.
 | Stage | Phases | Gate before next stage |
 |---|---|---|
 | **Stage 1** | Phase 1 + **Phase 1b** + **Phase 1c** + **Phase 1d** + Phase 2 + Phase 3 (US1) | Deployed; constitution amended (twice — see Phase 1); single-media regression verified; carousel verified (looping, fixed frame, arrows, indicator); pending items individually removable/previewable; upload deferred to submit and atomic; GIF exclusion verified for both GIF sources, server + client |
-| ~~Stage 2~~ | ~~Phase 4 (US2)~~ — **RETIRED 2026-07-31** | N/A — dropped; the Phase 1d carousel already delivers looping navigation inline |
+| **Stage 2** | Phase 4 (US2) — retired 2026-07-31, **reinstated 2026-08-05** | Deployed; fullscreen paging (arrows/swipe/keyboard/looping) verified, single-image mode regression-checked |
 | **Stage 3** | Phase 5 (US3, reorder only) + Phase 6 | Deployed; reorder verified end-to-end |
 
 Parallelism marked `[P]` below is **within** a phase only.
@@ -358,7 +368,7 @@ hook. Every user story depends on this phase.
 
 ---
 
-## ~~Phase 4: User Story 2 - Navigate between gallery items (Priority: P2)~~ — RETIRED 2026-07-31 — **Stage 2 dropped**
+## ~~Phase 4: User Story 2 - Navigate between gallery items (Priority: P2)~~ — RETIRED 2026-07-31, **REINSTATED in modified form 2026-08-05**
 
 *Retired in full, never started (all tasks below were still `[ ]`).* Stage 2's
 entire value — looping navigation, edge-anchored arrows, a position indicator
@@ -370,20 +380,30 @@ therefore never gains an `items`/`startIndex` prop — it keeps its existing
 single-`src` signature permanently. Kept here, not deleted, so historical
 references retain a stable target (see `spec.md`'s retired User Story 2).
 
-- [ ] ~~T041 [P] [US2] Gallery navigation in `web/tests/unit/Lightbox.test.tsx`~~ — **RETIRED 2026-07-31**, superseded by T098/T101 (now inline, in `GalleryCarousel.test.tsx`)
-- [ ] ~~T042 [P] [US2] Regression guard in `web/tests/unit/Lightbox.test.tsx`~~ — **RETIRED 2026-07-31** — moot, since `Lightbox.tsx` never gains the `items` prop this guarded against
-- [ ] ~~T043 [US2] Add optional `items`/`startIndex` props to `web/components/Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106 (`GalleryCarousel.tsx` owns paging state instead)
-- [ ] ~~T044 [US2] Add prev/next controls anchored to the screen edges in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106 (arrows anchored to the carousel frame's own edges, not the viewport)
-- [ ] ~~T045 [US2] Implement looping navigation in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106 (looping now lives in `GalleryCarousel.tsx`)
-- [ ] ~~T046 [US2] Add the position indicator to `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, superseded by T106
+**Reinstated 2026-08-05**: D20 was overturned per explicit user request — see
+`research.md`'s addendum under D20. T041/T043–T046/T048–T050 below are
+implemented, in modified form (dominant-axis drag disambiguation layered onto
+`Lightbox.tsx`'s existing zoom/pan/dismiss model, rather than the originally
+imagined standalone nav layer). T042 is covered by a new "single-image mode
+is unaffected" regression block in `Lightbox.test.tsx`. T047 and T051 stay
+retired — never gallery-specific to begin with.
+
+- [X] ~~T041 [P] [US2] Gallery navigation in `web/tests/unit/Lightbox.test.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05**: covered by the new "gallery mode: paging and looping" / "pointer-swipe navigation" / "dominant-axis disambiguation" blocks in `Lightbox.test.tsx`
+- [X] ~~T042 [P] [US2] Regression guard in `web/tests/unit/Lightbox.test.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05**: covered by the "single-image mode is unaffected" block — no `items` prop ⇒ no prev/next/indicator/track in the DOM
+- [X] ~~T043 [US2] Add optional `items`/`startIndex` props to `web/components/Lightbox.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05** as implemented (gallery mode gated on `items.length > 0`; `GalleryCarousel.tsx` is unchanged, still owns inline paging separately)
+- [X] ~~T044 [US2] Add prev/next controls anchored to the screen edges in `Lightbox.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05**: edge-anchored arrows, hidden on coarse pointers (same convention as `GalleryCarousel`)
+- [X] ~~T045 [US2] Implement looping navigation in `Lightbox.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05**
+- [X] ~~T046 [US2] Add the position indicator to `Lightbox.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05**
 - [ ] ~~T047 [US2] Ensure each item renders letterboxed, not cropped, in `Lightbox.tsx`~~ — **RETIRED 2026-07-31** — this was never gallery-specific; it describes `Lightbox`'s existing single-image baseline behaviour, unaffected by any of this feature's stages
-- [ ] ~~T048 [US2] Add keyboard Left/Right navigation in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, moot without inter-item navigation in `Lightbox`
-- [ ] ~~T049 [US2] Gate horizontal swipe on `zoomLevel.current === 1` in `Lightbox.tsx`~~ — **RETIRED 2026-07-31**, moot — no swipe navigation is ever added to `Lightbox`
-- [ ] ~~T050 [US2] Upgrade the tile handler to pass `gallery` + `startIndex` to `Lightbox`~~ — **RETIRED 2026-07-31**, superseded by T108 (`GalleryCarousel` opens `Lightbox` on its `currentIndex` item only, no array passed)
+- [X] ~~T048 [US2] Add keyboard Left/Right navigation in `Lightbox.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05**
+- [X] ~~T049 [US2] Gate horizontal swipe on `zoomLevel.current === 1` in `Lightbox.tsx`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05** in modified form: pan-while-zoomed keeps first priority in `onPointerMove`/`onPointerUp`; paging only ever evaluated once `zoomLevel.current <= 1`
+- [X] ~~T050 [US2] Upgrade the tile handler to pass `gallery` + `startIndex` to `Lightbox`~~ — RETIRED 2026-07-31, **REINSTATED 2026-08-05**: `ShoutCard.tsx`'s shout- and comment-level gallery `Lightbox` call sites now pass `items`/`startIndex` instead of a single derived `src`/`orientation`
 - [ ] ~~T051 [US2] Coverage that scroll position is preserved on dismiss~~ — **RETIRED 2026-07-31** — this was never gallery-specific either; `useScrollLock` behaviour is an existing baseline, not new work this feature introduces
 
-**Checkpoint**: N/A — this phase never shipped and never will. Stage 1 (through
-Phase 1d) deploys directly to Stage 3 with nothing in between.
+**Checkpoint**: Reinstated 2026-08-05 — `Lightbox.tsx` gallery mode ships
+alongside Stage 1's `GalleryCarousel.tsx`, both independently deployable
+(gallery mode only changes what happens once a `GalleryCarousel` tile is
+activated).
 
 ---
 
