@@ -276,7 +276,7 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
 
       <div
         data-testid="gallery-carousel-indicator"
-        className="absolute bottom-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-th-card/70 text-xs text-th-text tabular-nums"
+        className="absolute bottom-1.5 left-1/2 -translate-x-1/2 px-3 py-1 sm:px-2 sm:py-0.5 rounded-full bg-th-card/70 text-2xl sm:text-xs text-th-text tabular-nums"
       >
         {currentIndex + 1} / {length}
       </div>
