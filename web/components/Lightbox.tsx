@@ -48,6 +48,10 @@ const SETTLE_MS = 260;
 const SETTLE_TRANSITION = `transform ${SETTLE_MS}ms cubic-bezier(.2,.8,.3,1)`;
 // px of movement before a drag commits to horizontal (page) or vertical (dismiss).
 const AXIS_LOCK_THRESHOLD = 8;
+// How fast the arrows/indicator fade once a swipe-dismiss starts — much
+// quicker than the 300ms image exit, so the controls clear out well before
+// it instead of sitting static on screen until the whole thing unmounts.
+const CLOSING_FADE_MS = 100;
 
 const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, orientation, items, startIndex }) => {
   const galleryMode = !!(items && items.length > 0);
@@ -57,6 +61,10 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
     galleryMode ? Math.min(Math.max(startIndex ?? 0, 0), items!.length - 1) : 0
   );
   const [neighborsMounted, setNeighborsMounted] = useState(false);
+  // Set once a swipe-dismiss has committed, so the arrows/indicator fade out
+  // fast (CLOSING_FADE_MS) instead of lingering, static, for the full 300ms
+  // dismiss animation before the component unmounts.
+  const [closing, setClosing] = useState(false);
 
   const activeItem = galleryMode ? items![currentIndex] : undefined;
   const activeSrc = activeItem ? activeItem.full : (src as string);
@@ -163,6 +171,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
       overlay.style.transition = 'background 0.3s ease';
       overlay.style.background = 'rgba(0,0,0,0)';
     }
+    setClosing(true);
     setTimeout(onClose, 300);
   }, [onClose]);
 
@@ -584,7 +593,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
             aria-label="Предыдущее изображение"
             onClick={(e) => { e.stopPropagation(); goPrev(); }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-colors"
+            className={`absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-all duration-[${CLOSING_FADE_MS}ms] ${closing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -596,7 +605,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
             aria-label="Следующее изображение"
             onClick={(e) => { e.stopPropagation(); goNext(); }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-colors"
+            className={`absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-th-card/70 hover:bg-th-card flex items-center justify-center text-th-text transition-all duration-[${CLOSING_FADE_MS}ms] ${closing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -608,7 +617,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
       {galleryMode && length >= 2 && (
         <div
           data-testid="lightbox-indicator"
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-full bg-th-card/70 text-lg sm:text-xs text-th-text tabular-nums"
+          className={`absolute bottom-6 left-1/2 -translate-x-1/2 px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-full bg-th-card/70 text-lg sm:text-xs text-th-text tabular-nums transition-opacity duration-[${CLOSING_FADE_MS}ms] ${closing ? 'opacity-0' : 'opacity-100'}`}
         >
           {currentIndex + 1} / {length}
         </div>

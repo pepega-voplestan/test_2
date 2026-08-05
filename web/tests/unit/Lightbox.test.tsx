@@ -187,6 +187,17 @@ describe('Lightbox — gallery mode: arrows and indicator', () => {
     expect(screen.queryByTestId('lightbox-next')).toBeNull();
     expect(screen.queryByTestId('lightbox-indicator')).toBeNull();
   });
+
+  it('fades the arrows and indicator out immediately once a swipe-dismiss commits, instead of leaving them static for the full 300ms exit', () => {
+    render(<Lightbox items={items(3)} startIndex={0} onClose={vi.fn()} />);
+    fireEvent.pointerDown(overlay(), { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(overlay(), { button: 0, clientX: 100, clientY: 300 }); // dy=200, past DISMISS_THRESHOLD, locks vertical
+    fireEvent.pointerUp(overlay(), { button: 0, clientX: 100, clientY: 300 });
+
+    expect(prevButton().className).toMatch(/opacity-0/);
+    expect(nextButton().className).toMatch(/opacity-0/);
+    expect(indicator().className).toMatch(/opacity-0/);
+  });
 });
 
 describe('Lightbox — gallery mode: pointer-swipe navigation', () => {
