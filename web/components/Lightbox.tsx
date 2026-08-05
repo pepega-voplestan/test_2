@@ -56,7 +56,6 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
   const [currentIndex, setCurrentIndex] = useState(() =>
     galleryMode ? Math.min(Math.max(startIndex ?? 0, 0), items!.length - 1) : 0
   );
-  const [coarsePointer] = useState(() => window.matchMedia('(pointer: coarse)').matches);
   const [neighborsMounted, setNeighborsMounted] = useState(false);
 
   const activeItem = galleryMode ? items![currentIndex] : undefined;
@@ -577,7 +576,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
         </div>
       )}
 
-      {galleryMode && length >= 2 && !coarsePointer && (
+      {galleryMode && length >= 2 && (
         <>
           <button
             type="button"
@@ -609,7 +608,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
       {galleryMode && length >= 2 && (
         <div
           data-testid="lightbox-indicator"
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1 sm:px-2 sm:py-0.5 rounded-full bg-th-card/70 text-2xl sm:text-xs text-th-text tabular-nums"
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-full bg-th-card/70 text-lg sm:text-xs text-th-text tabular-nums"
         >
           {currentIndex + 1} / {length}
         </div>
