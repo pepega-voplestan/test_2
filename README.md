@@ -141,6 +141,8 @@ docker run --rm -d --name vopley-test-db -p 6432:5432 \
   -e POSTGRES_DB=vopley_test postgres:16-alpine
 ```
 
+> Port 6432 is also what `docker-compose.local.yml` publishes for the local dev database, so the two cannot run at once. If `make local` is up, put the test container on another port (e.g. `-p 6433:5432`) and match `TEST_DATABASE_URL` to it.
+
 Or skip all of it with `make test-docker`, which starts its own disposable database.
 
 Husky hooks: lint on pre-commit, tests on pre-push. CI runs lint + tests on PRs to `main`.

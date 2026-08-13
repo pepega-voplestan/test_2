@@ -1,25 +1,36 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 3.0.0 → 3.1.0
-Rationale: MINOR bump. Two new Core Principles are ADDED — VI (Design-First,
-Tests Second) and VII (Minimal, Meaningful Comments). No existing principle is
-removed or redefined and no prior guidance is narrowed, so this is additive
-under the Versioning rule ("MINOR for new or materially expanded
-principles/sections").
+Version change: 3.1.0 → 4.0.0
+Rationale: MAJOR bump. Principle III (Soft-Delete & Data Preservation), marked
+NON-NEGOTIABLE, is REDEFINED rather than expanded. Its previous form permitted
+exactly one hard-delete exception (notifications under a 14-day TTL) and drew no
+distinction between database rows and stored files; a reader was entitled to
+conclude that no user media could ever be removed. The amended form separates
+the two concerns and permits reclaiming media FILES under bounded conditions.
+Because this narrows an existing absolute guarantee, it is backward-incompatible
+under the Versioning rule ("MAJOR for backward-incompatible principle removals
+or redefinitions") — not MINOR, despite reading as an addition.
 
-Driven by: specs/007-email-whitelist (Email Domain Whitelist). Two lessons were
-codified: (1) the whitelist was deliberately implemented as a static in-code
-list rather than an environment variable whose main benefit was test
-convenience — design chosen over test ergonomics; (2) comment density on the
-new code was flagged as too high.
+Driven by: specs/008-reclaim-unused-media, decision D1. An audit found three
+classes of media files that no display surface can reach: variants generated but
+never requested, uploads abandoned before publishing, and media behind
+soft-deleted content. Under the prior wording none could be reclaimed, so
+storage grew without bound while the preservation guarantee it purchased was
+illusory — nobody could view the files either.
 
 Modified sections:
-  - Core Principles → ADDED "VI. Design-First, Tests Second" and
-    "VII. Minimal, Meaningful Comments".
+  - Core Principles → III. Soft-Delete & Data Preservation (NON-NEGOTIABLE)
+    REDEFINED. Split into Records / Stored media files / Restore fidelity /
+    Exemptions. Row preservation is unchanged and now stated explicitly.
+    File reclamation is newly permitted under three bounded conditions.
+    Administrator restore is newly declared CONTENT-complete but not
+    MEDIA-complete beyond the grace period. Ban-removed content
+    (`is_deleted=2`), live-referenced media, personal-library media, and avatars
+    are exempt.
 
-Unchanged: Core Principles I–V, all Domain & Content Constraints, the entire
-Development Workflow & Quality Gates section, and Governance.
+Unchanged: Core Principles I, II, IV, V, VI, VII; all Domain & Content
+Constraints; the entire Development Workflow & Quality Gates section; Governance.
 
 Removed sections: none
 
@@ -31,11 +42,15 @@ Templates requiring updates:
   - ✅ .specify/templates/tasks-template.md (no constitution coupling)
 
 Runtime guidance requiring propagation:
-  - ✅ CLAUDE.md "Core Principles (Non-Negotiables)" list → the two new
-    principles were added via the /docs skill (CLAUDE.md is never edited
+  - ✅ CLAUDE.md "Core Principles (Non-Negotiables)" → the "Soft-delete
+    everywhere" bullet was rewritten for the row/file split and tagged
+    (Constitution v4.0.0 §III), via the /docs skill (CLAUDE.md is never edited
     directly).
 
-Follow-up TODOs: none.
+Follow-up TODOs:
+  - ✅ RESOLVED — specs/008-reclaim-unused-media/plan.md sets the concrete
+    values the constitution deliberately declines to fix: grace periods default
+    to 7 days via MEDIA_UNPUBLISHED_GRACE_DAYS and MEDIA_DELETED_GRACE_DAYS.
 -->
 
 # Vopley.net Constitution
@@ -65,14 +80,45 @@ incorrect declensions break user trust and the product's identity.
 
 ### III. Soft-Delete & Data Preservation (NON-NEGOTIABLE)
 
-User content MUST be soft-deleted, never hard-deleted, using the established
-markers (`is_deleted=1` for user-removed, `is_deleted=2` for banned). The ONLY
-permitted hard-delete is notifications under their 14-day TTL. Queries, feeds,
-and admin actions MUST respect soft-delete state rather than physically removing
-rows.
+**Records.** User content MUST be soft-deleted, never hard-deleted, using the
+established markers (`is_deleted=1` for user-removed, `is_deleted=2` for
+banned). Rows — content, media, and the link rows joining them — MUST be
+preserved. The ONLY permitted hard-delete of a row is notifications under their
+14-day TTL. Queries, feeds, and admin actions MUST respect soft-delete state
+rather than physically removing rows.
 
-Rationale: Soft-delete preserves moderation history, supports recovery, and
-keeps referential integrity for replies, mentions, and audit trails.
+**Stored media files.** Stored media files are governed separately from rows and
+MAY be reclaimed, because storage is finite while rows are cheap. Reclaiming a
+media file MUST NOT delete any row. Files MAY be reclaimed when:
+
+- the media is unreachable by every display surface in the product; or
+- the media was uploaded but never published, after a configurable safety
+  window; or
+- the media's only references are to soft-deleted content (`is_deleted=1`),
+  after a configurable grace period measured from deletion. The grace period
+  defaults to a few days and MUST be long enough to cover routine reversal of a
+  recent decision.
+
+**Restore fidelity.** Within the grace period, administrator restore MUST be
+fully faithful, including all media. Beyond it, restore remains
+CONTENT-complete but is NOT MEDIA-complete: restored content returns with its
+text intact and its media permanently gone. This loss is deliberate. It MUST be
+visible rather than silent — restored content whose media was reclaimed MUST be
+presented as media-free and MUST NEVER render as a broken image.
+
+**Exemptions.** Media whose references include ban-removed content
+(`is_deleted=2`) MUST NEVER be reclaimed, because unbanning restores that
+content wholesale and moderation review depends on it being complete. Media
+reachable from any live content, or from a user's saved personal library, is not
+eligible under any clause above. Avatars are outside this principle entirely.
+
+Rationale: Soft-delete exists to preserve moderation history, support recovery,
+and keep referential integrity for replies, mentions, and audit trails — all of
+which live in rows, not in bytes on disk. Retaining every file forever bought
+none of those guarantees and grew without bound. Separating the two lets the
+preservation guarantee stay absolute where it does the work, while storage for
+content nobody can reach is recoverable. Ban-removed content is exempt because
+that is precisely where after-the-fact review is most likely to be needed.
 
 ### IV. Validated, Prisma-Mediated Data Access
 
@@ -183,4 +229,4 @@ conflict. All changes are governed as follows:
   and justified in the plan's Complexity Tracking section, or the design MUST be
   revised to comply.
 
-**Version**: 3.1.0 | **Ratified**: 2026-06-23 | **Last Amended**: 2026-08-04
+**Version**: 4.0.0 | **Ratified**: 2026-06-23 | **Last Amended**: 2026-08-12

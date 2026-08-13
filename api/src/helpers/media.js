@@ -179,26 +179,59 @@ export async function fetchYouTubeMeta(videoId) {
 
 /* ---------- Media DTO helper ---------- */
 
+/**
+ * True when every file behind this media has been reclaimed (feature 008 US3).
+ * The row outlives its files, so this is the only way to know it cannot render.
+ *
+ * Parsed tolerantly: it runs on every media DTO and on every publish, and
+ * unparseable meta must not become a 500.
+ */
+export function isMediaReclaimed(mediaMeta) {
+  let meta;
+  try {
+    meta = JSON.parse(mediaMeta || "{}");
+  } catch {
+    return false;
+  }
+  return meta.reclaimed?.files === true;
+}
+
 export function buildMedia(mediaObj) {
   if (!mediaObj) return undefined;
+  // Omitted entirely rather than rendered broken: a post restored after its
+  // grace period comes back text-only, and the loss is visible (FR-014,
+  // constitution §III). Callers already treat undefined as "no media", and
+  // buildGallery filters it out.
+  if (isMediaReclaimed(mediaObj.media_meta)) return undefined;
   if (mediaObj.media_type === "image") {
     const meta = JSON.parse(mediaObj.media_meta || "{}");
     // During the original-quality window (orig present, not yet downgraded) the
     // full-size view serves the lossless original; otherwise the WebP variant.
     const pendingOriginal = Boolean(meta.orig) && meta.converted !== true;
+    const animated = Boolean(meta.animated);
+    // Only the variants a surface can actually request are generated (feature
+    // 008), and which one is dead flips with the media kind: an animated item
+    // plays from the GIF so it has no 1600, a still image has no reader for its
+    // 320. Advertising the missing one would hand clients a 404.
+    const thumb = animated ? { thumb: `/media/${mediaObj.media_url}/320.webp` } : {};
+    const full = animated
+      ? {}
+      : {
+          full: pendingOriginal
+            ? `/media/${mediaObj.media_url}/${meta.orig}`
+            : `/media/${mediaObj.media_url}/1600.webp`,
+        };
     return {
       type: "image",
       url: `/media/${mediaObj.media_url}/960.webp`,
-      thumb: `/media/${mediaObj.media_url}/320.webp`,
-      full: pendingOriginal
-        ? `/media/${mediaObj.media_url}/${meta.orig}`
-        : `/media/${mediaObj.media_url}/1600.webp`,
+      ...thumb,
+      ...full,
       width: meta.w || 0,
       height: meta.h || 0,
       // EXIF orientation only matters while serving the metadata-stripped original;
       // the WebP variants are already auto-rotated upright.
       ...(pendingOriginal && meta.orientation ? { orientation: meta.orientation } : {}),
-      ...(meta.animated && { animated: true, gif: `/media/${mediaObj.media_url}/original.gif` }),
+      ...(animated && { animated: true, gif: `/media/${mediaObj.media_url}/original.gif` }),
     };
   }
   if (mediaObj.media_type === "video") {

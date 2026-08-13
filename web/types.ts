@@ -19,7 +19,9 @@ export interface UserProfile {
 }
 
 export type ShoutMedia =
-  | { type: 'image'; url: string; thumb: string; full: string; width: number; height: number; animated?: boolean; gif?: string; orientation?: number }
+  // `thumb` is present only for animated images, `full` only for still ones —
+  // the other variant is not generated (feature 008). `url` is always present.
+  | { type: 'image'; url: string; thumb?: string; full?: string; width: number; height: number; animated?: boolean; gif?: string; orientation?: number }
   | { type: 'video'; url: string; thumb?: string; width?: number; height?: number }
   | { type: 'youtube'; videoId: string; embedUrl: string; title?: string | null; channel?: string | null }
   | { type: 'giphy'; giphyId: string; url: string; still: string; width: number; height: number };

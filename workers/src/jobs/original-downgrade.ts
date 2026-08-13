@@ -119,7 +119,21 @@ export async function runOriginalDowngrade(deps: Partial<DowngradeDeps> = {}): P
       const newMetaJson = JSON.stringify(meta);
 
       // Flip state first — readers now resolve `full` to the WebP variant.
-      await db.media.update({ where: { id: m.id }, data: { media_meta: newMetaJson } });
+      //
+      // Conditional on the row being untouched since the read: the 008 reclaim
+      // script rewrites this same column from a separate process, and a blind
+      // write in either direction is a lost update. Losing this one would drop
+      // that script's `reclaimed` marker; losing the other would restore an
+      // `orig` key for a file this sweep is about to unlink. A row that moved
+      // under us is left entirely alone and retried next sweep.
+      const { count } = await db.media.updateMany({
+        where: { id: m.id, media_meta: m.media_meta },
+        data: { media_meta: newMetaJson },
+      });
+      if (count === 0) {
+        result.skipped++;
+        continue;
+      }
       try {
         fileSystem.writeFileSync(path.join(dir, "meta.json"), newMetaJson);
       } catch {

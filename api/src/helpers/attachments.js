@@ -41,6 +41,18 @@ export function isMultiItemEligible(mediaType, mediaMeta) {
 }
 
 /**
+ * Russian message for attaching media whose files have been reclaimed.
+ *
+ * Shared by both create routes so the copy is identical, and phrased without a
+ * numeral so it needs no declension agreement (Constitution Principle II). It
+ * mirrors the register of the neighbouring "Медиа не найдено. Загрузите файл
+ * заново" — the user's remedy is the same in both cases: upload it again.
+ */
+export function reclaimedMediaMessage() {
+  return "Файл больше недоступен. Загрузите его заново";
+}
+
+/**
  * Russian message for exceeding the attachment cap.
  *
  * Kept here so both create routes emit identical copy, and correctly declined:

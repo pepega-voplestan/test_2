@@ -3,6 +3,7 @@ import sharp from "sharp";
 import {
   extractYouTubeId,
   buildMedia,
+  buildGallery,
   stripJpegMetadata,
   stripPngMetadata,
 } from "../../src/helpers/media.js";
@@ -83,10 +84,130 @@ describe("buildMedia", () => {
     expect(buildMedia(media)).toEqual({
       type: "image",
       url: "/media/abc-123/960.webp",
-      thumb: "/media/abc-123/320.webp",
       full: "/media/abc-123/1600.webp",
       width: 1920,
       height: 1080,
+    });
+  });
+
+  // Feature 008: the unreachable variant is no longer generated, so the DTO must
+  // not advertise an address for a file that does not exist. The rule is
+  // per-kind and inverted between the two — see workers/src/helpers/variant-rules.ts.
+  it("omits thumb for non-animated images, whose 320 variant is not generated", () => {
+    const media = {
+      media_type: "image",
+      media_url: "img-1",
+      media_meta: JSON.stringify({ w: 800, h: 600 }),
+    };
+    const result = buildMedia(media);
+    expect(result).not.toHaveProperty("thumb");
+    expect(result.full).toBe("/media/img-1/1600.webp");
+  });
+
+  it("omits full for animated images, which play from the GIF instead", () => {
+    const media = {
+      media_type: "image",
+      media_url: "gif-1",
+      media_meta: JSON.stringify({ w: 320, h: 240, animated: true }),
+    };
+    const result = buildMedia(media);
+    expect(result).not.toHaveProperty("full");
+    expect(result.thumb).toBe("/media/gif-1/320.webp");
+    expect(result.gif).toBe("/media/gif-1/original.gif");
+  });
+
+  it("always emits url, for every image kind", () => {
+    for (const animated of [true, false]) {
+      const media = {
+        media_type: "image",
+        media_url: "m",
+        media_meta: JSON.stringify({ w: 10, h: 10, animated }),
+      };
+      expect(buildMedia(media).url).toBe("/media/m/960.webp");
+    }
+  });
+
+  it("still serves the pending original as full during the 24h window", () => {
+    const media = {
+      media_type: "image",
+      media_url: "orig-1",
+      media_meta: JSON.stringify({ w: 100, h: 100, orig: "original.jpg", converted: false }),
+    };
+    expect(buildMedia(media).full).toBe("/media/orig-1/original.jpg");
+  });
+
+  it("carries orientation while a pending original is served", () => {
+    const media = {
+      media_type: "image",
+      media_url: "orig-2",
+      media_meta: JSON.stringify({
+        w: 100,
+        h: 100,
+        orig: "original.jpg",
+        converted: false,
+        orientation: 6,
+      }),
+    };
+    expect(buildMedia(media).orientation).toBe(6);
+  });
+
+  // Feature 008 US3: the row outlives its files. Once every file is reclaimed
+  // the media must vanish from the payload rather than render as a broken
+  // image — the loss has to be visible (FR-014, constitution §III).
+  describe("reclaimed media", () => {
+    const reclaimed = (extra = {}) =>
+      JSON.stringify({ w: 800, h: 600, ...extra, reclaimed: { files: true, at: "2026-08-01T00:00:00.000Z" } });
+
+    it("returns undefined for an image whose files were reclaimed", () => {
+      expect(buildMedia({ media_type: "image", media_url: "gone", media_meta: reclaimed() })).toBeUndefined();
+    });
+
+    it("returns undefined for an animated image whose files were reclaimed", () => {
+      expect(
+        buildMedia({ media_type: "image", media_url: "gone", media_meta: reclaimed({ animated: true }) })
+      ).toBeUndefined();
+    });
+
+    it("returns undefined for a reclaimed video", () => {
+      expect(buildMedia({ media_type: "video", media_url: "gone", media_meta: reclaimed() })).toBeUndefined();
+    });
+
+    // Only `files` means unrenderable. A variants-only marker must not hide media.
+    it("still builds media carrying a variants-only reclaim marker", () => {
+      const media = {
+        media_type: "image",
+        media_url: "ok",
+        media_meta: JSON.stringify({ w: 800, h: 600, reclaimed: { variants: ["320"], at: "x" } }),
+      };
+      expect(buildMedia(media)?.url).toBe("/media/ok/960.webp");
+    });
+
+    it("drops a reclaimed item from a gallery, degrading it below two", () => {
+      const rows = [
+        { media: { media_type: "image", media_url: "a", media_meta: JSON.stringify({ w: 1, h: 1 }) } },
+        { media: { media_type: "image", media_url: "b", media_meta: reclaimed() } },
+      ];
+      // One survivor is not a gallery — the caller falls back to single-media shape.
+      expect(buildGallery(rows)).toBeUndefined();
+    });
+
+    it("keeps a gallery that still has two survivors", () => {
+      const rows = [
+        { media: { media_type: "image", media_url: "a", media_meta: JSON.stringify({ w: 1, h: 1 }) } },
+        { media: { media_type: "image", media_url: "b", media_meta: JSON.stringify({ w: 1, h: 1 }) } },
+        { media: { media_type: "image", media_url: "c", media_meta: reclaimed() } },
+      ];
+      const gallery = buildGallery(rows);
+      expect(gallery).toHaveLength(2);
+      expect(gallery.map((g) => g.url)).toEqual(["/media/a/960.webp", "/media/b/960.webp"]);
+    });
+
+    it("returns undefined for a gallery whose every item was reclaimed", () => {
+      const rows = [
+        { media: { media_type: "image", media_url: "a", media_meta: reclaimed() } },
+        { media: { media_type: "image", media_url: "b", media_meta: reclaimed() } },
+      ];
+      expect(buildGallery(rows)).toBeUndefined();
     });
   });
 
@@ -163,7 +284,8 @@ describe("buildMedia", () => {
     const result = buildMedia(media);
     expect(result.full).toBe("/media/orig-1/original.jpg");
     expect(result.url).toBe("/media/orig-1/960.webp");
-    expect(result.thumb).toBe("/media/orig-1/320.webp");
+    // Still image: 320 is never generated, so `thumb` must not be advertised.
+    expect(result.thumb).toBeUndefined();
   });
 
   it("includes orientation only while serving the pending original", () => {

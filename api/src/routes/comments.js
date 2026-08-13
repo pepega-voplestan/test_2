@@ -6,8 +6,8 @@ import { broadcast, broadcastToUser } from "../sse.js";
 import { asyncHandler, utcTimestamp, resolveQuoteText } from "../helpers/common.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { commentSchema, editCommentSchema, COMMENT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
-import { extractYouTubeId, fetchYouTubeMeta, buildMedia, buildGallery } from "../helpers/media.js";
-import { attachMedia, resolveMediaIds, isMultiItemEligible, attachmentLimitMessage } from "../helpers/attachments.js";
+import { extractYouTubeId, fetchYouTubeMeta, buildMedia, buildGallery, isMediaReclaimed } from "../helpers/media.js";
+import { attachMedia, resolveMediaIds, isMultiItemEligible, attachmentLimitMessage, reclaimedMediaMessage } from "../helpers/attachments.js";
 
 const router = Router();
 
@@ -99,6 +99,12 @@ router.post("/shouts/:id/replies", requireAuth, asyncHandler(async (req, res) =>
     });
     if (rows.length !== galleryIds.length) {
       return res.status(400).json({ error: "Медиа не найдено. Загрузите файл заново" });
+    }
+    // Feature 008: the media row survives reclaim but its files do not. Reject
+    // the whole publish rather than silently dropping the attachment, so the
+    // user is told instead of getting a post with a broken image (FR-013).
+    if (rows.some((r) => isMediaReclaimed(r.media_meta))) {
+      return res.status(400).json({ error: reclaimedMediaMessage() });
     }
     if (galleryIds.length > 1 && !rows.every((r) => isMultiItemEligible(r.media_type, r.media_meta))) {
       return res.status(400).json({ error: "В галерею можно добавить только изображения" });

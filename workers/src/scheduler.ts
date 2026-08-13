@@ -1,4 +1,9 @@
-import { notificationCleanupQueue, dbBackupQueue, originalDowngradeQueue } from "./queues.js";
+import {
+  notificationCleanupQueue,
+  dbBackupQueue,
+  originalDowngradeQueue,
+  mediaReclaimQueue,
+} from "./queues.js";
 
 export async function registerScheduledJobs(): Promise<void> {
   // Notification cleanup — runs daily at 00:00 UTC
@@ -21,6 +26,14 @@ export async function registerScheduledJobs(): Promise<void> {
   await originalDowngradeQueue.upsertJobScheduler(
     "original-downgrade-sweep",
     { pattern: "0 * * * *" },
+    { name: "run", data: {} }
+  );
+
+  // Media reclaim — runs daily at 03:00 UTC, after the db-backup at 02:00 so a
+  // day's snapshot is always taken before that day's files are removed.
+  await mediaReclaimQueue.upsertJobScheduler(
+    "daily-media-reclaim",
+    { pattern: "0 3 * * *" },
     { name: "run", data: {} }
   );
 

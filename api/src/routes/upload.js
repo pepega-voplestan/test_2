@@ -123,6 +123,14 @@ router.post("/upload/media", requireAuth, (req, res) => {
 
       const urls = {};
 
+      // Only the variants some surface can actually request (feature 008). The
+      // dead one flips with the kind: animated media plays from original.gif so
+      // its 1600 is never read, while a still image has no reader for its 320.
+      // 960 is read by both, so it is always generated.
+      const variants = isAnimatedGif
+        ? MEDIA_VARIANTS.filter((w) => w !== 1600)
+        : MEDIA_VARIANTS.filter((w) => w !== 320);
+
       if (isAnimatedGif) {
         // Store original GIF for animated playback
         fs.writeFileSync(path.join(tmpDir, "original.gif"), req.file.buffer);
@@ -130,7 +138,7 @@ router.post("/upload/media", requireAuth, (req, res) => {
 
         // Generate static WebP thumbnails from the first frame
         const firstFrame = sharp(req.file.buffer, { pages: 1 });
-        for (const w of MEDIA_VARIANTS) {
+        for (const w of variants) {
           const outPath = path.join(tmpDir, `${w}.webp`);
           await firstFrame.clone().resize(w, null, { withoutEnlargement: true }).webp({ quality: 82 }).toFile(outPath);
           urls[w] = `/media/${mediaId}/${w}.webp`;
@@ -138,7 +146,7 @@ router.post("/upload/media", requireAuth, (req, res) => {
       } else {
         // Strip EXIF by re-encoding, generate width-capped variants
         const rotated = image.rotate(); // auto-rotate by EXIF, then EXIF is stripped
-        for (const w of MEDIA_VARIANTS) {
+        for (const w of variants) {
           const resized = rotated.clone().resize(w, null, { withoutEnlargement: true });
           const outPath = path.join(tmpDir, `${w}.webp`);
           await resized.webp({ quality: 82 }).toFile(outPath);
@@ -188,14 +196,18 @@ router.post("/upload/media", requireAuth, (req, res) => {
         },
       });
 
-      console.log(`[Media] Upload complete: ${mediaId}, ${MEDIA_VARIANTS.join("/")}w${isAnimatedGif ? " (animated GIF)" : ""}`);
+      console.log(`[Media] Upload complete: ${mediaId}, ${variants.join("/")}w${isAnimatedGif ? " (animated GIF)" : ""}`);
       res.json({
         ok: true,
         mediaId,
         urls: {
-          thumb: urls[320],
+          // Mirrors buildMedia: only variants that were actually written are
+          // advertised, so the client never holds an address that 404s.
+          ...(urls[320] && { thumb: urls[320] }),
           medium: urls[960],
-          full: origFile ? `/media/${mediaId}/${origFile}` : urls[1600],
+          ...(origFile
+            ? { full: `/media/${mediaId}/${origFile}` }
+            : urls[1600] && { full: urls[1600] }),
           ...(isAnimatedGif && { gif: urls.gif }),
         },
       });
