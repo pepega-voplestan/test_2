@@ -1,34 +1,15 @@
 import { prisma } from "../db.js";
 
-/**
- * Reference-checking for media reclaim (feature 008, research D9).
- *
- * Three tables can reference a media row, and `user_gifs` is the one that bites:
- * a personal-library GIF is deliberately attached to no post, so any check that
- * consults only the two join tables classifies every user's saved library as
- * orphaned and deletes it. That is the single most destructive mistake available
- * in this feature, which is why the check lives here once rather than being
- * open-coded per caller.
- */
-
 export type RefDb = Pick<typeof prisma, "shoutMedia" | "commentMedia" | "userGif">;
 
 /**
- * Soft-delete states of a shout/comment that PROTECT its media.
- *
- * `2` (ban-removed) is protecting, not merely un-reclaimable: constitution §III
- * exempts it because unbanning restores that content wholesale. Expressing the
- * exemption as a protection rather than as a filter applied afterwards makes
- * retention the structural default — a missed protection retains data, whereas
- * a missed filter deletes it (research D10).
+ * States that PROTECT referenced media. `2` (ban-removed) is expressed as a
+ * protection rather than a filter applied later so retention is the structural
+ * default: a missed protection retains data, a missed filter destroys it.
  */
 const PROTECTING_STATES = [0, 2];
 
-/**
- * True when some display surface can still reach this media: a live or
- * ban-removed shout, a live or ban-removed comment, or an active personal
- * library entry. Media failing all three is the only reclaim candidate.
- */
+/** Some display surface can still reach this media. */
 export async function hasLiveReference(db: RefDb, mediaId: string): Promise<boolean> {
   const [shout, comment, gif] = await Promise.all([
     db.shoutMedia.findFirst({
@@ -39,24 +20,18 @@ export async function hasLiveReference(db: RefDb, mediaId: string): Promise<bool
       where: { media_id: mediaId, comment: { is_deleted: { in: PROTECTING_STATES } } },
       select: { comment_id: true },
     }),
-    db.userGif.findFirst({
-      where: { media_id: mediaId, is_deleted: 0 },
-      select: { id: true },
-    }),
+    // A personal-library GIF is attached to no post. Omitting this table
+    // classifies every user's saved library as orphaned and deletes it.
+    db.userGif.findFirst({ where: { media_id: mediaId, is_deleted: 0 }, select: { id: true } }),
   ]);
   return Boolean(shout || comment || gif);
 }
 
 /**
- * True when the media was ever attached to anything, regardless of that thing's
- * soft-delete state.
- *
- * This is what separates the two reclaim classes, and they are NOT the same
- * question as `hasLiveReference`. Media with no row here at all was never
- * published (US2). Media with a row here but no live one sits behind deleted
- * content (US3) and is governed by a different grace period measured from the
- * deletion rather than from the upload — so it must not be swept up by the
- * never-published pass.
+ * The media was attached to something once, whatever state that thing is in
+ * now. Distinct from `hasLiveReference`, and the distinction picks the clock:
+ * no row at all means never published (grace measured from upload), whereas a
+ * row pointing at deleted content is measured from the deletion instead.
  */
 export async function hasAnyReference(db: RefDb, mediaId: string): Promise<boolean> {
   const [shout, comment, gif] = await Promise.all([

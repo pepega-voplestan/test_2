@@ -16,20 +16,13 @@ import {
 /**
  * Recurring reclaim of media files no display surface can reach (feature 008).
  *
- * Currently handles ONE class: media that was uploaded but never published
- * (US2). Media sitting behind soft-deleted content (US3) is a separate class
- * with its own grace period measured from the deletion, and is deliberately not
- * swept here yet — `MEDIA_DELETED_GRACE_DAYS` is already wired through the
- * compose files for it, and is intentionally unread until that class ships.
+ * Handles the never-published class only. Media behind soft-deleted content is
+ * measured from the deletion instead, so `MEDIA_DELETED_GRACE_DAYS` is wired
+ * through the compose files but stays unread until that class ships.
  *
- * Files only. No row is ever deleted: the tombstone rendering for a deleted
- * shout that still carries live comments depends on the join rows surviving
- * (FR-009, constitution §III).
- *
- * Avatars (FR-021) need no exclusion here: they carry no `media` row and live
- * on a separate volume (`AVATAR_PATH`, default /data/avatars), so they are never
- * candidates. Stated because "we never delete avatars" is a requirement, and a
- * requirement satisfied by accident of structure should say so.
+ * Files only, never rows: a deleted shout with live comments still renders a
+ * tombstone from them (FR-009, constitution §III). Avatars (FR-021) need no
+ * exclusion — they carry no `media` row and live on a separate volume.
  */
 
 const UNPUBLISHED_GRACE_DAYS = Number(process.env.MEDIA_UNPUBLISHED_GRACE_DAYS) || 7;
@@ -39,12 +32,7 @@ const BATCH_SIZE = 500;
 /** Media kinds that own local files. `youtube`/`giphy` are remote references. */
 const LOCAL_FILE_TYPES = ["image", "video"];
 
-/**
- * The on-disk mirror of `media_meta`. Kept rather than reclaimed: it is a few
- * hundred bytes, and leaving it behind means an operator walking the volume can
- * still see that the directory was reclaimed deliberately instead of finding an
- * unexplained empty directory.
- */
+/** Left on disk so a reclaimed directory reads as deliberate, not as an accident. */
 const META_MIRROR = "meta.json";
 
 export interface MediaReclaimDeps {
@@ -62,10 +50,8 @@ export interface MediaReclaimDeps {
  * injectable with a real default, so unit tests need neither a database nor
  * Redis.
  *
- * Candidates are paged with take/cursor rather than loaded at once (research
- * D6). Unlike the downgrade sweep, this candidate set does not self-empty —
- * protected media stays a candidate forever, and in `dryRun` nothing is marked
- * at all — so an unbounded `findMany` would grow with the volume.
+ * Paged with take/cursor because this candidate set never self-empties the way
+ * the downgrade sweep's does: protected media stays a candidate forever.
  */
 export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Promise<ReclaimResult> {
   const {
@@ -111,9 +97,8 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
         continue;
       }
 
-      // Any reference at all — live, ban-removed, or soft-deleted — means this
-      // was published, so it is not this class's business. The deleted-content
-      // class (US3) will decide those on its own grace period.
+      // Any reference at all means it was published, so it belongs to the
+      // deleted-content class and its clock, not this one.
       if (await hasAnyReference(db, m.id)) {
         result.skipped++;
         continue;
@@ -132,16 +117,13 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
             meta,
             metaJson: m.media_meta,
             filesToRemove,
-            // Nothing is meant to survive — the media becomes unrenderable by
-            // design, which is what `reclaimed.files` records.
             survivor: null,
             markerPatch: { files: true },
           },
           { db: db.media, fileSystem, mediaDir, dryRun, now: nowDate }
         );
         if (!applied) {
-          // Another writer touched the row between our read and our write.
-          // Nothing was deleted; the next sweep replans from fresh state.
+          // Row moved under us; nothing was deleted. Not a failure — replanned next sweep.
           result.skipped++;
           continue;
         }
