@@ -1,6 +1,6 @@
 # Vopley.net
 
-Social network for GAYnmers and mentally ill people
+Social network for GAYmers and mentally ill people
 
 **Stack:** React 18 + TypeScript + Vite · Node.js + Express + Prisma + PostgreSQL · BullMQ + Redis · Docker + Nginx
 
