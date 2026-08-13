@@ -58,6 +58,12 @@ jobs:
       - name: Install workers dependencies
         run: npm ci --prefix workers
 
+      # workers/ has its own node_modules and its own client to generate; the
+      # schema is a symlink to api/prisma/schema.prisma.
+      - name: Generate Prisma client (workers)
+        run: npx prisma generate
+        working-directory: workers
+
       - name: Lint API
         run: npm run lint --prefix api
 
