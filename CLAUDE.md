@@ -27,13 +27,13 @@ make prod             # Docker production (ports 80/443)
 | `make backup` / `make backup-upload` | Backup volumes / + rclone to Google Drive |
 | `make restore` | Restore latest backup (or `TIMESTAMP=YYYYMMDD_HHMMSS`) |
 | `make test` / `make test-web` / `make test-all` | Run API / web / both tests |
-| `make db-pull` / `make db-pull-local` | Dump PostgreSQL DB locally |
+| `make db-pull` / `make db-pull-local` | ⚠️ **Broken** — still runs `sqlite3` against `/data/app.db`, which no longer exists post-Postgres migration. See [infra docs](docs/infra.md) |
 
 ## Core Principles (Non-Negotiables)
 
 - **Session auth only** — never suggest JWT or localStorage for auth state
 - **Russian UI** — all user-visible strings in Russian with correct declensions; never introduce English-language UI copy
-- **Soft-delete everywhere** — `is_deleted=1` (user), `is_deleted=2` (banned); never hard-delete user content except notifications (14-day TTL)
+- **Soft-delete everywhere** — `is_deleted=1` (user), `is_deleted=2` (banned). Never hard-delete *rows* — content, media, or the link rows joining them — except notifications (14-day TTL). Stored media *files* are governed separately and may be reclaimed (never deleting a row) when unreachable by every display surface, never published after a safety window, or referenced only by `is_deleted=1` content after a grace period of a few days. Never reclaim files for `is_deleted=2` (unban restores wholesale), for media still referenced by live content or a user's GIF library, or for avatars. Past the grace period restore is text-complete but not media-complete, and that loss must be visible, never a broken image. *(Constitution v4.0.0 §III — governing rule; the reclamation itself is specified in `specs/008-reclaim-unused-media/` and not yet implemented.)*
 - **Bounded media gallery per post/comment** — an ordered gallery of up to 5 images OR one YouTube embed, never both; backend enforces the cap and the exclusivity, frontend gates as secondary guard. GIFs (uploaded or Giphy-sourced) and video are never part of a gallery — a single GIF or video attachment outside a gallery is unaffected. Galleries are immutable once published (no edit-time add/remove/reorder). *(Constitution v3.0.0. Shipping in stages — Stage 1 shipped, see `specs/006-multi-media-gallery/`; remaining Stage 3 work is reordering pending items while composing only.)*
 - **Single-level comments** — no nested replies; `parent_id` on shouts is legacy/unused
 - **Optimistic UI + rollback** — likes, deletes, poll votes update immediately, revert on error
@@ -87,5 +87,5 @@ make prod             # Docker production (ports 80/443)
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/007-email-whitelist/plan.md
+at specs/008-reclaim-unused-media/plan.md
 <!-- SPECKIT END -->

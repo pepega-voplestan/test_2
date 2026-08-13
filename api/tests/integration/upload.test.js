@@ -30,6 +30,26 @@ async function makePng(width = 300, height = 300) {
     .toBuffer();
 }
 
+/**
+ * A genuinely multi-frame GIF89a. Hand-assembled because sharp cannot author an
+ * animated GIF from `create:` input, and the upload route only takes the
+ * animated branch when `metadata().pages > 1`.
+ */
+function makeAnimatedGif(frames = 2) {
+  const b = [];
+  b.push(...Buffer.from("GIF89a"));
+  b.push(1, 0, 1, 0, 0xf0, 0, 0); // 1x1 logical screen, 2-entry global colour table
+  b.push(0, 0, 0, 255, 255, 255); // black, white
+  b.push(0x21, 0xff, 0x0b, ...Buffer.from("NETSCAPE2.0"), 0x03, 0x01, 0x00, 0x00, 0x00);
+  for (let i = 0; i < frames; i++) {
+    b.push(0x21, 0xf9, 0x04, 0x00, 0x0a, 0x00, 0x00, 0x00); // graphic control, 100ms
+    b.push(0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0x00); // image descriptor
+    b.push(0x02, 0x02, 0x44, 0x01, 0x00); // LZW payload for one pixel
+  }
+  b.push(0x3b);
+  return Buffer.from(b);
+}
+
 describe("Upload routes", () => {
   beforeEach(async () => {
     await cleanDb();
@@ -95,11 +115,12 @@ describe("Upload routes", () => {
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
       expect(typeof res.body.mediaId).toBe("string");
+      // A JPEG is a still image: 320 is not generated, so `thumb` is absent.
       expect(res.body.urls).toMatchObject({
-        thumb: expect.stringContaining("/media/"),
         medium: expect.stringContaining("/media/"),
         full: expect.stringContaining("/media/"),
       });
+      expect(res.body.urls.thumb).toBeUndefined();
 
       // Verify DB record was created
       const row = await getTestPrisma().media.findUnique({ where: { id: res.body.mediaId } });
@@ -136,11 +157,13 @@ describe("Upload routes", () => {
       expect(res.status).toBe(200);
       const { mediaId } = res.body;
 
-      // Original + all WebP variants exist on disk.
+      // Original + the reachable WebP variants exist on disk. 320 is NOT
+      // generated for still images — nothing reads it (feature 008, FR-001).
       expect(fs.existsSync(mediaFile(mediaId, "original.jpg"))).toBe(true);
-      for (const w of [320, 960, 1600]) {
+      for (const w of [960, 1600]) {
         expect(fs.existsSync(mediaFile(mediaId, `${w}.webp`))).toBe(true);
       }
+      expect(fs.existsSync(mediaFile(mediaId, "320.webp"))).toBe(false);
       // Full URL points at the original during the window.
       expect(res.body.urls.full).toBe(`/media/${mediaId}/original.jpg`);
 
@@ -151,6 +174,51 @@ describe("Upload routes", () => {
       expect(meta.converted).toBe(false);
       expect(typeof meta.uploaded_at).toBe("string");
       expect(Number.isNaN(Date.parse(meta.uploaded_at))).toBe(false);
+    });
+
+    // Feature 008 — per-kind variant reachability. The rule is inverted between
+    // the two kinds, so both directions are asserted explicitly.
+    it("does not generate the unreachable 320 variant for a still image", async () => {
+      const user = await createUser({ username: "vera", email: "vera@test.local" });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", await makeJpeg(800, 600), { filename: "p.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(200);
+      const { mediaId } = res.body;
+      expect(fs.existsSync(mediaFile(mediaId, "320.webp"))).toBe(false);
+      expect(fs.existsSync(mediaFile(mediaId, "960.webp"))).toBe(true);
+      expect(fs.existsSync(mediaFile(mediaId, "1600.webp"))).toBe(true);
+      // The payload must not advertise a variant that was never written.
+      expect(res.body.urls.thumb).toBeUndefined();
+      expect(res.body.urls.medium).toBe(`/media/${mediaId}/960.webp`);
+    });
+
+    it("does not generate the unreachable 1600 variant for an animated GIF", async () => {
+      const user = await createUser({ username: "wanda", email: "wanda@test.local" });
+      const agent = await authenticatedAgent(user);
+
+      const res = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", makeAnimatedGif(3), { filename: "a.gif", contentType: "image/gif" });
+
+      expect(res.status).toBe(200);
+      const { mediaId } = res.body;
+
+      const row = await getTestPrisma().media.findUnique({ where: { id: mediaId } });
+      expect(JSON.parse(row.media_meta).animated).toBe(true);
+
+      expect(fs.existsSync(mediaFile(mediaId, "1600.webp"))).toBe(false);
+      // 320 IS reachable for animated media — the GIF picker grid reads it.
+      expect(fs.existsSync(mediaFile(mediaId, "320.webp"))).toBe(true);
+      expect(fs.existsSync(mediaFile(mediaId, "960.webp"))).toBe(true);
+      expect(fs.existsSync(mediaFile(mediaId, "original.gif"))).toBe(true);
+
+      expect(res.body.urls.full).toBeUndefined();
+      expect(res.body.urls.gif).toBe(`/media/${mediaId}/original.gif`);
+      expect(res.body.urls.thumb).toBe(`/media/${mediaId}/320.webp`);
     });
 
     it("stores a lossless original.png for a PNG (US1)", async () => {

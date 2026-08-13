@@ -81,6 +81,8 @@ services:
       REDIS_HOST: redis
       BULL_BOARD_BASE_PATH: /workers
       MEDIA_PATH: /media
+      MEDIA_UNPUBLISHED_GRACE_DAYS: ${MEDIA_UNPUBLISHED_GRACE_DAYS:-7}
+      MEDIA_DELETED_GRACE_DAYS: ${MEDIA_DELETED_GRACE_DAYS:-7}
     volumes:
       - media:/media
     expose:

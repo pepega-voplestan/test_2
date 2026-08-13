@@ -632,7 +632,7 @@ export const swaggerSpec = {
       post: {
         tags: ["upload"],
         summary: "Upload image, GIF, or video",
-        description: "Requires auth. Accepts JPG, PNG, WebP, GIF, or MP4 up to 10 MB. Images generate 320/960/1600px WebP variants. GIFs preserve the original. MP4 videos are stored as-is. Rate limited to 100 req/10min per user.",
+        description: "Requires auth. Accepts JPG, PNG, WebP, GIF, or MP4 up to 10 MB. Only the WebP variants a display surface can request are generated: 960/1600px for still images, 320/960px for animated GIFs (which play from the preserved original). MP4 videos are stored as-is. Rate limited to 100 req/10min per user.",
         requestBody: {
           required: true,
           content: {
@@ -653,8 +653,19 @@ export const swaggerSpec = {
                 schema: {
                   type: "object",
                   properties: {
-                    id: { type: "string", format: "uuid" },
-                    media: { $ref: "#/components/schemas/MediaDto" },
+                    ok: { type: "boolean" },
+                    mediaId: { type: "string", format: "uuid" },
+                    urls: {
+                      type: "object",
+                      description: "Only the variants actually written are present, so no advertised path can 404.",
+                      properties: {
+                        thumb: { type: "string", description: "320px WebP — animated GIFs only" },
+                        medium: { type: "string", description: "960px WebP — always present" },
+                        full: { type: "string", description: "Lossless original during the original-quality window, else the 1600px WebP. Absent for animated GIFs." },
+                        gif: { type: "string", description: "Original GIF — animated GIFs only" },
+                      },
+                      required: ["medium"],
+                    },
                   },
                 },
               },

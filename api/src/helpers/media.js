@@ -186,19 +186,30 @@ export function buildMedia(mediaObj) {
     // During the original-quality window (orig present, not yet downgraded) the
     // full-size view serves the lossless original; otherwise the WebP variant.
     const pendingOriginal = Boolean(meta.orig) && meta.converted !== true;
+    const animated = Boolean(meta.animated);
+    // Only the variants a surface can actually request are generated (feature
+    // 008), and which one is dead flips with the media kind: an animated item
+    // plays from the GIF so it has no 1600, a still image has no reader for its
+    // 320. Advertising the missing one would hand clients a 404.
+    const thumb = animated ? { thumb: `/media/${mediaObj.media_url}/320.webp` } : {};
+    const full = animated
+      ? {}
+      : {
+          full: pendingOriginal
+            ? `/media/${mediaObj.media_url}/${meta.orig}`
+            : `/media/${mediaObj.media_url}/1600.webp`,
+        };
     return {
       type: "image",
       url: `/media/${mediaObj.media_url}/960.webp`,
-      thumb: `/media/${mediaObj.media_url}/320.webp`,
-      full: pendingOriginal
-        ? `/media/${mediaObj.media_url}/${meta.orig}`
-        : `/media/${mediaObj.media_url}/1600.webp`,
+      ...thumb,
+      ...full,
       width: meta.w || 0,
       height: meta.h || 0,
       // EXIF orientation only matters while serving the metadata-stripped original;
       // the WebP variants are already auto-rotated upright.
       ...(pendingOriginal && meta.orientation ? { orientation: meta.orientation } : {}),
-      ...(meta.animated && { animated: true, gif: `/media/${mediaObj.media_url}/original.gif` }),
+      ...(animated && { animated: true, gif: `/media/${mediaObj.media_url}/original.gif` }),
     };
   }
   if (mediaObj.media_type === "video") {

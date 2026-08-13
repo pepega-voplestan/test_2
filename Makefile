@@ -1,4 +1,4 @@
-.PHONY: prod local down down-local logs logs-local rebuild rebuild-local backup backup-upload backup-no-media backup-dev restore restore-dev deploy deploy-local db-pull db-pull-local test test-web test-all test-docker test-coverage test-web-coverage ensure-htpasswd install
+.PHONY: prod local down down-local logs logs-local rebuild rebuild-local backup backup-upload backup-no-media backup-dev restore restore-dev deploy deploy-local db-pull db-pull-local test test-web test-workers test-all test-docker test-coverage test-web-coverage ensure-htpasswd install
 
 # Ensure .htpasswd exists (nginx auth_basic requires a valid file, otherwise /admin returns 500)
 ensure-htpasswd:
@@ -97,10 +97,15 @@ test:
 test-web:
 	cd web && npm test
 
-# Run all tests (API + web)
+# Run workers tests locally
+test-workers:
+	cd workers && npm test
+
+# Run all tests (API + web + workers)
 test-all:
 	cd api && npm test
 	cd web && npm test
+	cd workers && npm test
 
 # Run API tests in Docker
 test-docker:

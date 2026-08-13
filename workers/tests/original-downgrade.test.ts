@@ -28,11 +28,14 @@ function makeDb({ media = [], shoutGalleryRows = [], commentGalleryRows = [] }: 
             .filter((m) => m.media_type === "image" && m.created_at < cutoff)
             .map((m) => ({ id: m.id, media_url: m.media_url, media_meta: m.media_meta }));
         }),
-        update: vi.fn(async ({ where, data }: any) => {
-          updates[where.id] = data.media_meta;
+        // Mirrors Prisma: the media_meta guard is part of the WHERE, so a row
+        // another writer has changed since the read matches nothing.
+        updateMany: vi.fn(async ({ where, data }: any) => {
           const row = media.find((m) => m.id === where.id);
-          if (row) row.media_meta = data.media_meta;
-          return row;
+          if (!row || row.media_meta !== where.media_meta) return { count: 0 };
+          updates[where.id] = data.media_meta;
+          row.media_meta = data.media_meta;
+          return { count: 1 };
         }),
       },
       shoutMedia: {
@@ -144,6 +147,29 @@ describe("runOriginalDowngrade", () => {
 
     const res = await runOriginalDowngrade({ db, fileSystem, mediaDir: "/media", windowHours: 24, now: NOW });
     expect(res).toMatchObject({ scanned: 0, converted: 0 });
+  });
+
+  it("unlinks nothing when another writer changed media_meta since the read", async () => {
+    const media = [pending("m7", 30)];
+    const { db, updates } = makeDb({ media, shoutGalleryRows: [{ media_id: "m7", is_deleted: 0 }] });
+    const unlinked: string[] = [];
+    const fileSystem = makeFs(["m7"], unlinked);
+
+    // Simulate the reclaim script writing its marker between our read and write.
+    const original = db.media.findMany;
+    db.media.findMany = vi.fn(async (args: any) => {
+      const rows = await original(args);
+      media[0].media_meta = JSON.stringify({ ...JSON.parse(media[0].media_meta), reclaimed: { variants: ["320"], at: "x" } });
+      return rows;
+    }) as any;
+
+    const res = await runOriginalDowngrade({ db, fileSystem, mediaDir: "/media", windowHours: 24, now: NOW });
+
+    expect(res).toMatchObject({ scanned: 1, converted: 0, skipped: 1 });
+    expect(updates["m7"]).toBeUndefined();
+    expect(unlinked).toHaveLength(0);
+    // The other writer's marker survives intact.
+    expect(JSON.parse(media[0].media_meta).reclaimed.variants).toEqual(["320"]);
   });
 
   it("converts when the owning content is a live comment (not a shout)", async () => {

@@ -83,11 +83,71 @@ describe("buildMedia", () => {
     expect(buildMedia(media)).toEqual({
       type: "image",
       url: "/media/abc-123/960.webp",
-      thumb: "/media/abc-123/320.webp",
       full: "/media/abc-123/1600.webp",
       width: 1920,
       height: 1080,
     });
+  });
+
+  // Feature 008: the unreachable variant is no longer generated, so the DTO must
+  // not advertise an address for a file that does not exist. The rule is
+  // per-kind and inverted between the two — see workers/src/helpers/variant-rules.ts.
+  it("omits thumb for non-animated images, whose 320 variant is not generated", () => {
+    const media = {
+      media_type: "image",
+      media_url: "img-1",
+      media_meta: JSON.stringify({ w: 800, h: 600 }),
+    };
+    const result = buildMedia(media);
+    expect(result).not.toHaveProperty("thumb");
+    expect(result.full).toBe("/media/img-1/1600.webp");
+  });
+
+  it("omits full for animated images, which play from the GIF instead", () => {
+    const media = {
+      media_type: "image",
+      media_url: "gif-1",
+      media_meta: JSON.stringify({ w: 320, h: 240, animated: true }),
+    };
+    const result = buildMedia(media);
+    expect(result).not.toHaveProperty("full");
+    expect(result.thumb).toBe("/media/gif-1/320.webp");
+    expect(result.gif).toBe("/media/gif-1/original.gif");
+  });
+
+  it("always emits url, for every image kind", () => {
+    for (const animated of [true, false]) {
+      const media = {
+        media_type: "image",
+        media_url: "m",
+        media_meta: JSON.stringify({ w: 10, h: 10, animated }),
+      };
+      expect(buildMedia(media).url).toBe("/media/m/960.webp");
+    }
+  });
+
+  it("still serves the pending original as full during the 24h window", () => {
+    const media = {
+      media_type: "image",
+      media_url: "orig-1",
+      media_meta: JSON.stringify({ w: 100, h: 100, orig: "original.jpg", converted: false }),
+    };
+    expect(buildMedia(media).full).toBe("/media/orig-1/original.jpg");
+  });
+
+  it("carries orientation while a pending original is served", () => {
+    const media = {
+      media_type: "image",
+      media_url: "orig-2",
+      media_meta: JSON.stringify({
+        w: 100,
+        h: 100,
+        orig: "original.jpg",
+        converted: false,
+        orientation: 6,
+      }),
+    };
+    expect(buildMedia(media).orientation).toBe(6);
   });
 
   it("defaults width/height to 0 when meta is empty", () => {
@@ -163,7 +223,8 @@ describe("buildMedia", () => {
     const result = buildMedia(media);
     expect(result.full).toBe("/media/orig-1/original.jpg");
     expect(result.url).toBe("/media/orig-1/960.webp");
-    expect(result.thumb).toBe("/media/orig-1/320.webp");
+    // Still image: 320 is never generated, so `thumb` must not be advertised.
+    expect(result.thumb).toBeUndefined();
   });
 
   it("includes orientation only while serving the pending original", () => {

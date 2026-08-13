@@ -272,14 +272,22 @@ router.post("/gifs/upload", requireAuth, (req, res) => {
       fs.writeFileSync(path.join(tmpDir, "original.gif"), req.file.buffer);
       const urls = { gif: `/media/${mediaId}/original.gif` };
 
+      const isAnimated = !!(meta.pages && meta.pages > 1);
+
+      // Only the variants a surface can request (feature 008). 320 is always
+      // live here — the picker grid reads it for every library item. 1600 is
+      // dead ONLY for a multi-frame GIF, which plays from original.gif; a
+      // single-frame one is served as a still by buildMedia, so the lightbox
+      // still reads its `full`.
+      const variants = isAnimated ? MEDIA_VARIANTS.filter((w) => w !== 1600) : MEDIA_VARIANTS;
+
       const firstFrame = sharp(req.file.buffer, { pages: 1 });
-      for (const w of MEDIA_VARIANTS) {
+      for (const w of variants) {
         const outPath = path.join(tmpDir, `${w}.webp`);
         await firstFrame.clone().resize(w, null, { withoutEnlargement: true }).webp({ quality: 82 }).toFile(outPath);
         urls[w] = `/media/${mediaId}/${w}.webp`;
       }
 
-      const isAnimated = !!(meta.pages && meta.pages > 1);
       const metaJson = JSON.stringify({ w: meta.width, h: meta.height, size: req.file.size, mime: req.file.mimetype, animated: isAnimated });
       fs.writeFileSync(path.join(tmpDir, "meta.json"), metaJson);
 
