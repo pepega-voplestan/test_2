@@ -3,6 +3,7 @@ import sharp from "sharp";
 import {
   extractYouTubeId,
   buildMedia,
+  buildGallery,
   stripJpegMetadata,
   stripPngMetadata,
 } from "../../src/helpers/media.js";
@@ -148,6 +149,66 @@ describe("buildMedia", () => {
       }),
     };
     expect(buildMedia(media).orientation).toBe(6);
+  });
+
+  // Feature 008 US3: the row outlives its files. Once every file is reclaimed
+  // the media must vanish from the payload rather than render as a broken
+  // image — the loss has to be visible (FR-014, constitution §III).
+  describe("reclaimed media", () => {
+    const reclaimed = (extra = {}) =>
+      JSON.stringify({ w: 800, h: 600, ...extra, reclaimed: { files: true, at: "2026-08-01T00:00:00.000Z" } });
+
+    it("returns undefined for an image whose files were reclaimed", () => {
+      expect(buildMedia({ media_type: "image", media_url: "gone", media_meta: reclaimed() })).toBeUndefined();
+    });
+
+    it("returns undefined for an animated image whose files were reclaimed", () => {
+      expect(
+        buildMedia({ media_type: "image", media_url: "gone", media_meta: reclaimed({ animated: true }) })
+      ).toBeUndefined();
+    });
+
+    it("returns undefined for a reclaimed video", () => {
+      expect(buildMedia({ media_type: "video", media_url: "gone", media_meta: reclaimed() })).toBeUndefined();
+    });
+
+    // Only `files` means unrenderable. A variants-only marker must not hide media.
+    it("still builds media carrying a variants-only reclaim marker", () => {
+      const media = {
+        media_type: "image",
+        media_url: "ok",
+        media_meta: JSON.stringify({ w: 800, h: 600, reclaimed: { variants: ["320"], at: "x" } }),
+      };
+      expect(buildMedia(media)?.url).toBe("/media/ok/960.webp");
+    });
+
+    it("drops a reclaimed item from a gallery, degrading it below two", () => {
+      const rows = [
+        { media: { media_type: "image", media_url: "a", media_meta: JSON.stringify({ w: 1, h: 1 }) } },
+        { media: { media_type: "image", media_url: "b", media_meta: reclaimed() } },
+      ];
+      // One survivor is not a gallery — the caller falls back to single-media shape.
+      expect(buildGallery(rows)).toBeUndefined();
+    });
+
+    it("keeps a gallery that still has two survivors", () => {
+      const rows = [
+        { media: { media_type: "image", media_url: "a", media_meta: JSON.stringify({ w: 1, h: 1 }) } },
+        { media: { media_type: "image", media_url: "b", media_meta: JSON.stringify({ w: 1, h: 1 }) } },
+        { media: { media_type: "image", media_url: "c", media_meta: reclaimed() } },
+      ];
+      const gallery = buildGallery(rows);
+      expect(gallery).toHaveLength(2);
+      expect(gallery.map((g) => g.url)).toEqual(["/media/a/960.webp", "/media/b/960.webp"]);
+    });
+
+    it("returns undefined for a gallery whose every item was reclaimed", () => {
+      const rows = [
+        { media: { media_type: "image", media_url: "a", media_meta: reclaimed() } },
+        { media: { media_type: "image", media_url: "b", media_meta: reclaimed() } },
+      ];
+      expect(buildGallery(rows)).toBeUndefined();
+    });
   });
 
   it("defaults width/height to 0 when meta is empty", () => {

@@ -6,9 +6,9 @@ import { broadcast, broadcastToUser } from "../sse.js";
 import { extractMentionedUserIds, buildSnippet } from "../helpers/mentions.js";
 import { asyncHandler, utcTimestamp } from "../helpers/common.js";
 import { shoutSchema, editContentSchema, SHOUT_MAX_LENGTH, EDIT_WINDOW_MS } from "../helpers/validation.js";
-import { extractYouTubeId, fetchYouTubeMeta, buildMedia, buildGallery } from "../helpers/media.js";
+import { extractYouTubeId, fetchYouTubeMeta, buildMedia, buildGallery, isMediaReclaimed } from "../helpers/media.js";
 import { enrichFeed } from "../helpers/feed.js";
-import { attachMedia, resolveMediaIds, isMultiItemEligible, attachmentLimitMessage, isMediaReclaimed, reclaimedMediaMessage } from "../helpers/attachments.js";
+import { attachMedia, resolveMediaIds, isMultiItemEligible, attachmentLimitMessage, reclaimedMediaMessage } from "../helpers/attachments.js";
 
 const router = Router();
 

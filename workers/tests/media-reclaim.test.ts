@@ -47,7 +47,12 @@ function makeDb(rows: {
         if (cursor) list = list.slice(list.findIndex((m) => m.id === cursor.id) + 1);
         return list
           .slice(0, take)
-          .map((m) => ({ id: m.id, media_url: m.media_url, media_meta: m.media_meta }));
+          .map((m) => ({
+            id: m.id,
+            media_url: m.media_url,
+            media_meta: m.media_meta,
+            created_at: m.created_at,
+          }));
       },
       updateMany: async ({ where, data }: any) => {
         const row = rowsMedia.find((m) => m.id === where.id);
@@ -120,7 +125,13 @@ function makeFs(dirs: Record<string, Record<string, number>>) {
 const VARIANTS = { "960.webp": 40000, "1600.webp": 90000, "meta.json": 120 };
 
 function run(deps: Partial<MediaReclaimDeps>) {
-  return runMediaReclaim({ mediaDir: MEDIA_DIR, unpublishedGraceDays: 7, now: NOW, ...deps });
+  return runMediaReclaim({
+    mediaDir: MEDIA_DIR,
+    unpublishedGraceDays: 7,
+    deletedGraceDays: 7,
+    now: NOW,
+    ...deps,
+  });
 }
 
 describe("runMediaReclaim — never-published class (US2)", () => {
@@ -222,20 +233,6 @@ describe("runMediaReclaim — what it must never touch", () => {
     expect(unlinked).toHaveLength(0);
   });
 
-  // This pass owns the never-published class only. Media behind soft-deleted
-  // content is a different class on a deletion-based grace period (US3), and
-  // sweeping it here would apply the wrong clock.
-  it("leaves media behind soft-deleted content to the deleted-content class", async () => {
-    const { db } = makeDb({
-      media: [media("m1", 100)],
-      shoutMedia: [{ media_id: "m1", shoutDeleted: 1 }],
-    });
-    const { fileSystem, unlinked } = makeFs({ "/media/m1": { ...VARIANTS } });
-
-    expect(await run({ db, fileSystem })).toMatchObject({ reclaimed: 0, skipped: 1 });
-    expect(unlinked).toHaveLength(0);
-  });
-
   it("leaves ban-removed content's media alone (SC-007)", async () => {
     const { db } = makeDb({
       media: [media("m1", 100)],
@@ -279,6 +276,99 @@ describe("runMediaReclaim — what it must never touch", () => {
   });
 });
 
+describe("runMediaReclaim — deleted-content class (US3)", () => {
+  it("reclaims media behind a soft-deleted shout once past the grace period", async () => {
+    const { db, rowsMedia } = makeDb({
+      media: [media("m1", 30)],
+      shoutMedia: [{ media_id: "m1", shoutDeleted: 1 }],
+    });
+    const { fileSystem, unlinked } = makeFs({ "/media/m1": { ...VARIANTS } });
+
+    const res = await run({ db, fileSystem });
+
+    expect(res).toMatchObject({ reclaimed: 1, reclaimedDeleted: 1, reclaimedUnpublished: 0 });
+    expect(unlinked).toHaveLength(2);
+    // Rows survive: the tombstone for a deleted shout with live comments needs them.
+    expect(rowsMedia).toHaveLength(1);
+    expect(JSON.parse(rowsMedia[0].media_meta!).reclaimed.files).toBe(true);
+  });
+
+  it("reclaims media behind a soft-deleted comment", async () => {
+    const { db } = makeDb({
+      media: [media("m1", 30)],
+      commentMedia: [{ media_id: "m1", commentDeleted: 1 }],
+    });
+    const { fileSystem, unlinked } = makeFs({ "/media/m1": { ...VARIANTS } });
+
+    expect(await run({ db, fileSystem })).toMatchObject({ reclaimed: 1, reclaimedDeleted: 1 });
+    expect(unlinked).toHaveLength(2);
+  });
+
+  it("leaves it alone while inside the deleted grace period", async () => {
+    const { db } = makeDb({
+      media: [media("m1", 30)],
+      shoutMedia: [{ media_id: "m1", shoutDeleted: 1 }],
+    });
+    const { fileSystem, unlinked } = makeFs({ "/media/m1": { ...VARIANTS } });
+
+    const res = await run({ db, fileSystem, deletedGraceDays: 60 });
+
+    expect(res).toMatchObject({ reclaimed: 0, skipped: 1 });
+    expect(res.retained.inGrace).toBe(1);
+    expect(unlinked).toHaveLength(0);
+  });
+
+  // SC-007: unbanning restores an account's content wholesale, so ban-removed
+  // content must protect its media no matter how old.
+  it("NEVER reclaims media behind ban-removed content", async () => {
+    const { db } = makeDb({
+      media: [media("m1", 3650)],
+      shoutMedia: [{ media_id: "m1", shoutDeleted: 2 }],
+    });
+    const { fileSystem, unlinked } = makeFs({ "/media/m1": { ...VARIANTS } });
+
+    const res = await run({ db, fileSystem });
+
+    expect(res).toMatchObject({ reclaimed: 0, skipped: 1 });
+    expect(res.retained.liveReference).toBe(1);
+    expect(unlinked).toHaveLength(0);
+  });
+
+  it("retains media shared by one deleted and one live shout", async () => {
+    const { db } = makeDb({
+      media: [media("m1", 3650)],
+      shoutMedia: [
+        { media_id: "m1", shoutDeleted: 1 },
+        { media_id: "m1", shoutDeleted: 0 },
+      ],
+    });
+    const { fileSystem, unlinked } = makeFs({ "/media/m1": { ...VARIANTS } });
+
+    const res = await run({ db, fileSystem });
+
+    expect(res).toMatchObject({ reclaimed: 0 });
+    expect(res.retained.liveReference).toBe(1);
+    expect(unlinked).toHaveLength(0);
+  });
+
+  it("keeps the two grace periods independent", async () => {
+    // 10 days old: past the 7-day deleted window, inside the 30-day unpublished one.
+    const { db } = makeDb({
+      media: [media("orphan", 10), media("deleted", 10)],
+      shoutMedia: [{ media_id: "deleted", shoutDeleted: 1 }],
+    });
+    const { fileSystem } = makeFs({
+      "/media/orphan": { ...VARIANTS },
+      "/media/deleted": { ...VARIANTS },
+    });
+
+    const res = await run({ db, fileSystem, unpublishedGraceDays: 30, deletedGraceDays: 7 });
+
+    expect(res).toMatchObject({ reclaimed: 1, reclaimedDeleted: 1, reclaimedUnpublished: 0 });
+    expect(res.retained.inGrace).toBe(1);
+  });
+});
+
 describe("runMediaReclaim — why a run reclaimed nothing", () => {
   it("attributes each retained item to its reason", async () => {
     const rows = [media("m1", 10), media("m2", 10), media("m3", 10)];
@@ -293,7 +383,7 @@ describe("runMediaReclaim — why a run reclaimed nothing", () => {
     const res = await run({ db, fileSystem });
 
     expect(res).toMatchObject({ scanned: 3, reclaimed: 0, skipped: 3 });
-    expect(res.retained).toEqual({ referenced: 2, alreadyReclaimed: 1, raced: 0, unreadableMeta: 0 });
+    expect(res.retained).toEqual({ liveReference: 2, inGrace: 0, alreadyReclaimed: 1, raced: 0, unreadableMeta: 0 });
   });
 
   it("distinguishes an empty candidate set from a fully-retained one", async () => {
@@ -303,7 +393,7 @@ describe("runMediaReclaim — why a run reclaimed nothing", () => {
     const res = await run({ db, fileSystem });
 
     expect(res).toMatchObject({ scanned: 0, skipped: 0 });
-    expect(res.retained).toEqual({ referenced: 0, alreadyReclaimed: 0, raced: 0, unreadableMeta: 0 });
+    expect(res.retained).toEqual({ liveReference: 0, inGrace: 0, alreadyReclaimed: 0, raced: 0, unreadableMeta: 0 });
   });
 });
 

@@ -98,7 +98,9 @@ When a post or comment is deleted it is only marked deleted; its media files rem
 - **FR-009**: The job MUST delete files ONLY. It MUST NOT delete database records or link rows, because tombstone rendering for a deleted post with live comments depends on them.
 - **FR-010**: The job MUST NOT reclaim media whose only references are to content removed by a ban, so that unbanning restores that content complete.
 - **FR-011**: The job MUST leave never-published media untouched until a configurable safety window has elapsed since upload.
-- **FR-012**: The job MUST leave media behind deleted content untouched until a configurable grace period has elapsed since deletion. Once elapsed, its files MUST be reclaimed; restoring such content afterwards returns it without its media, which is accepted (see D1).
+- **FR-012**: The job MUST leave media behind deleted content untouched until a configurable grace period has elapsed. Once elapsed, its files MUST be reclaimed; restoring such content afterwards returns it without its media, which is accepted (see D1).
+
+  **AMENDED 2026-08-13 — the grace period runs from content CREATION, not from deletion.** No schema records a deletion time: `is_deleted` is a bare integer flag with no accompanying timestamp, and adding one was considered and rejected in favour of shipping without a migration (see D3). The consequence is accepted and must not be discovered later: deleting content that is already older than the grace period makes its media reclaimable on the very next sweep, so there is NO window in which restore is media-complete for such content. Restore is media-complete only for content created within the grace period.
 - **FR-013**: Publishing a post whose attachment has already been reclaimed MUST fail with a clear message in the product's language rather than creating a post with broken media.
 - **FR-014**: Restoring content whose media was already reclaimed MUST succeed and MUST present the content as media-free rather than rendering a broken image, so the loss is visible and unambiguous to both administrator and readers.
 
@@ -140,7 +142,7 @@ When a post or comment is deleted it is only marked deleted; its media files rem
 
 - **Banned content is retained.** Media referenced only by content removed via ban is never reclaimed. The unban path restores that content wholesale, so reclaiming it would make unbanning lossy. This is the conservative reading of the project's data-preservation principle.
 - **Safety window for never-published media defaults to 7 days.** Long enough to cover a composer left open across a weekend, short enough that abandoned uploads do not accumulate. Configurable.
-- **Grace period for deleted content defaults to 7 days**, matching the never-published window so operators reason about one number rather than two. Configurable independently. This implements decision D1's "a few days" as a concrete default; lowering it to 3 changes no requirement.
+- **Grace period for deleted content defaults to 7 days**, matching the never-published window so operators reason about one number rather than two. Configurable independently. This implements decision D1's "a few days" as a concrete default; lowering it to 3 changes no requirement. Measured from content creation rather than deletion — see FR-012's amendment and D3.
 - **Database records are always retained.** Even for media that was never published, only files are reclaimed. This keeps the feature uniformly file-only, avoids referential surprises, and keeps the reclaim reversible in the sense that history remains auditable. Records are small relative to files.
 - **Video and external embeds are unaffected by the unreachable-copy work.** That work concerns image copies only. Video and embeds are still subject to the association-based reclaim.
 - **Preview mode is the default posture for the one-time reclaim.** An operator must opt in explicitly to destructive execution.
@@ -166,6 +168,31 @@ When a post or comment is deleted it is only marked deleted; its media files rem
 **Consequence**: This requires amending the project constitution's data-preservation principle, which currently permits exactly one hard-delete exception. The amendment establishes that reclaiming media *files* while preserving all database records is permitted, and that restore is content-complete but not media-complete beyond the grace period. Ban-removed content remains exempt.
 
 **Rejected**: never reclaiming (forfeits the largest single reclaim) and reclaiming immediately on deletion (makes routine, same-day restore lossy for no meaningful extra saving).
+
+---
+
+### D3: The deleted-content grace period is clocked from creation, not deletion
+
+**Decision** (2026-08-13): Reclaim media behind soft-deleted content once the
+CONTENT is older than the grace period, rather than once the DELETION is.
+
+**Rationale**: The schema has no deletion timestamp. Adding `deleted_at` to
+`shouts` and `comments` — stamped at every `is_deleted` write, cleared on
+restore, backfilled for existing rows — was the correct implementation of D1 as
+written, but was rejected in favour of avoiding a migration and reclaiming the
+existing backlog immediately.
+
+**Consequence**: D1's central promise is materially weakened. D1 says restore
+"remains fully faithful for the window in which it is realistically exercised —
+a user or moderator reversing a recent decision". Under this clock that holds
+only when the CONTENT is recent. Deleting a year-old post makes its media
+reclaimable at once, so the routine case of an author deleting an old post and
+asking for it back the same day is lossy. Constitution §III's "within the grace
+period, administrator restore MUST be fully faithful, including all media" is
+therefore honoured only for recently-created content.
+
+**Revisit by**: adding `deleted_at`, which makes this a per-row correction with
+no change to the job's shape beyond the column it reads.
 
 ---
 

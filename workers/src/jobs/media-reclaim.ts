@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { prisma } from "../db.js";
 import { redisConnection } from "../redis.js";
-import { hasAnyReference, type RefDb } from "../helpers/media-refs.js";
+import { classifyReferences, type RefDb } from "../helpers/media-refs.js";
 import {
   emptyResult,
   formatResult,
@@ -16,9 +16,16 @@ import {
 /**
  * Recurring reclaim of media files no display surface can reach (feature 008).
  *
- * Handles the never-published class only. Media behind soft-deleted content is
- * measured from the deletion instead, so `MEDIA_DELETED_GRACE_DAYS` is wired
- * through the compose files but stays unread until that class ships.
+ * Two classes, each with its own grace period:
+ *   - never published   — no reference of any kind (US2)
+ *   - deleted content   — references exist, but none to live or banned content (US3)
+ *
+ * Both clocks run off `media.created_at`. For the deleted class the spec asks
+ * for time-since-DELETION, but no schema records that: `is_deleted` is a bare
+ * flag with no timestamp. Clocking off creation was chosen deliberately over
+ * adding one (2026-08-13), and the consequence is real — deleting a post that
+ * is already older than the grace period makes its media unrecoverable at once,
+ * with no window in which restore is still media-complete.
  *
  * Files only, never rows: a deleted shout with live comments still renders a
  * tombstone from them (FR-009, constitution §III). Avatars (FR-021) need no
@@ -26,6 +33,7 @@ import {
  */
 
 const UNPUBLISHED_GRACE_DAYS = Number(process.env.MEDIA_UNPUBLISHED_GRACE_DAYS) || 7;
+const DELETED_GRACE_DAYS = Number(process.env.MEDIA_DELETED_GRACE_DAYS) || 7;
 const MEDIA_DIR = process.env.MEDIA_PATH || "/media";
 const BATCH_SIZE = 500;
 
@@ -40,21 +48,34 @@ const META_MIRROR = "meta.json";
  * run is indistinguishable from a broken one.
  */
 export interface MediaReclaimResult extends ReclaimResult {
-  retained: { referenced: number; alreadyReclaimed: number; raced: number; unreadableMeta: number };
+  retained: {
+    liveReference: number;
+    /** Eligible class, but not yet past its grace period. */
+    inGrace: number;
+    alreadyReclaimed: number;
+    raced: number;
+    unreadableMeta: number;
+  };
+  /** Split so the storage win can be attributed per waste class (SC-004). */
+  reclaimedUnpublished: number;
+  reclaimedDeleted: number;
   /** Files the unlink could not remove. Non-zero means the volume is not writable. */
   strayFiles: number;
   /** Echoed so a zero-reclaim run explains itself without a second lookup. */
   graceDays: number;
+  deletedGraceDays: number;
   cutoff: string;
 }
 
 /** Single formatting site — the worker log, the job log, and Bull Board agree. */
 export function summarize(r: MediaReclaimResult): string {
-  const { referenced, alreadyReclaimed, raced, unreadableMeta } = r.retained;
+  const { liveReference, inGrace, alreadyReclaimed, raced, unreadableMeta } = r.retained;
   return (
     `${formatResult("media-reclaim", r)} ` +
-    `retained(referenced=${referenced} already=${alreadyReclaimed} raced=${raced} unreadable=${unreadableMeta}) ` +
-    `strays=${r.strayFiles} graceDays=${r.graceDays} cutoff=${r.cutoff}`
+    `by-class(unpublished=${r.reclaimedUnpublished} deleted=${r.reclaimedDeleted}) ` +
+    `retained(live=${liveReference} inGrace=${inGrace} already=${alreadyReclaimed} ` +
+    `raced=${raced} unreadable=${unreadableMeta}) ` +
+    `strays=${r.strayFiles} grace(unpublished=${r.graceDays} deleted=${r.deletedGraceDays}) cutoff=${r.cutoff}`
   );
 }
 
@@ -63,6 +84,7 @@ export interface MediaReclaimDeps {
   fileSystem: FileSystemLike;
   mediaDir: string;
   unpublishedGraceDays: number;
+  deletedGraceDays: number;
   batchSize: number;
   dryRun: boolean;
   now: number;
@@ -82,6 +104,7 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
     fileSystem = fs,
     mediaDir = MEDIA_DIR,
     unpublishedGraceDays = UNPUBLISHED_GRACE_DAYS,
+    deletedGraceDays = DELETED_GRACE_DAYS,
     batchSize = BATCH_SIZE,
     dryRun = false,
     now = Date.now(),
@@ -89,15 +112,20 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
 
   const result: MediaReclaimResult = {
     ...emptyResult(dryRun),
-    retained: { referenced: 0, alreadyReclaimed: 0, raced: 0, unreadableMeta: 0 },
+    retained: { liveReference: 0, inGrace: 0, alreadyReclaimed: 0, raced: 0, unreadableMeta: 0 },
     strayFiles: 0,
+    reclaimedUnpublished: 0,
+    reclaimedDeleted: 0,
     graceDays: unpublishedGraceDays,
+    deletedGraceDays,
     cutoff: "",
   };
-  const graceMs = unpublishedGraceDays * 24 * 60 * 60 * 1000;
-  // Full ISO-8601, matching original-downgrade.ts: valid whether the generated
-  // client types created_at as String or DateTime.
-  const cutoff = new Date(now - graceMs).toISOString();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const unpublishedBefore = now - unpublishedGraceDays * DAY_MS;
+  const deletedBefore = now - deletedGraceDays * DAY_MS;
+  // Prefilter on whichever window is more permissive, then apply the exact one
+  // per class below — otherwise the shorter grace silently caps the longer.
+  const cutoff = new Date(Math.max(unpublishedBefore, deletedBefore)).toISOString();
   result.cutoff = cutoff;
   const nowDate = new Date(now);
 
@@ -105,7 +133,7 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
   for (;;) {
     const batch = await db.media.findMany({
       where: { media_type: { in: LOCAL_FILE_TYPES }, created_at: { lt: cutoff } },
-      select: { id: true, media_url: true, media_meta: true },
+      select: { id: true, media_url: true, media_meta: true, created_at: true },
       orderBy: { id: "asc" },
       take: batchSize,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -129,11 +157,19 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
         continue;
       }
 
-      // Any reference at all means it was published, so it belongs to the
-      // deleted-content class and its clock, not this one.
-      if (await hasAnyReference(db, m.id)) {
+      const refs = await classifyReferences(db, m.id);
+      if (refs === "live") {
         result.skipped++;
-        result.retained.referenced++;
+        result.retained.liveReference++;
+        continue;
+      }
+
+      const createdAt =
+        typeof m.created_at === "string" ? Date.parse(m.created_at) : m.created_at.getTime();
+      const eligibleAfter = refs === "none" ? unpublishedBefore : deletedBefore;
+      if (!(createdAt < eligibleAfter)) {
+        result.skipped++;
+        result.retained.inGrace++;
         continue;
       }
 
@@ -163,6 +199,8 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
         }
         result.bytesFreed += bytesFreed;
         result.reclaimed++;
+        if (refs === "none") result.reclaimedUnpublished++;
+        else result.reclaimedDeleted++;
         if (strays.length > 0) {
           result.strayFiles += strays.length;
           console.error(`[media-reclaim] ${m.id}: could not remove ${strays.join(", ")}`);

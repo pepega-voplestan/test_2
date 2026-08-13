@@ -114,15 +114,15 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 
 ### Tests for User Story 3
 
-- [ ] T026 [P] [US3] Tests for the deleted-content class in `workers/tests/media-reclaim.test.ts`: `is_deleted=1` past grace → reclaimed, inside grace → untouched, `is_deleted=2` (banned) → NEVER reclaimed, media shared by one deleted and one live post → retained
-- [ ] T027 [P] [US3] Tests for reclaimed-media omission in `api/tests/unit/media.test.js`: `buildMedia` returns `undefined` when `reclaimed.files` is true; `buildGallery` drops the item and degrades a 2-item gallery to single-media shape
+- [X] T026 [P] [US3] Tests for the deleted-content class in `workers/tests/media-reclaim.test.ts`: `is_deleted=1` past grace → reclaimed, inside grace → untouched, `is_deleted=2` (banned) → NEVER reclaimed, media shared by one deleted and one live post → retained
+- [X] T027 [P] [US3] Tests for reclaimed-media omission in `api/tests/unit/media.test.js`: `buildMedia` returns `undefined` when `reclaimed.files` is true; `buildGallery` drops the item and degrades a 2-item gallery to single-media shape
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Extend `workers/src/jobs/media-reclaim.ts` with the deleted-content class, treating `is_deleted=2` and live content alike as PROTECTING their media so the fail-safe direction is retention (research D10)
-- [ ] T029 [US3] Update `buildMedia` in `api/src/helpers/media.js` to return `undefined` when `media_meta.reclaimed.files` is true (contract C2), so restored content renders media-free instead of broken
-- [ ] T030 [US3] Verify `buildGallery` in `api/src/helpers/media.js` degrades correctly when reclaim reduces a gallery below two surviving items (existing sub-2-item behaviour should need no change — confirm, do not assume)
-- [ ] T031 [US3] Manually verify admin restore per quickstart Step 6, both inside and outside the grace period — any uncaught error in `admin.js` exits code 1 in production, so this MUST be exercised locally before deploy
+- [X] T028 [US3] Extend `workers/src/jobs/media-reclaim.ts` with the deleted-content class, treating `is_deleted=2` and live content alike as PROTECTING their media so the fail-safe direction is retention (research D10)
+- [X] T029 [US3] Update `buildMedia` in `api/src/helpers/media.js` to return `undefined` when `media_meta.reclaimed.files` is true (contract C2), so restored content renders media-free instead of broken
+- [X] T030 [US3] Verify `buildGallery` in `api/src/helpers/media.js` degrades correctly when reclaim reduces a gallery below two surviving items (existing sub-2-item behaviour should need no change — confirm, do not assume)
+- [ ] T031 [US3] **Operator-only — needs a running stack.** Manually verify admin restore per quickstart Step 6, both inside and outside the grace period — any uncaught error in `admin.js` exits code 1 in production, so this MUST be exercised locally before deploy
 
 **Checkpoint**: All three stories independently functional
 
@@ -153,7 +153,7 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 
 - **US1 (P1)**: Fully independent. Ships alone.
 - **US2 (P2)**: Independent of US1.
-- **US3 (P3)**: Extends the job file created in US2 — the one genuine cross-story code dependency. Behaviourally still independently testable. NOT STARTED: `media-reclaim.ts` handles the never-published class only, and `MEDIA_DELETED_GRACE_DAYS` is wired through the compose files but deliberately unread until T028 lands.
+- **US3 (P3)**: Extends the job file created in US2 — the one genuine cross-story code dependency. Behaviourally still independently testable. SHIPPED, with one deviation: the grace period is clocked from content creation rather than deletion, because no deletion timestamp exists (spec D3).
 
 ### Within Each Story
 

@@ -179,8 +179,30 @@ export async function fetchYouTubeMeta(videoId) {
 
 /* ---------- Media DTO helper ---------- */
 
+/**
+ * True when every file behind this media has been reclaimed (feature 008 US3).
+ * The row outlives its files, so this is the only way to know it cannot render.
+ *
+ * Parsed tolerantly: it runs on every media DTO and on every publish, and
+ * unparseable meta must not become a 500.
+ */
+export function isMediaReclaimed(mediaMeta) {
+  let meta;
+  try {
+    meta = JSON.parse(mediaMeta || "{}");
+  } catch {
+    return false;
+  }
+  return meta.reclaimed?.files === true;
+}
+
 export function buildMedia(mediaObj) {
   if (!mediaObj) return undefined;
+  // Omitted entirely rather than rendered broken: a post restored after its
+  // grace period comes back text-only, and the loss is visible (FR-014,
+  // constitution §III). Callers already treat undefined as "no media", and
+  // buildGallery filters it out.
+  if (isMediaReclaimed(mediaObj.media_meta)) return undefined;
   if (mediaObj.media_type === "image") {
     const meta = JSON.parse(mediaObj.media_meta || "{}");
     // During the original-quality window (orig present, not yet downgraded) the

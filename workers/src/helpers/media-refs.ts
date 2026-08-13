@@ -28,6 +28,20 @@ export async function hasLiveReference(db: RefDb, mediaId: string): Promise<bool
 }
 
 /**
+ * Which reclaim class a media item falls into.
+ *
+ * `deletedContent` is the trap: soft-delete leaves the join rows in place, so
+ * media behind a deleted shout still HAS a reference and is not "never
+ * published". It runs on a deletion-based clock instead (US3).
+ */
+export type RefState = "live" | "deletedContent" | "none";
+
+export async function classifyReferences(db: RefDb, mediaId: string): Promise<RefState> {
+  if (await hasLiveReference(db, mediaId)) return "live";
+  return (await hasAnyReference(db, mediaId)) ? "deletedContent" : "none";
+}
+
+/**
  * The media was attached to something once, whatever state that thing is in
  * now. Distinct from `hasLiveReference`, and the distinction picks the clock:
  * no row at all means never published (grace measured from upload), whereas a

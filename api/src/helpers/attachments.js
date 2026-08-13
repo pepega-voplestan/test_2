@@ -41,26 +41,6 @@ export function isMultiItemEligible(mediaType, mediaMeta) {
 }
 
 /**
- * True when this media's files have been reclaimed (feature 008) and it can no
- * longer render. The row survives reclaim — only the bytes go — so an id held
- * by a composer left open past the grace period still resolves to a media row
- * and would otherwise publish as a broken image.
- *
- * Parsed tolerantly, unlike `isMultiItemEligible` above: that one runs only for
- * 2+-item galleries, whereas this guard is on every publish that carries media,
- * and unparseable meta must not turn into a 500 on the hot path.
- */
-export function isMediaReclaimed(mediaMeta) {
-  let meta;
-  try {
-    meta = JSON.parse(mediaMeta || "{}");
-  } catch {
-    return false;
-  }
-  return meta.reclaimed?.files === true;
-}
-
-/**
  * Russian message for attaching media whose files have been reclaimed.
  *
  * Shared by both create routes so the copy is identical, and phrased without a

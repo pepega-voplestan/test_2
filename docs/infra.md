@@ -55,11 +55,32 @@ Soft-deleted owners do **not** exempt an item from the sweep. The job checks whe
 
 A media item is reclaimable only when nothing references it. The reference check (`workers/src/helpers/media-refs.ts`) consults **three** tables, and the third is the one that bites: `user_gifs` holds a user's personal GIF library, whose entries are deliberately attached to no post — a check consulting only `shout_media`/`comment_media` classifies every saved library as orphaned and deletes it. `is_deleted=2` (ban-removed) content *protects* its media rather than being filtered out afterwards, so the fail-safe direction is retention: a missed protection retains data, a missed filter destroys it. Unbanning therefore still restores an account's content complete.
 
-Only the **never-published** class is swept today: media with no reference of any kind, older than `MEDIA_UNPUBLISHED_GRACE_DAYS` (default 7). Media sitting behind `is_deleted=1` content is a separate class on a deletion-based clock and is deliberately **not** swept — `MEDIA_DELETED_GRACE_DAYS` is already wired into all three compose files but is intentionally unread until that work lands.
+Two classes are swept, each with its own grace period (both default 7 days):
+
+| Class | Condition | Grace |
+|---|---|---|
+| Never published | no reference of any kind | `MEDIA_UNPUBLISHED_GRACE_DAYS` |
+| Behind deleted content | references exist, none to live or ban-removed content | `MEDIA_DELETED_GRACE_DAYS` |
+
+Media shared by one deleted and one live post is retained — a single live reference protects it. The DB prefilter uses whichever of the two cutoffs is more permissive, then the exact per-class cutoff is applied in memory, so the shorter window cannot silently cap the longer one.
+
+**The deleted-content clock runs from content CREATION, not deletion**, and this is the most surprising behaviour in the feature. Nothing in the schema records when a delete happened: `is_deleted` is a bare `Int` with no timestamp. Adding `deleted_at` was considered and rejected in favour of shipping without a migration ([spec D3](../specs/008-reclaim-unused-media/spec.md)). The consequence: deleting a post that is ALREADY older than the grace period makes its media reclaimable on the next sweep, with no window in which restore is media-complete. Restore is media-complete only for recently **created** content — which is weaker than Constitution v4.0.0 §III's "within the grace period, administrator restore MUST be fully faithful, including all media". Fixing it means adding the column; the job would then read it instead of `created_at` and need no other change.
 
 Candidates are paged with `take`/`cursor` (500 per batch). Unlike the downgrade sweep this candidate set does not self-empty — protected media stays a candidate forever, and a dry run marks nothing — so an unbounded `findMany` would grow with the volume. `media_meta.reclaimed.files=true` is written **before** any `unlink`, so an interruption can only leave a harmless stray file, never a record pointing at a file that is gone. That write is a compare-and-set on the whole `media_meta` blob, because `original-downgrade` rewrites the same column hourly from another process; a row that moved under us is left entirely alone and retried next sweep. `meta.json` is deliberately left on disk as a tombstone, so a reclaimed directory reads as intentional rather than as an unexplained empty one. `runMediaReclaim({ dryRun: true })` performs every read and reports `bytesFreed` without deleting anything.
 
 Avatars are unaffected: they carry no `media` row and live on a separate volume (`AVATAR_PATH`, default `/data/avatars`).
+
+Reclaimed media disappears from API payloads rather than 404ing: `buildMedia` returns `undefined` once `media_meta.reclaimed.files` is true, and `buildGallery` filters it out and collapses to the single-media shape below two survivors. A restored post therefore comes back text-only.
+
+**Reporting.** Each run writes the same summary to three places — the worker log, `job.log` (Bull Board's *Logs* tab), and the processor's return value (Bull Board's *Return Value* tab):
+
+```
+[media-reclaim] scanned=847 reclaimed=81 skipped=766 failed=0 freed=11.6MB
+  by-class(unpublished=12 deleted=69) retained(live=700 inGrace=66 already=0 raced=0 unreadable=0)
+  strays=0 grace(unpublished=7 deleted=7) cutoff=2026-08-06T…
+```
+
+It logs unconditionally, so "did nothing" is distinguishable from "never ran". `by-class` attributes the saving per waste class. `retained` says why each candidate survived — `inGrace` is not yet old enough, `raced` lost the compare-and-set. `bytesFreed` counts only files actually removed; **`strays` > 0 means files survived the unlink**, which in practice means the media volume is not writable, and the job says so explicitly.
 
 ### One-time reclaim of unreachable variants
 
