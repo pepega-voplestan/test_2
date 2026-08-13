@@ -92,6 +92,26 @@ describe("Comments routes", () => {
       expect(comment.is_deleted).toBe(0);
     });
 
+    // Feature 008 (FR-013) — same guard as the shout create route.
+    it("rejects a reply whose attachment was reclaimed, creating no comment", async () => {
+      const author = await createUser({ username: "author", email: "author@test.local" });
+      const shout = await createShout({ userId: author.id });
+      const commenter = await createUser({ username: "commenter", email: "c@test.local" });
+      const media = await createMedia({
+        userId: commenter.id,
+        mediaMeta: JSON.stringify({ w: 320, h: 240, reclaimed: { files: true, at: "2026-08-01T00:00:00.000Z" } }),
+      });
+      const agent = await authenticatedAgent(commenter);
+
+      const res = await agent
+        .post(`/api/v1/shouts/${shout.id}/replies`)
+        .send({ content: "With a reclaimed image", mediaId: media.id });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Файл больше недоступен. Загрузите его заново");
+      expect(await getTestPrisma().comment.count()).toBe(0);
+    });
+
     it("allows a media-restricted user to attach an existing image mediaId (reuse of already-stored media, not a new upload)", async () => {
       const author = await createUser({ username: "author", email: "author@test.local" });
       const shout = await createShout({ userId: author.id });

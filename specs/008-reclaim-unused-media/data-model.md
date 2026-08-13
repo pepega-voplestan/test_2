@@ -39,8 +39,11 @@ New key added by this feature:
 
 - `reclaimed` is written once per transition and never removed. Its presence is
   the idempotency marker (FR-018).
-- `variants` and `files` are independent. The one-time script sets `variants`;
-  the recurring job sets `files: true`. An item can have both.
+- `variants` and `files` are independent. Only the recurring job writes a
+  marker, setting `files: true`; the one-time variant reclaim ships as a host
+  shell script that reads the database and never writes it (contract C5), so
+  `variants` is read-tolerated but currently written by nothing. Readers and the
+  merge helper must still preserve it — a marker is never dropped once present.
 - `files: true` means the media is permanently unrenderable. This is the flag
   that makes a restored post render media-free rather than broken (FR-014).
 - Written to the DB **before** any `unlink`, per FR-017. A crash between the two

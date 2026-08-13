@@ -3,11 +3,17 @@ import express from "express";
 import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
-import { notificationCleanupQueue, dbBackupQueue, originalDowngradeQueue } from "./queues.js";
+import {
+  notificationCleanupQueue,
+  dbBackupQueue,
+  originalDowngradeQueue,
+  mediaReclaimQueue,
+} from "./queues.js";
 import { registerScheduledJobs } from "./scheduler.js";
 import { createNotificationCleanupWorker } from "./jobs/notification-cleanup.js";
 import { createDbBackupWorker } from "./jobs/db-backup.js";
 import { createOriginalDowngradeWorker } from "./jobs/original-downgrade.js";
+import { createMediaReclaimWorker } from "./jobs/media-reclaim.js";
 import { prisma } from "./db.js";
 
 const PORT = Number(process.env.WORKERS_PORT ?? 3001);
@@ -19,6 +25,7 @@ async function main() {
     createNotificationCleanupWorker(),
     createDbBackupWorker(),
     createOriginalDowngradeWorker(),
+    createMediaReclaimWorker(),
   ];
 
   // Register repeatable schedules (upsert — safe to run on every startup)
@@ -33,6 +40,7 @@ async function main() {
       new BullMQAdapter(notificationCleanupQueue),
       new BullMQAdapter(dbBackupQueue),
       new BullMQAdapter(originalDowngradeQueue),
+      new BullMQAdapter(mediaReclaimQueue),
     ],
     serverAdapter,
   });

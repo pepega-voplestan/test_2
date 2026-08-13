@@ -336,6 +336,62 @@ describe("Shouts routes", () => {
       expect(res.body.shout.media.type).toBe("image");
     });
 
+    // Feature 008 (FR-013): the media row outlives its files, so a composer
+    // held open past the grace period still holds a resolvable id.
+    describe("attaching media whose files were reclaimed", () => {
+      const reclaimedMeta = JSON.stringify({
+        w: 320,
+        h: 240,
+        animated: false,
+        reclaimed: { files: true, at: "2026-08-01T00:00:00.000Z" },
+      });
+
+      it("rejects the publish with the Russian message and creates no shout", async () => {
+        const user = await createUser({ username: "alice", email: "alice@test.local" });
+        const media = await createMedia({ userId: user.id, mediaMeta: reclaimedMeta });
+        const agent = await authenticatedAgent(user);
+
+        const res = await agent.post("/api/v1/shouts").send({
+          content: "With a reclaimed image",
+          mediaId: media.id,
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Файл больше недоступен. Загрузите его заново");
+        expect(await getTestPrisma().shout.count()).toBe(0);
+      });
+
+      it("rejects the whole gallery when only one item was reclaimed", async () => {
+        const user = await createUser({ username: "alice", email: "alice@test.local" });
+        const ok = await createMedia({ userId: user.id, mediaUrl: "uploads/test/ok.webp" });
+        const gone = await createMedia({ userId: user.id, mediaUrl: "uploads/test/gone.webp", mediaMeta: reclaimedMeta });
+        const agent = await authenticatedAgent(user);
+
+        const res = await agent.post("/api/v1/shouts").send({
+          content: "Half a gallery",
+          mediaIds: [ok.id, gone.id],
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Файл больше недоступен. Загрузите его заново");
+        expect(await getTestPrisma().shout.count()).toBe(0);
+        expect(await getTestPrisma().shoutMedia.count()).toBe(0);
+      });
+
+      it("still accepts media carrying an unrelated reclaim marker", async () => {
+        const user = await createUser({ username: "alice", email: "alice@test.local" });
+        // Only variants were reclaimed — the media still renders.
+        const media = await createMedia({
+          userId: user.id,
+          mediaMeta: JSON.stringify({ w: 320, h: 240, reclaimed: { variants: ["320"], at: "2026-08-01T00:00:00.000Z" } }),
+        });
+        const agent = await authenticatedAgent(user);
+
+        const res = await agent.post("/api/v1/shouts").send({ content: "Fine", mediaId: media.id });
+        expect(res.status).toBe(200);
+      });
+    });
+
     it("allows a media-restricted user to attach an existing image mediaId (reuse of already-stored media, not a new upload)", async () => {
       const user = await createUser({ username: "alice", email: "alice@test.local", is_media_allowed: false });
       const media = await createMedia({ userId: user.id });

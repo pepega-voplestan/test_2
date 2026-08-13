@@ -6,21 +6,14 @@ How to validate the feature end to end. Assumes `make install` has run.
 
 ---
 
-## Step 0 — Repair the workers test harness (blocking)
+## Step 0 — Workers test harness (done)
 
-`workers/tests/original-downgrade.test.ts` imports `vitest`, but
-`workers/package.json` declares no `vitest` dependency and no `test` script.
-The suite cannot currently run ([research D8](./research.md#d8)).
+`workers/package.json` now declares `vitest` and a `test` script, and CI runs
+the suite ([research D8](./research.md#d8)). Confirm it still executes:
 
 ```sh
-cd workers
-npm pkg set scripts.test="vitest run"
-npm install -D vitest
-npm test          # establish a baseline for the EXISTING suite first
+cd workers && npm test
 ```
-
-The existing suite's pass/fail state is unknown. Establish it before adding
-anything, or a pre-existing failure will be misattributed to this feature.
 
 ---
 
@@ -75,8 +68,11 @@ GIF picker.
 
 ## Step 3 — Dry-run the one-time script (US1)
 
+Run from the repo root on the host holding the volumes. Add `--dev` to target
+the dev stack instead of prod.
+
 ```sh
-docker compose exec worker npx tsx src/scripts/reclaim-unreachable-variants.ts
+./scripts/reclaim-unreachable-variants.sh
 ```
 
 Expect a report of files and bytes, and **zero** changes on disk. Verify by
@@ -85,7 +81,7 @@ re-running Step 1 and confirming identical totals.
 Then execute, ideally staged:
 
 ```sh
-docker compose exec worker npx tsx src/scripts/reclaim-unreachable-variants.ts --execute --limit 100
+./scripts/reclaim-unreachable-variants.sh --execute --limit 100
 # verify the app still renders correctly, then run without --limit
 ```
 

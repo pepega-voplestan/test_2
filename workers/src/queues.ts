@@ -20,3 +20,13 @@ export const originalDowngradeQueue = new Queue("original-downgrade", {
     backoff: { type: "exponential", delay: 30000 },
   },
 });
+
+export const mediaReclaimQueue = new Queue("media-reclaim", {
+  connection: redisConnection,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 30000 },
+  },
+});

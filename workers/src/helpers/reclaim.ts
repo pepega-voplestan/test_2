@@ -46,7 +46,7 @@ export function emptyResult(dryRun: boolean): ReclaimResult {
 
 export type FileSystemLike = Pick<
   typeof fs,
-  "existsSync" | "statSync" | "unlinkSync" | "writeFileSync"
+  "existsSync" | "statSync" | "unlinkSync" | "writeFileSync" | "readdirSync"
 >;
 
 export interface MediaUpdater {

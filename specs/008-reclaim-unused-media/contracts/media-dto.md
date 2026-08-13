@@ -116,8 +116,13 @@ real defaults, so no DB or Redis is needed in unit tests. Registered on queue
 ## C5 — One-time script entry point
 
 ```
-npx tsx workers/src/scripts/reclaim-unreachable-variants.ts [--execute] [--limit N]
+./scripts/reclaim-unreachable-variants.sh [--dev] [--execute] [--limit N]
 ```
+
+A host-side shell script rather than a worker-side TypeScript entry point: it is
+run once by an operator standing at the machine that holds the volumes, so it
+reads the volume through `docker compose exec` and needs no build step, no
+`tsx`, and no deploy to change. `--dev` targets the dev stack.
 
 | Flag | Default | Effect |
 |---|---|---|
@@ -126,7 +131,13 @@ npx tsx workers/src/scripts/reclaim-unreachable-variants.ts [--execute] [--limit
 | `--limit N` | unlimited | Process at most N items — for a staged rollout |
 
 Dry run is the default posture; destruction requires an explicit opt-in
-(FR-015). Exit code 0 on success, non-zero if any item failed.
+(FR-015). Exit code 0 on success, non-zero on a refused or failed run.
+
+The database is read but never written, so this script records no `reclaimed`
+marker and cannot contend with the hourly `original-downgrade` job over
+`media_meta`. Its idempotency comes from the disk instead: a variant already
+gone is not a candidate on the next run (FR-018). Only the recurring job (C4)
+writes the marker, and only for media it removes wholesale.
 
 ---
 

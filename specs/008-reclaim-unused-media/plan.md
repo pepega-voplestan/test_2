@@ -121,8 +121,6 @@ workers/
 ├── package.json                # MODIFY — add vitest + test script (BLOCKING, D8)
 ├── src/
 │   ├── jobs/media-reclaim.ts   # NEW — recurring job (C4)
-│   ├── scripts/
-│   │   └── reclaim-unreachable-variants.ts  # NEW — one-time script (C5)
 │   ├── helpers/media-refs.ts   # NEW — hasLiveReference predicate (D9)
 │   ├── queues.ts               # MODIFY — register media-reclaim queue
 │   ├── scheduler.ts            # MODIFY — daily schedule
@@ -135,6 +133,9 @@ workers/
 web/
 ├── types.ts                    # MODIFY — thumb/full optional (C1)
 └── components/                 # VERIFY ONLY — no reader of the omitted fields
+
+scripts/
+└── reclaim-unreachable-variants.sh  # NEW — one-time operator script (C5)
 
 media-nginx.conf                # MODIFY — 960.webp fallback (C6)
 ```

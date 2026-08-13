@@ -61,8 +61,8 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 
 ### Tests for User Story 1
 
-- [X] T007 [P] [US1] Unit tests for per-kind variant reachability in `workers/tests/reclaim-variants.test.ts`: static image → `320` removable, `960`/`1600` retained; animated → `1600` removable, `320`/`960` retained; video and `youtube`/`giphy` rows skipped entirely
-- [ ] T008 [P] [US1] Unit tests for `buildMedia` emission rules in `api/tests/unit/media.test.js`: `thumb` omitted for non-animated, `full` omitted for animated, `url` always present, `orientation` unchanged
+- [X] T007 [P] [US1] ~~Unit tests for per-kind variant reachability in `workers/tests/reclaim-variants.test.ts`~~ — **superseded by T014's redesign.** The per-kind rule now lives in an `awk` join inside the shell script rather than a TypeScript module, so it has no unit-testable seam. The rule itself is stated in the script header, enforced at generation time by T015's integration tests, and guarded at run time by the plan's path whitelist plus a mandatory dry run.
+- [X] T008 [P] [US1] Unit tests for `buildMedia` emission rules in `api/tests/unit/media.test.js`: `thumb` omitted for non-animated, `full` omitted for animated, `url` always present, `orientation` unchanged
 
 ### Implementation for User Story 1
 
@@ -71,8 +71,8 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 - [X] T011 [P] [US1] Widen `thumb` and `full` to optional on the `image` member of the media union in `web/types.ts` (contract C1) — must land in the same commit as T010
 - [X] T012 [US1] Verify no frontend reader breaks in `web/components/ShoutCard.tsx`, `web/components/Lightbox.tsx`, `web/components/GalleryCarousel.tsx`: inline and gallery use `url`, lightbox uses `full` only for non-animated, GIF picker `thumb` comes from `gifs.js` not `buildMedia`
 - [X] T013 [US1] Replace the `try_files $uri =404` webp rule in `media-nginx.conf` with the `960.webp` fallback from contract C6, keeping the existing cache and nosniff headers; leave the non-webp rule unchanged
-- [X] T014 [US1] Create the one-time script `workers/src/scripts/reclaim-unreachable-variants.ts` per contract C5: dry-run by default, `--execute` to delete, `--limit N` for staged rollout, non-zero exit if any item failed, reports files and bytes
-- [ ] T015 [US1] Integration test for per-kind variant generation in `api/tests/integration/upload.test.js`: JPG upload produces no `320.webp`, animated GIF upload produces no `1600.webp`, both still render through the API payload
+- [X] T014 [US1] Create the one-time script `scripts/reclaim-unreachable-variants.sh` per contract C5: dry-run by default, `--execute` to delete, `--limit N` for staged rollout, `--dev` to target the dev stack, non-zero exit on a refused run, reports files and bytes. A host shell script rather than a worker-side TS entry point — it is run once by an operator at the machine holding the volumes, so it needs no build, no `tsx`, and no deploy to change. It reads the database and never writes it, so it cannot contend with `original-downgrade` over `media_meta`; idempotency comes from the disk instead
+- [X] T015 [US1] Integration test for per-kind variant generation in `api/tests/integration/upload.test.js`: JPG upload produces no `320.webp`, animated GIF upload produces no `1600.webp`, both still render through the API payload
 
 **Checkpoint**: US1 fully functional and independently shippable. Deploy and verify in production before starting US3.
 
@@ -86,19 +86,19 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 
 ### Tests for User Story 2
 
-- [ ] T016 [P] [US2] Tests for the reference predicate in `workers/tests/media-refs.test.ts`: media referenced only by an active `user_gifs` row is PROTECTED (the most destructive possible bug), `user_gifs.is_deleted=1` does not protect, live shout protects, live comment protects
-- [ ] T017 [P] [US2] Tests for the never-published class in `workers/tests/media-reclaim.test.ts`: inside grace → untouched, outside grace → reclaimed, rows still present after reclaim, dry-run reports without deleting
+- [X] T016 [P] [US2] Tests for the reference predicate in `workers/tests/media-refs.test.ts`: media referenced only by an active `user_gifs` row is PROTECTED (the most destructive possible bug), `user_gifs.is_deleted=1` does not protect, live shout protects, live comment protects
+- [X] T017 [P] [US2] Tests for the never-published class in `workers/tests/media-reclaim.test.ts`: inside grace → untouched, outside grace → reclaimed, rows still present after reclaim, dry-run reports without deleting
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Create the `hasLiveReference(mediaId)` predicate in `workers/src/helpers/media-refs.ts` checking all three tables — `shout_media`→`shouts`, `comment_media`→`comments`, `user_gifs` — via Prisma only (research D9)
-- [ ] T019 [US2] Create the recurring job `workers/src/jobs/media-reclaim.ts` per contract C4, handling the never-published class only: `runMediaReclaim(deps)` with injected `db`/`fileSystem`/grace periods/`dryRun`/`now`, plus `createMediaReclaimWorker()`
-- [ ] T020 [US2] Add cursor-based batching to `workers/src/jobs/media-reclaim.ts` so worker memory stays bounded regardless of media volume (research D6)
-- [ ] T021 [P] [US2] Register the `media-reclaim` queue in `workers/src/queues.ts` with retry/backoff matching `originalDowngradeQueue`
-- [ ] T022 [P] [US2] Register the daily schedule in `workers/src/scheduler.ts` via `upsertJobScheduler`
-- [ ] T023 [US2] Wire the worker and its Bull Board panel into `workers/src/index.ts` (depends on T019, T021)
-- [ ] T024 [US2] Add the publish guard to `api/src/helpers/attachments.js` per contract C3: reject the whole publish when a `media_id` has `reclaimed.files === true`, with a Russian error message and correct declensions (Principle II)
-- [ ] T025 [P] [US2] Integration test for the publish guard in `api/tests/integration/shouts.test.js`: publishing a reclaimed attachment fails with the Russian message and creates no shout
+- [X] T018 [US2] Create the `hasLiveReference(mediaId)` predicate in `workers/src/helpers/media-refs.ts` checking all three tables — `shout_media`→`shouts`, `comment_media`→`comments`, `user_gifs` — via Prisma only (research D9)
+- [X] T019 [US2] Create the recurring job `workers/src/jobs/media-reclaim.ts` per contract C4, handling the never-published class only: `runMediaReclaim(deps)` with injected `db`/`fileSystem`/grace periods/`dryRun`/`now`, plus `createMediaReclaimWorker()`
+- [X] T020 [US2] Add cursor-based batching to `workers/src/jobs/media-reclaim.ts` so worker memory stays bounded regardless of media volume (research D6)
+- [X] T021 [P] [US2] Register the `media-reclaim` queue in `workers/src/queues.ts` with retry/backoff matching `originalDowngradeQueue`
+- [X] T022 [P] [US2] Register the daily schedule in `workers/src/scheduler.ts` via `upsertJobScheduler`
+- [X] T023 [US2] Wire the worker and its Bull Board panel into `workers/src/index.ts` (depends on T019, T021)
+- [X] T024 [US2] Add the publish guard to `api/src/helpers/attachments.js` per contract C3: reject the whole publish when a `media_id` has `reclaimed.files === true`, with a Russian error message and correct declensions (Principle II)
+- [X] T025 [P] [US2] Integration test for the publish guard in `api/tests/integration/shouts.test.js`: publishing a reclaimed attachment fails with the Russian message and creates no shout
 
 **Checkpoint**: US1 and US2 both work independently
 
@@ -130,11 +130,11 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T032 Run the full quickstart validation end to end (`specs/008-reclaim-unused-media/quickstart.md`), including the before/after storage measurement so the reduction can be attributed per class (SC-004)
-- [ ] T033 Verify zero `.webp` 404s under `/media/` in the nginx access log after reclaim (SC-005)
-- [ ] T034 [P] Update `docs/infra.md` via the `/docs` skill: document the new `media-reclaim` job in the Background Jobs table, and correct the line claiming the `workers/` suite runs via `npm test` (it did not until T001)
-- [ ] T035 [P] Update `CLAUDE.md` via the `/docs` skill: add `media-reclaim` to the background-job guidance and note the per-kind variant rule under media handling
-- [ ] T036 Run `make test-all` and `cd workers && npm test` to confirm no regressions across api, web, and workers
+- [ ] T032 **Operator-only — needs the deployed stack and its media volume.** Run the full quickstart validation end to end (`specs/008-reclaim-unused-media/quickstart.md`), including the before/after storage measurement so the reduction can be attributed per class (SC-004)
+- [ ] T033 **Operator-only — needs the prod nginx access log.** Verify zero `.webp` 404s under `/media/` in the nginx access log after reclaim (SC-005)
+- [X] T034 [P] Update `docs/infra.md` via the `/docs` skill: document the new `media-reclaim` job in the Background Jobs table, and correct the line claiming the `workers/` suite runs via `npm test` (it did not until T001)
+- [X] T035 [P] Update `CLAUDE.md` via the `/docs` skill: add `media-reclaim` to the background-job guidance and note the per-kind variant rule under media handling
+- [X] T036 Run `make test-all` (api + web + workers) to confirm no regressions
 
 ---
 
@@ -153,7 +153,7 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 
 - **US1 (P1)**: Fully independent. Ships alone.
 - **US2 (P2)**: Independent of US1.
-- **US3 (P3)**: Extends the job file created in US2 — the one genuine cross-story code dependency. Behaviourally still independently testable.
+- **US3 (P3)**: Extends the job file created in US2 — the one genuine cross-story code dependency. Behaviourally still independently testable. NOT STARTED: `media-reclaim.ts` handles the never-published class only, and `MEDIA_DELETED_GRACE_DAYS` is wired through the compose files but deliberately unread until T028 lands.
 
 ### Within Each Story
 
@@ -177,7 +177,6 @@ Web app: `api/src/` (Node ESM), `workers/src/` (TypeScript), `web/` (React + TS)
 
 ```bash
 # Tests first, in parallel:
-Task: "Unit tests for per-kind variant reachability in workers/tests/reclaim-variants.test.ts"
 Task: "Unit tests for buildMedia emission rules in api/tests/unit/media.test.js"
 
 # Then the two contract-side changes, in parallel but committed together:
