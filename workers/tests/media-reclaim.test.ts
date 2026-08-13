@@ -279,6 +279,69 @@ describe("runMediaReclaim — what it must never touch", () => {
   });
 });
 
+describe("runMediaReclaim — why a run reclaimed nothing", () => {
+  it("attributes each retained item to its reason", async () => {
+    const rows = [media("m1", 10), media("m2", 10), media("m3", 10)];
+    rows[2].media_meta = JSON.stringify({ w: 1, h: 1, reclaimed: { files: true, at: "x" } });
+    const { db } = makeDb({
+      media: rows,
+      shoutMedia: [{ media_id: "m1", shoutDeleted: 0 }],
+      userGifs: [{ media_id: "m2", is_deleted: 0 }],
+    });
+    const { fileSystem } = makeFs({});
+
+    const res = await run({ db, fileSystem });
+
+    expect(res).toMatchObject({ scanned: 3, reclaimed: 0, skipped: 3 });
+    expect(res.retained).toEqual({ referenced: 2, alreadyReclaimed: 1, raced: 0, unreadableMeta: 0 });
+  });
+
+  it("distinguishes an empty candidate set from a fully-retained one", async () => {
+    const { db } = makeDb({ media: [media("m1", 1)] });
+    const { fileSystem } = makeFs({});
+
+    const res = await run({ db, fileSystem });
+
+    expect(res).toMatchObject({ scanned: 0, skipped: 0 });
+    expect(res.retained).toEqual({ referenced: 0, alreadyReclaimed: 0, raced: 0, unreadableMeta: 0 });
+  });
+});
+
+describe("runMediaReclaim — a volume it cannot write to", () => {
+  // The failure this must never hide: every unlink throws, yet the run reports
+  // a healthy bytesFreed and the operator sees no change in volume space.
+  it("reports zero bytes and counts strays when removal fails", async () => {
+    const { db } = makeDb({ media: [media("m1", 10)] });
+    const { fileSystem, dirs } = makeFs({ "/media/m1": { ...VARIANTS } });
+    fileSystem.unlinkSync = () => {
+      throw Object.assign(new Error("EROFS: read-only file system"), { code: "EROFS" });
+    };
+
+    const res = await run({ db, fileSystem });
+
+    expect(res.bytesFreed).toBe(0);
+    expect(res.strayFiles).toBe(2);
+    // The files are still there — which is the whole point of the assertion.
+    expect(Object.keys(dirs["/media/m1"]).sort()).toEqual(["1600.webp", "960.webp", "meta.json"]);
+  });
+
+  it("still credits bytes for a file that vanished by other means", async () => {
+    const { db } = makeDb({ media: [media("m1", 10)] });
+    const { fileSystem, dirs } = makeFs({ "/media/m1": { ...VARIANTS } });
+    const realUnlink = fileSystem.unlinkSync;
+    fileSystem.unlinkSync = (p: string) => {
+      delete dirs["/media/m1"][p.slice(p.lastIndexOf("/") + 1)];
+      throw new Error("boom"); // removed, but reported as a failure
+    };
+    void realUnlink;
+
+    const res = await run({ db, fileSystem });
+
+    expect(res.strayFiles).toBe(0);
+    expect(res.bytesFreed).toBe(130000);
+  });
+});
+
 describe("runMediaReclaim — batching", () => {
   it("pages past the batch size without skipping or repeating rows (research D6)", async () => {
     const rows = Array.from({ length: 7 }, (_, i) => media(`m${i}`, 10));

@@ -140,7 +140,7 @@ export interface PerformDeps {
 export async function performReclaim(
   plan: RemovalPlan,
   deps: PerformDeps
-): Promise<{ bytesFreed: number; applied: boolean }> {
+): Promise<{ bytesFreed: number; applied: boolean; strays: string[] }> {
   const { db, fileSystem, mediaDir, dryRun, now } = deps;
   const dir = path.join(mediaDir, plan.mediaUrl);
 
@@ -151,16 +151,15 @@ export async function performReclaim(
     }
   }
 
-  let bytesFreed = 0;
-  const present: string[] = [];
+  const doomed: { name: string; size: number }[] = [];
   for (const name of plan.filesToRemove) {
     const p = path.join(dir, name);
     if (!fileSystem.existsSync(p)) continue;
-    bytesFreed += fileSystem.statSync(p).size;
-    present.push(name);
+    doomed.push({ name, size: fileSystem.statSync(p).size });
   }
+  const plannedBytes = doomed.reduce((n, f) => n + f.size, 0);
 
-  if (dryRun) return { bytesFreed, applied: true };
+  if (dryRun) return { bytesFreed: plannedBytes, applied: true, strays: [] };
 
   const newMeta = mergeReclaimed(plan.meta, plan.markerPatch, now);
   const newMetaJson = JSON.stringify(newMeta);
@@ -169,7 +168,7 @@ export async function performReclaim(
     where: { id: plan.mediaId, media_meta: plan.metaJson },
     data: { media_meta: newMetaJson },
   });
-  if (count === 0) return { bytesFreed: 0, applied: false };
+  if (count === 0) return { bytesFreed: 0, applied: false, strays: [] };
 
   try {
     fileSystem.writeFileSync(path.join(dir, "meta.json"), newMetaJson);
@@ -177,15 +176,24 @@ export async function performReclaim(
     /* on-disk mirror is best-effort; the DB is authoritative */
   }
 
-  for (const name of present) {
+  // Counted AFTER the unlink, not before: a read-only mount or a permission
+  // problem makes every removal throw, and summing up front would report a
+  // healthy `bytesFreed` for a run that freed nothing.
+  let bytesFreed = 0;
+  const strays: string[] = [];
+  for (const { name, size } of doomed) {
+    const p = path.join(dir, name);
     try {
-      fileSystem.unlinkSync(path.join(dir, name));
+      fileSystem.unlinkSync(p);
+      bytesFreed += size;
     } catch {
-      /* already gone — still reclaimed */
+      // Gone by any means is the goal state; only a file that survived is a stray.
+      if (!fileSystem.existsSync(p)) bytesFreed += size;
+      else strays.push(name);
     }
   }
 
-  return { bytesFreed, applied: true };
+  return { bytesFreed, applied: true, strays };
 }
 
 export function formatResult(label: string, r: ReclaimResult): string {

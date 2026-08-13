@@ -35,6 +35,29 @@ const LOCAL_FILE_TYPES = ["image", "video"];
 /** Left on disk so a reclaimed directory reads as deliberate, not as an accident. */
 const META_MIRROR = "meta.json";
 
+/**
+ * `skipped` is the total; `retained` says why. Without the split a zero-reclaim
+ * run is indistinguishable from a broken one.
+ */
+export interface MediaReclaimResult extends ReclaimResult {
+  retained: { referenced: number; alreadyReclaimed: number; raced: number; unreadableMeta: number };
+  /** Files the unlink could not remove. Non-zero means the volume is not writable. */
+  strayFiles: number;
+  /** Echoed so a zero-reclaim run explains itself without a second lookup. */
+  graceDays: number;
+  cutoff: string;
+}
+
+/** Single formatting site — the worker log, the job log, and Bull Board agree. */
+export function summarize(r: MediaReclaimResult): string {
+  const { referenced, alreadyReclaimed, raced, unreadableMeta } = r.retained;
+  return (
+    `${formatResult("media-reclaim", r)} ` +
+    `retained(referenced=${referenced} already=${alreadyReclaimed} raced=${raced} unreadable=${unreadableMeta}) ` +
+    `strays=${r.strayFiles} graceDays=${r.graceDays} cutoff=${r.cutoff}`
+  );
+}
+
 export interface MediaReclaimDeps {
   db: Pick<typeof prisma, "media"> & RefDb;
   fileSystem: FileSystemLike;
@@ -53,7 +76,7 @@ export interface MediaReclaimDeps {
  * Paged with take/cursor because this candidate set never self-empties the way
  * the downgrade sweep's does: protected media stays a candidate forever.
  */
-export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Promise<ReclaimResult> {
+export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Promise<MediaReclaimResult> {
   const {
     db = prisma,
     fileSystem = fs,
@@ -64,11 +87,18 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
     now = Date.now(),
   } = deps;
 
-  const result = emptyResult(dryRun);
+  const result: MediaReclaimResult = {
+    ...emptyResult(dryRun),
+    retained: { referenced: 0, alreadyReclaimed: 0, raced: 0, unreadableMeta: 0 },
+    strayFiles: 0,
+    graceDays: unpublishedGraceDays,
+    cutoff: "",
+  };
   const graceMs = unpublishedGraceDays * 24 * 60 * 60 * 1000;
   // Full ISO-8601, matching original-downgrade.ts: valid whether the generated
   // client types created_at as String or DateTime.
   const cutoff = new Date(now - graceMs).toISOString();
+  result.cutoff = cutoff;
   const nowDate = new Date(now);
 
   let cursor: string | undefined;
@@ -89,11 +119,13 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
       const meta = parseMeta(m.media_meta);
       if (!meta) {
         result.failed++;
+        result.retained.unreadableMeta++;
         console.error(`[media-reclaim] Unparseable media_meta for ${m.id}`);
         continue;
       }
       if (meta.reclaimed?.files) {
         result.skipped++;
+        result.retained.alreadyReclaimed++;
         continue;
       }
 
@@ -101,6 +133,7 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
       // deleted-content class and its clock, not this one.
       if (await hasAnyReference(db, m.id)) {
         result.skipped++;
+        result.retained.referenced++;
         continue;
       }
 
@@ -110,7 +143,7 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
           ? fileSystem.readdirSync(dir).filter((name) => name !== META_MIRROR)
           : [];
 
-        const { bytesFreed, applied } = await performReclaim(
+        const { bytesFreed, applied, strays } = await performReclaim(
           {
             mediaId: m.id,
             mediaUrl: m.media_url,
@@ -125,10 +158,15 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
         if (!applied) {
           // Row moved under us; nothing was deleted. Not a failure — replanned next sweep.
           result.skipped++;
+          result.retained.raced++;
           continue;
         }
         result.bytesFreed += bytesFreed;
         result.reclaimed++;
+        if (strays.length > 0) {
+          result.strayFiles += strays.length;
+          console.error(`[media-reclaim] ${m.id}: could not remove ${strays.join(", ")}`);
+        }
       } catch (e) {
         result.failed++;
         console.error(`[media-reclaim] Failed for media ${m.id}:`, (e as Error).message);
@@ -136,15 +174,30 @@ export async function runMediaReclaim(deps: Partial<MediaReclaimDeps> = {}): Pro
     }
   }
 
-  if (result.scanned > 0) console.log(formatResult("media-reclaim", result));
+  // Logged unconditionally: this job is triggered by hand as often as by cron,
+  // and "it did nothing" must be distinguishable from "it never ran".
+  console.log(summarize(result));
+  if (result.strayFiles > 0) {
+    console.error(
+      `[media-reclaim] ${result.strayFiles} file(s) survived removal — is ${mediaDir} writable?`
+    );
+  }
   return result;
 }
 
 export function createMediaReclaimWorker(): Worker {
   return new Worker(
     "media-reclaim",
-    async () => {
-      await runMediaReclaim();
+    async (job) => {
+      const result = await runMediaReclaim();
+      // Two different Bull Board panels: `job.log` fills the Logs tab, the
+      // return value fills the Return Value tab. Discarding either leaves an
+      // operator staring at a blank panel after a manual run.
+      await job.log(summarize(result));
+      if (result.strayFiles > 0) {
+        await job.log(`WARNING: ${result.strayFiles} file(s) survived removal — is the media volume writable?`);
+      }
+      return result;
     },
     { connection: redisConnection }
   );
