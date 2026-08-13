@@ -1,6 +1,6 @@
 # Vopley.net
 
-Twitter/X-style social network ("shouts" = posts), Russian-language UI.
+Social network for GAYnmers and mentally ill people
 
 **Stack:** React 18 + TypeScript + Vite · Node.js + Express + Prisma + PostgreSQL · BullMQ + Redis · Docker + Nginx
 
