@@ -60,9 +60,11 @@ Allow a shout or comment to carry an ordered gallery of up to five **images**
 (GIFs and video excluded — see the 2026-07-31 revision) instead of a single
 attachment, rendered inline as a single-item-at-a-time carousel: a fixed
 1:1-square, letterboxed frame with edge-anchored arrows, a position indicator,
-and infinite looping navigation, always opening on the first uploaded item.
+and infinite looping navigation, opening on the first uploaded item on a fresh
+mount and staying synced to wherever the fullscreen viewer was left otherwise
+(2026-08-15 revision — see spec.md Session 2026-08-15).
 Activating the currently-displayed item still opens the existing single-image
-fullscreen viewer, unchanged. There is no separate fullscreen-specific
+fullscreen viewer. There is no separate fullscreen-specific
 navigation layer — the previously-planned Stage 2 is dropped, since the inline
 carousel already delivers that browsing value.
 
@@ -287,7 +289,7 @@ web/
 │   ├── ShoutCard.tsx                 # reply composer (SEPARATE impl) + gallery preview; opens viewer
 │   ├── Lightbox.tsx                  # Reused as-is, permanently — no multi-item nav ever added (Stage 2 dropped 2026-07-31, D20); 2026-07-30: also opened on a pending item's local object URL
 │   ├── GalleryGrid.tsx               # RETIRED 2026-07-31 — deleted; replaced by GalleryCarousel.tsx
-│   ├── GalleryCarousel.tsx           # NEW (2026-07-31) — fixed 1:1-square letterboxed frame, one item at a time, edge-anchored arrows, looping, position indicator (FR-012, FR-014, FR-042–FR-044); always opens on index 0
+│   ├── GalleryCarousel.tsx           # NEW (2026-07-31) — fixed 1:1-square letterboxed frame, one item at a time, edge-anchored arrows, looping, position indicator (FR-012, FR-014, FR-042–FR-044); opens on index 0 on a fresh mount, controlled `index`/`onIndexChange` props keep it synced with Lightbox otherwise (2026-08-15)
 │   ├── PendingMediaStrip.tsx         # NEW (2026-07-30) — bordered/divided horizontal-scroll pending-item preview, shared by both composers; renders remove-X + click-to-Lightbox per tile
 │   └── EmojiPicker.tsx / GifPicker.tsx  # FR-035 gate — PERMANENT as of 2026-07-31, never lifted; gate fixed to also block a 2nd GIF once one is attached, for either GIF source (closes the client-side stacking gap; server-side gap for uploaded animated GIFs closed alongside it, see attachments.js)
 ├── hooks/

@@ -700,9 +700,12 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
     user && comment.likedBy ? comment.likedBy.includes(user.id) : false
   );
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  // Which gallery tile is open full size, if any (feature 006, FR-036).
-  // Separate from `lightboxOpen` so the single-media path is untouched.
-  const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
+  // Gallery position, synced live with the fullscreen viewer while it's open
+  // (feature 006, FR-036) so the inline carousel resumes where the reader left
+  // off instead of always resetting to the first item. `galleryOpen` is
+  // separate so the single-media path (`lightboxOpen`) stays untouched.
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [ytLoaded, setYtLoaded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -893,7 +896,13 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {/* Gallery of 2+ items on a comment — identical treatment to shouts (FR-031). */}
           {showMedia && comment.gallery && comment.gallery.length > 1 ? (
-            <GalleryCarousel items={comment.gallery} maxHeight={200} onOpen={setGalleryIndex} />
+            <GalleryCarousel
+              items={comment.gallery}
+              maxHeight={200}
+              index={galleryIndex}
+              onIndexChange={setGalleryIndex}
+              onOpen={() => setGalleryOpen(true)}
+            />
           ) : showMedia && comment.media?.type === 'image' && (
             <div className="mb-2 rounded-lg">
               <img
@@ -908,11 +917,12 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             <MediaPlaceholder className="mb-2" />
           )}
 
-          {galleryIndex !== null && comment.gallery?.[galleryIndex] && (
+          {galleryOpen && comment.gallery?.[galleryIndex] && (
             <Lightbox
               items={comment.gallery}
               startIndex={galleryIndex}
-              onClose={() => setGalleryIndex(null)}
+              onIndexChange={setGalleryIndex}
+              onClose={() => setGalleryOpen(false)}
             />
           )}
 
@@ -1056,9 +1066,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  // Which gallery tile is open full size, if any (feature 006, FR-036).
-  // Separate from `lightboxOpen` so the single-media path is untouched.
-  const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
+  // Gallery position, synced live with the fullscreen viewer while it's open
+  // (feature 006, FR-036) so the inline carousel resumes where the reader left
+  // off instead of always resetting to the first item. `galleryOpen` is
+  // separate so the single-media path (`lightboxOpen`) stays untouched.
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [ytLoaded, setYtLoaded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1397,7 +1410,9 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
         <GalleryCarousel
           items={shout.gallery}
           maxHeight={300}
-          onOpen={setGalleryIndex}
+          index={galleryIndex}
+          onIndexChange={setGalleryIndex}
+          onOpen={() => setGalleryOpen(true)}
         />
       ) : shout.media?.type === 'image' && (
          <div className="mb-2 rounded-lg">
@@ -1409,11 +1424,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
          </div>
       )}
 
-      {galleryIndex !== null && shout.gallery?.[galleryIndex] && (
+      {galleryOpen && shout.gallery?.[galleryIndex] && (
         <Lightbox
           items={shout.gallery}
           startIndex={galleryIndex}
-          onClose={() => setGalleryIndex(null)}
+          onIndexChange={setGalleryIndex}
+          onClose={() => setGalleryOpen(false)}
         />
       )}
 

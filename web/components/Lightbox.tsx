@@ -16,6 +16,10 @@ interface LightboxProps {
   items?: GalleryItem[];
   /** Initial index into `items`. Only meaningful in gallery mode. */
   startIndex?: number;
+  /** Fires with the current index whenever it changes. Only meaningful in
+   *  gallery mode — lets an inline carousel this Lightbox was opened from
+   *  stay synced to wherever the reader left off. */
+  onIndexChange?: (index: number) => void;
 }
 
 // EXIF orientation (1–8) → CSS transform that renders the image upright.
@@ -53,13 +57,17 @@ const AXIS_LOCK_THRESHOLD = 8;
 // it instead of sitting static on screen until the whole thing unmounts.
 const CLOSING_FADE_MS = 100;
 
-const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, orientation, items, startIndex }) => {
+const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, orientation, items, startIndex, onIndexChange }) => {
   const galleryMode = !!(items && items.length > 0);
   const length = galleryMode ? items!.length : 0;
 
   const [currentIndex, setCurrentIndex] = useState(() =>
     galleryMode ? Math.min(Math.max(startIndex ?? 0, 0), items!.length - 1) : 0
   );
+
+  useEffect(() => {
+    if (galleryMode) onIndexChange?.(currentIndex);
+  }, [galleryMode, currentIndex, onIndexChange]);
   const [neighborsMounted, setNeighborsMounted] = useState(false);
   // Set once a swipe-dismiss has committed, so the arrows/indicator fade out
   // fast (CLOSING_FADE_MS) instead of lingering, static, for the full 300ms
@@ -551,13 +559,6 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
                 draggable={false}
                 style={imgStyle}
               />
-              <button
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold pointer-events-auto"
-              >
-                X
-              </button>
             </div>
           </div>
           {neighborsMounted && (
@@ -575,13 +576,6 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
             draggable={false}
             style={imgStyle}
           />
-          <button
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="absolute -top-3 -right-3 w-8 h-8 bg-th-input border border-th-border rounded-full flex items-center justify-center text-th-text-2 hover:text-th-text hover:bg-th-elevated text-sm font-bold pointer-events-auto"
-          >
-            X
-          </button>
         </div>
       )}
 
