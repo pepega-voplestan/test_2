@@ -360,6 +360,9 @@ const ShoutFeed: React.FC = () => {
     } else {
       window.scrollTo(0, 0);
     }
+    // restoreState is stable after mount (set once via useState's lazy
+    // initializer); only `restoring` flipping is meant to re-trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restoring]);
 
   // Saves the reader's current position (which shout is at the top, and how
