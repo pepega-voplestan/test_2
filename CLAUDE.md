@@ -92,5 +92,5 @@ make prod             # Docker production (ports 80/443)
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/009-anchor-scroll-restore/plan.md
+at specs/010-donation-footer/plan.md
 <!-- SPECKIT END -->
