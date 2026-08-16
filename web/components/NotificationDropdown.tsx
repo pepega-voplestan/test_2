@@ -65,6 +65,11 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification: n, on
     markAsRead(n.id);
     if (e.button === 1 || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
+    // stopPropagation is required, not optional: App.tsx also has a global
+    // <a> click interceptor that would otherwise ALSO fire on this same
+    // click and navigateTo() a second time, double-pushing history — Назад
+    // would then need two clicks (the first just pops the duplicate entry).
+    e.stopPropagation();
     if (n.shoutId) {
       const path = n.commentId
         ? `/shout/${n.shoutId}?comment=${n.commentId}`

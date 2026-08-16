@@ -347,6 +347,31 @@ describe("ShoutFeed — anchor-based scroll position restore across navigation (
     expect(sessionStorage.getItem(FEED_SCROLL_STORAGE_KEY)).toBeNull();
   });
 
+  it("attaches infinite-scroll pagination after a restore completes (regression: sentinel doesn't exist yet on the first effect run while restoring)", async () => {
+    // The sentinel <div ref={loaderRef}> only renders in the non-restoring
+    // branch, so on a restore-from-anchor mount the IntersectionObserver
+    // effect's first run finds loaderRef still null and bails out. Without
+    // `restoring` in that effect's deps, it never gets a second chance once
+    // the real sentinel actually mounts — auto-load-more pagination would
+    // stay silently dead for the rest of that page's lifetime.
+    class TrackingIntersectionObserver {
+      static observeCalls = 0;
+      constructor(_cb: IntersectionObserverCallback) {}
+      observe() { TrackingIntersectionObserver.observeCalls++; }
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("IntersectionObserver", TrackingIntersectionObserver);
+
+    sessionStorage.setItem(FEED_SCROLL_STORAGE_KEY, JSON.stringify(makeAnchor({ shoutId: "a1" })));
+    mockFetchShouts([makeShout({ id: "a1" })]);
+
+    render(<ShoutFeed />, { wrapper });
+    await screen.findByTestId("shout-a1");
+
+    await vi.waitFor(() => expect(TrackingIntersectionObserver.observeCalls).toBeGreaterThan(0));
+  });
+
   it("scrolls to an estimated position immediately on mount — before any network fetch resolves — then corrects once the anchor actually renders", async () => {
     // This is what eliminates the flash-to-top: the estimate (derived
     // synchronously from the saved anchor's approxItemsAbove, not from

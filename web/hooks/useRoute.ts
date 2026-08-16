@@ -75,7 +75,10 @@ export function navigateTo(path: string) {
 // was itself reached via navigateTo, so there's guaranteed to be something
 // behind it), falling back to the feed for direct/external entries — e.g. a
 // shared permalink opened in a fresh tab, where history.back() would leave
-// the app entirely rather than land anywhere useful.
+// the app entirely rather than land anywhere useful. Applies uniformly
+// regardless of how the current entry was reached (including from a
+// notification) — real back navigation is the more consistent UX than
+// special-casing any particular entry point.
 export function goBack() {
   const inApp = (window.history.state as { inApp?: boolean } | null)?.inApp;
   if (inApp) {

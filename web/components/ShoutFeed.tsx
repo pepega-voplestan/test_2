@@ -5,6 +5,7 @@ import { Shout, Comment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useSSE } from '../hooks/useSSE';
+import { scrollToAnchorWhenRendered } from '../utils/scrollAnchor';
 
 const PAGE_SIZE = 25;
 
@@ -69,27 +70,6 @@ function readPendingRestore(): SavedFeedAnchor | null {
   } catch {
     return null;
   }
-}
-
-// Waits for the anchor shout's DOM node to actually be rendered (shoutRefs
-// is populated by ref callbacks during commit, which lands slightly after
-// the state update that added the shout to `shouts`), then scrolls so its
-// top edge lands at `offsetFromTop` — the only way to get the real position,
-// since it depends on the rendered height of everything above it. Gives up
-// at `deadline` regardless (a slow/failed render never hangs this forever).
-function scrollToAnchorWhenRendered(
-  shoutRefs: Map<string, HTMLDivElement>,
-  shoutId: string,
-  offsetFromTop: number,
-  deadline: number
-) {
-  const el = shoutRefs.get(shoutId);
-  if (el) {
-    window.scrollBy(0, el.getBoundingClientRect().top - offsetFromTop);
-    return;
-  }
-  if (Date.now() >= deadline) return;
-  requestAnimationFrame(() => scrollToAnchorWhenRendered(shoutRefs, shoutId, offsetFromTop, deadline));
 }
 
 const QUOTE_MAX_LEN = 150;
@@ -387,7 +367,12 @@ const ShoutFeed: React.FC = () => {
     };
   }, []);
 
-  // Infinite scroll: trigger fetchShouts when the sentinel enters the viewport
+  // Infinite scroll: trigger fetchShouts when the sentinel enters the viewport.
+  // Depends on `restoring` too, not just the (stable) fetchShouts: the
+  // sentinel only exists in the non-restoring render branch above, so on a
+  // restore-from-anchor mount this effect's first run finds loaderRef still
+  // null and gives up for good, unless it gets a second run once the
+  // placeholder is swapped for the real content and the sentinel mounts.
   useEffect(() => {
     const el = loaderRef.current;
     if (!el) return;
@@ -401,7 +386,7 @@ const ShoutFeed: React.FC = () => {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [fetchShouts]);
+  }, [fetchShouts, restoring]);
 
   const handleTabChange = (newTab: FeedTab) => {
     if (newTab === activeTab) return;

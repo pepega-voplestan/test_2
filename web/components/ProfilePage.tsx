@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { UserProfile, Shout, Comment, User, SocialDto } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -9,6 +9,7 @@ import ShoutCard from './ShoutCard';
 import AvatarUpload from './AvatarUpload';
 import Lightbox from './Lightbox';
 import { ProfileSocialsDisplay, ProfileSocialsEditor } from './ProfileSocials';
+import { scrollToAnchorWhenRendered } from '../utils/scrollAnchor';
 
 interface ProfilePageProps {
   userId: string;
@@ -18,6 +19,37 @@ const PAGE_SIZE = 10;
 const USERNAME_RE = /^[A-Za-zА-Яа-яЁё0-9\-_ ]+$/;
 const HAS_LATIN = /[A-Za-z]/;
 const HAS_CYRILLIC = /[А-Яа-яЁё]/;
+
+// Identity-based scroll restoration scoped to a single profile's own shout
+// list — same mechanism as ShoutFeed's (specs/009-anchor-scroll-restore),
+// deliberately kept on its own storage key so it never interacts with the
+// main feed's restoration. "ONLY IF IN PROFILE": readPendingProfileRestore
+// validates the saved userId against the profile actually being viewed, so
+// returning to a DIFFERENT profile (or the feed) never applies it.
+const ANCHOR_SEARCH_LIMIT_PAGES = 8;
+const AVERAGE_CARD_HEIGHT_ESTIMATE_PX = 150;
+export const PROFILE_SCROLL_STORAGE_KEY = 'profileScrollState';
+
+interface SavedProfileAnchor {
+  kind: 'profile-anchor';
+  userId: string;
+  shoutId: string;
+  offsetFromTop: number;
+  approxItemsAbove: number;
+}
+
+function readPendingProfileRestore(userId: string): SavedProfileAnchor | null {
+  const raw = sessionStorage.getItem(PROFILE_SCROLL_STORAGE_KEY);
+  try {
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && parsed.kind === 'profile-anchor' && parsed.userId === userId && typeof parsed.shoutId === 'string') {
+      return parsed as SavedProfileAnchor;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const { user, refresh } = useAuth();
@@ -35,6 +67,20 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const offsetRef = useRef(0);
+
+  // Scroll-restore anchor state (see the module-level comment above). Read
+  // once via lazy initializer so it's available on the very first render —
+  // guarded against going stale by `activeRestoreState` below if `userId`
+  // ever changes without an actual unmount (e.g. navigating profile→profile
+  // via a link, not through a shout).
+  const [restoreState] = useState<SavedProfileAnchor | null>(() => readPendingProfileRestore(userId));
+  const activeRestoreState = restoreState && restoreState.userId === userId ? restoreState : null;
+  const [restoring, setRestoring] = useState(!!activeRestoreState);
+  const anchorFoundRef = useRef(false);
+  const shoutRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const shoutsRef = useRef<Shout[]>([]);
+  shoutsRef.current = shouts;
+  const liveAnchorRef = useRef<{ shoutId: string; offsetFromTop: number } | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -139,7 +185,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   }, [userId]);
 
   // Fetch user shouts
-  const fetchShouts = useCallback(async (reset = false) => {
+  // Returns what this call actually loaded (not just void) so the
+  // scroll-restore effect below can drive its own paging search loop
+  // without depending on React state having re-rendered yet — mirrors
+  // ShoutFeed's fetchShouts contract exactly.
+  const fetchShouts = useCallback(async (reset = false): Promise<{ hasMore: boolean; shouts: Shout[] }> => {
     const currentOffset = reset ? 0 : offsetRef.current;
 
     if (reset) {
@@ -163,20 +213,127 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
       setShouts(prev => reset ? data.shouts : [...prev, ...data.shouts]);
       setHasMore(data.hasMore);
       offsetRef.current = currentOffset + data.shouts.length;
+      return { hasMore: !!data.hasMore, shouts: data.shouts as Shout[] };
     } catch (err) {
       console.error('[ProfilePage] Shout fetch error:', err);
+      return { hasMore: false, shouts: [] };
     } finally {
       setIsLoadingShouts(false);
       setIsLoadingMore(false);
     }
   }, [userId]);
 
-  // Load shouts after profile is loaded
-  useEffect(() => {
-    if (profile) {
-      fetchShouts(true);
+  // Scrolls to an ESTIMATED position immediately, before the first paint —
+  // mirrors ShoutFeed's identical effect. UX nicety only; the correction
+  // effect below (once the real anchor shout renders) supplies the exact
+  // position.
+  useLayoutEffect(() => {
+    if (activeRestoreState) {
+      window.scrollTo(0, activeRestoreState.approxItemsAbove * AVERAGE_CARD_HEIGHT_ESTIMATE_PX + window.innerHeight);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Tracks which shout is currently anchoring the top of the viewport while
+  // mounted — read by the unmount-save effect below instead of measuring
+  // anything at unmount time itself (too late; see ShoutFeed's identical
+  // effect for the full reasoning).
+  useEffect(() => {
+    let rafId: number | null = null;
+    const recomputeAnchor = () => {
+      rafId = null;
+      let atOrPastTop: { shoutId: string; offsetFromTop: number } | null = null;
+      let topmostOverall: { shoutId: string; offsetFromTop: number } | null = null;
+      for (const [id, el] of shoutRefs.current) {
+        const top = el.getBoundingClientRect().top;
+        if (top <= 0 && (atOrPastTop === null || top > atOrPastTop.offsetFromTop)) {
+          atOrPastTop = { shoutId: id, offsetFromTop: top };
+        }
+        if (topmostOverall === null || top < topmostOverall.offsetFromTop) {
+          topmostOverall = { shoutId: id, offsetFromTop: top };
+        }
+      }
+      liveAnchorRef.current = atOrPastTop ?? topmostOverall;
+    };
+    recomputeAnchor();
+
+    const onScroll = () => {
+      if (rafId === null) rafId = requestAnimationFrame(recomputeAnchor);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  // Load shouts after profile is loaded — restores the reader's previous
+  // position within THIS profile's list by identity if returning to it
+  // (e.g. via "Назад" from one of this profile's shouts), otherwise loads
+  // the first page fresh. Mirrors ShoutFeed's own restore effect.
+  useEffect(() => {
+    if (!profile) return;
+    if (!activeRestoreState) {
+      sessionStorage.removeItem(PROFILE_SCROLL_STORAGE_KEY);
+      fetchShouts(true);
+      return;
+    }
+
+    (async () => {
+      let pagesLoaded = 0;
+      let { hasMore: more, shouts: pageItems } = await fetchShouts(true);
+      pagesLoaded++;
+      let found = pageItems.some(s => s.id === activeRestoreState.shoutId);
+      while (!found && more && pagesLoaded < ANCHOR_SEARCH_LIMIT_PAGES) {
+        ({ hasMore: more, shouts: pageItems } = await fetchShouts(false));
+        pagesLoaded++;
+        found = pageItems.some(s => s.id === activeRestoreState.shoutId);
+      }
+      sessionStorage.removeItem(PROFILE_SCROLL_STORAGE_KEY);
+      anchorFoundRef.current = found;
+      setRestoring(false);
+    })();
+    // activeRestoreState is derived from state that's stable per userId
+    // "session" (see its own comment above); only profile/fetchShouts
+    // actually changing should re-trigger this, same as the effect it
+    // replaces.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, fetchShouts]);
+
+  // Once the placeholder is swapped for real content: if the anchor was
+  // found, wait for its real DOM node and correct to its exact position;
+  // otherwise land at the top, same as a fresh visit. Mirrors ShoutFeed's
+  // identical correction effect.
+  useLayoutEffect(() => {
+    if (restoring || !activeRestoreState) return;
+    if (anchorFoundRef.current) {
+      scrollToAnchorWhenRendered(shoutRefs.current, activeRestoreState.shoutId, activeRestoreState.offsetFromTop, Date.now() + 2000);
+    } else {
+      window.scrollTo(0, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoring]);
+
+  // Saves the reader's current position within this profile's list whenever
+  // it unmounts or userId changes (e.g. navigating into one of its shouts) —
+  // see the restore effects above. Keyed on userId (a prop, not a ref) so a
+  // profile→profile switch without an unmount still saves under the correct
+  // (soon-to-be-previous) userId rather than a stale one.
+  useEffect(() => {
+    return () => {
+      const anchor = liveAnchorRef.current;
+      if (!anchor) return;
+      const approxItemsAbove = Math.max(0, shoutsRef.current.findIndex(s => s.id === anchor.shoutId));
+      const saved: SavedProfileAnchor = {
+        kind: 'profile-anchor',
+        userId,
+        shoutId: anchor.shoutId,
+        offsetFromTop: anchor.offsetFromTop,
+        approxItemsAbove,
+      };
+      sessionStorage.setItem(PROFILE_SCROLL_STORAGE_KEY, JSON.stringify(saved));
+    };
+  }, [userId]);
 
   // Comment callback
   const addCommentToShout = useCallback((shoutId: string, comment: Comment) => {
@@ -798,55 +955,77 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
         {profile.isOwner ? 'Мои вопли' : `Вопли ${profile.name}`}
       </h2>
 
-      {/* Shouts loading */}
-      {isLoadingShouts && shouts.length === 0 && (
-        <div className="flex justify-center py-8">
+      {restoring && activeRestoreState ? (
+        // Stands in for the shouts list below while paging back up to the
+        // reader's previous position — mirrors ShoutFeed's identical
+        // placeholder (see the restore effects above).
+        <div
+          data-testid="profile-scroll-restore-placeholder"
+          style={{ minHeight: activeRestoreState.approxItemsAbove * AVERAGE_CARD_HEIGHT_ESTIMATE_PX + window.innerHeight }}
+          className="flex justify-center pt-8"
+        >
           <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
         </div>
-      )}
+      ) : (
+        <>
+          {/* Shouts loading */}
+          {isLoadingShouts && shouts.length === 0 && (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+            </div>
+          )}
 
-      {/* Empty state */}
-      {!isLoadingShouts && shouts.length === 0 && (
-        <div className="text-center text-th-text-4 text-sm py-8">
-          {profile.isOwner ? 'Вы ещё ничего не написали' : 'Пользователь ещё ничего не написал'}
-        </div>
-      )}
+          {/* Empty state */}
+          {!isLoadingShouts && shouts.length === 0 && (
+            <div className="text-center text-th-text-4 text-sm py-8">
+              {profile.isOwner ? 'Вы ещё ничего не написали' : 'Пользователь ещё ничего не написал'}
+            </div>
+          )}
 
-      {/* Shouts list */}
-      <div className="flex flex-col gap-3">
-        {shouts.map((shout) => (
-          <div key={shout.id} className="bg-th-feed rounded-xl px-5 py-4">
-            <ShoutCard
-              shout={shout}
-              showMedia={prefs.showMedia}
-              onCommentAdded={addCommentToShout}
-              onDelete={removeShout}
-              onCommentDeleted={removeComment}
-              isThreadOpen={openThreadId === shout.id}
-              onThreadToggle={handleThreadToggle}
-            />
+          {/* Shouts list */}
+          <div className="flex flex-col gap-3">
+            {shouts.map((shout) => (
+              <div
+                key={shout.id}
+                ref={(el) => {
+                  if (el) shoutRefs.current.set(shout.id, el);
+                  else shoutRefs.current.delete(shout.id);
+                }}
+                className="bg-th-feed rounded-xl px-5 py-4"
+              >
+                <ShoutCard
+                  shout={shout}
+                  showMedia={prefs.showMedia}
+                  onCommentAdded={addCommentToShout}
+                  onDelete={removeShout}
+                  onCommentDeleted={removeComment}
+                  isThreadOpen={openThreadId === shout.id}
+                  onThreadToggle={handleThreadToggle}
+                />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Load more */}
-      {hasMore && !isLoadingShouts && (
-        <div className="flex justify-center py-8">
-          <button
-            onClick={() => fetchShouts(false)}
-            disabled={isLoadingMore}
-            className="px-6 py-2 rounded-full border border-th-border text-th-text-3 hover:text-th-text hover:border-th-text-3 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoadingMore ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-th-border border-t-th-text-2 rounded-full animate-spin" />
-                Загрузка...
-              </span>
-            ) : (
-              'Загрузить ещё'
-            )}
-          </button>
-        </div>
+          {/* Load more */}
+          {hasMore && !isLoadingShouts && (
+            <div className="flex justify-center py-8">
+              <button
+                onClick={() => fetchShouts(false)}
+                disabled={isLoadingMore}
+                className="px-6 py-2 rounded-full border border-th-border text-th-text-3 hover:text-th-text hover:border-th-text-3 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoadingMore ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-th-border border-t-th-text-2 rounded-full animate-spin" />
+                    Загрузка...
+                  </span>
+                ) : (
+                  'Загрузить ещё'
+                )}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Confirm ignore modal */}
