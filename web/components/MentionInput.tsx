@@ -39,6 +39,24 @@ interface MentionQuery {
   atNodeOffset: number;
 }
 
+// True for a <br> that is purely the empty-line placeholder a new <div> gets
+// on Enter, left in place by some mobile keyboards (Android Chrome/Gboard)
+// even once real text is typed into that same block — e.g.
+// <div>Line1</div><div><br>Line2</div> for a single Enter press. That <br>
+// is redundant with its parent div's own line break and must not be counted
+// again by anything that already counts one break per <div> — except when
+// the div is the very first top-level one, which by convention counts no
+// break of its own (there is nothing before the first line), so its
+// placeholder <br> is then the ONLY representation of an intentional
+// leading blank line and must still count. Shared by serializeContent and
+// the char-offset helpers below so they can never drift out of sync with
+// each other — a mismatch there would misplace the cursor after any
+// DOM-restructuring operation (mention insert, spoiler wrap, emoji insert).
+function isRedundantLineBr(node: Node): boolean {
+  const parent = node.parentNode;
+  return !!parent && parent.nodeName === 'DIV' && parent.firstChild === node && parent.previousSibling !== null;
+}
+
 // Walk the contenteditable DOM and produce the serialized plain-text string.
 // Mention spans are converted to @[name:id] tokens.
 // \u00A0 (non-breaking spaces used after inserted mentions) become regular spaces.
@@ -47,7 +65,7 @@ function serializeContent(el: HTMLElement): string {
     if (node.nodeType === Node.TEXT_NODE) {
       return (node.textContent ?? '').replace(/\u00A0/g, ' ').replace(/\u200B/g, '');
     }
-    if (node.nodeName === 'BR') return '\n';
+    if (node.nodeName === 'BR') return isRedundantLineBr(node) ? '' : '\n';
     if (node.nodeName === 'SPAN' && (node as HTMLElement).dataset.mentionId) {
       const e = node as HTMLElement;
       return `@[${e.dataset.mentionName}:${e.dataset.mentionId}]`;
@@ -158,7 +176,7 @@ function getCharOffset(root: HTMLElement, range: Range): number {
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
       const tag = el.tagName;
-      if (tag === 'BR') offset += 1;
+      if (tag === 'BR') { if (!isRedundantLineBr(node)) offset += 1; }
       else if (tag === 'DIV' && node !== root && node.previousSibling) offset += 1;
       else if (tag === 'SPAN' && el.dataset.mentionId) {
         offset += (el.textContent ?? '').length;
@@ -193,6 +211,8 @@ function findDOMPosition(root: HTMLElement, targetOffset: number): { node: Node;
         if (remaining <= 0) return { node, offset: 0, before: true };
         if (remaining <= mentionLen) return { node, offset: 0, before: false }; // snap to after
         remaining -= mentionLen;
+      } else if (tag === 'BR' && isRedundantLineBr(node)) {
+        // Contributes no offset — mirrors getCharOffset above.
       } else if (tag === 'BR' || (tag === 'DIV' && node !== root && node.previousSibling)) {
         if (remaining <= 0) return { node, offset: 0, before: true };
         remaining -= 1;
@@ -1094,9 +1114,8 @@ const MentionInput = React.forwardRef<MentionInputHandle, MentionInputProps>((pr
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const saved = editorRef.current?.innerHTML;
-    const files = Array.from(e.dataTransfer.files);
-    const media = files.find(f => f.type.startsWith('image/') || f.type === 'video/mp4');
-    if (media && onImagePaste) onImagePaste(media);
+    // File handling is left to the ancestor form's onDrop (full multi-file +
+    // capacity-cap logic); this handler only guards the contenteditable DOM.
     // Chrome may still mutate the contenteditable DOM after preventDefault (no input event fired).
     // Restore the snapshot so the displayed text matches the preserved React state.
     requestAnimationFrame(() => {

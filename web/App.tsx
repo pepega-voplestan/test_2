@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import Header from './components/Header';
-import ShoutFeed from './components/ShoutFeed';
+import ShoutFeed, { FEED_SCROLL_STORAGE_KEY } from './components/ShoutFeed';
 import ProfilePage from './components/ProfilePage';
 import ShoutPage from './components/ShoutPage';
 import { AuthProvider } from './context/AuthContext';
@@ -15,9 +15,14 @@ import { useRoute, navigateTo } from './hooks/useRoute';
 const App: React.FC = () => {
   const route = useRoute();
 
-  // Reset scroll position when navigating between pages
+  // Reset scroll position when navigating between pages — except when
+  // returning to the feed with a pending scroll-restore (see ShoutFeed's own
+  // save/restore effects): ShoutFeed positions itself in that case, and
+  // resetting here first would fight it.
   const routeKey = route.page === 'profile' ? route.userId : route.page === 'shout' ? route.shoutId : '';
   useEffect(() => {
+    const pending = route.page === 'feed' && sessionStorage.getItem(FEED_SCROLL_STORAGE_KEY);
+    if (pending) return;
     window.scrollTo(0, 0);
   }, [route.page, routeKey]);
 

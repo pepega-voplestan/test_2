@@ -28,6 +28,15 @@ interface GalleryCarouselProps {
    */
   maxHeight: number;
   onOpen?: (index: number) => void;
+  /** Externally-driven position (e.g. wherever the reader left the fullscreen
+   *  viewer this carousel opens into). Uncontrolled — seeds initial state and
+   *  is re-applied whenever it changes, but paging/swiping still updates the
+   *  carousel's own state directly for smooth drag handling. */
+  index?: number;
+  /** Fires whenever the displayed index changes, from either paging or an
+   *  `index` prop update, so a parent can keep e.g. a fullscreen viewer's
+   *  starting position in sync. */
+  onIndexChange?: (index: number) => void;
 }
 
 /**
@@ -63,8 +72,8 @@ interface GalleryCarouselProps {
  * completes visually before the data model — and the now-current image's
  * neighbors — update underneath it.
  */
-const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onOpen }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onOpen, index, onIndexChange }) => {
+  const [currentIndex, setCurrentIndex] = useState(index ?? 0);
   const [neighborsMounted, setNeighborsMounted] = useState(false);
   // Touch devices already have swipe (above) — the arrow buttons are a
   // mouse/trackpad fallback and just eat space on mobile. Same
@@ -85,6 +94,18 @@ const GalleryCarousel: React.FC<GalleryCarouselProps> = ({ items, maxHeight, onO
   useEffect(() => () => {
     if (settleTimer.current !== null) window.clearTimeout(settleTimer.current.id);
   }, []);
+
+  // Re-applies an externally-driven position change (e.g. the fullscreen
+  // viewer this carousel opens into was left on a different item). Skipped
+  // when it already matches so this never fights the drag/swipe handlers,
+  // which update `currentIndex` directly.
+  useEffect(() => {
+    if (index !== undefined && index !== currentIndex) setCurrentIndex(index);
+  }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    onIndexChange?.(currentIndex);
+  }, [currentIndex, onIndexChange]);
 
   // Resetting the track's own transform to neutral used to happen inline in
   // commit() (see endDrag), right after calling goNext()/goPrev() — but that

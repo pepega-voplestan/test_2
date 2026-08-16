@@ -1,5 +1,11 @@
 import { renderHook, act } from "@testing-library/react";
-import { useRoute, navigateTo } from "./useRoute";
+import { useRoute, navigateTo, goBack } from "./useRoute";
+
+// useRoute.ts sets window.history.scrollRestoration = "manual" at module
+// load, guarded by a "scrollRestoration" in window.history feature check —
+// not covered by a test here because jsdom doesn't implement the property
+// at all (it's simply absent, so the guard correctly no-ops), leaving
+// nothing meaningful to assert in this environment.
 
 describe("useRoute", () => {
   afterEach(() => {
@@ -77,5 +83,36 @@ describe("navigateTo", () => {
     });
 
     expect(result.current).toEqual({ page: "profile", userId: "nav-user" });
+  });
+});
+
+describe("goBack", () => {
+  afterEach(() => {
+    history.replaceState(null, "", "/");
+  });
+
+  it("calls history.back() when the current entry was reached via navigateTo", () => {
+    navigateTo("/shout/test-id"); // pushes { inApp: true }
+    const backSpy = vi.spyOn(history, "back").mockImplementation(() => {});
+    const pushSpy = vi.spyOn(history, "pushState");
+
+    goBack();
+
+    expect(backSpy).toHaveBeenCalledTimes(1);
+    expect(pushSpy).not.toHaveBeenCalled();
+    backSpy.mockRestore();
+    pushSpy.mockRestore();
+  });
+
+  it("falls back to navigating to the feed when there is no in-app history (e.g. a direct/shared link)", () => {
+    // No prior navigateTo call — simulates landing directly on a permalink.
+    history.replaceState(null, "", "/shout/test-id");
+    const backSpy = vi.spyOn(history, "back").mockImplementation(() => {});
+
+    goBack();
+
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/");
+    backSpy.mockRestore();
   });
 });

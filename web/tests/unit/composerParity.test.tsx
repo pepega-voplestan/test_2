@@ -162,9 +162,14 @@ describe('gallery rendering — single-item carousel (FR-012, FR-031, FR-036, re
   });
 
   it('opens the viewer on the activated tile rather than always the first (FR-036)', () => {
-    expect(shoutCard).toMatch(/onOpen=\{setGalleryIndex\}/);
-    expect(shoutCard).toMatch(/galleryIndex !== null && shout\.gallery\?\.\[galleryIndex\]/);
-    expect(shoutCard).toMatch(/galleryIndex !== null && comment\.gallery\?\.\[galleryIndex\]/);
+    expect(shoutCard).toMatch(/onOpen=\{\(\) => setGalleryOpen\(true\)\}/);
+    expect(shoutCard).toMatch(/galleryOpen && shout\.gallery\?\.\[galleryIndex\]/);
+    expect(shoutCard).toMatch(/galleryOpen && comment\.gallery\?\.\[galleryIndex\]/);
+  });
+
+  it('keeps the inline carousel synced to wherever the fullscreen viewer was left (FR-036 sync)', () => {
+    expect(shoutCard).toMatch(/index=\{galleryIndex\}[\s\S]{0,40}onIndexChange=\{setGalleryIndex\}/);
+    expect(shoutCard).toMatch(/startIndex=\{galleryIndex\}[\s\S]{0,40}onIndexChange=\{setGalleryIndex\}/);
   });
 
   it('no longer branches on animated/gif for gallery items, since galleries are images-only', () => {

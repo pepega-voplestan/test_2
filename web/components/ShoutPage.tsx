@@ -8,7 +8,7 @@ function clientSnippet(content: string): string {
   const stripped = masked.replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').replace(/\s+/g, ' ').trim();
   return stripped.length > QUOTE_MAX_LEN ? stripped.slice(0, QUOTE_MAX_LEN) + '…' : stripped;
 }
-import { navigateTo } from '../hooks/useRoute';
+import { goBack } from '../hooks/useRoute';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../hooks/useSSE';
@@ -223,7 +223,7 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
   return (
     <div>
       <button
-        onClick={() => navigateTo('/')}
+        onClick={goBack}
         className="flex items-center gap-1.5 text-sm text-th-text-3 hover:text-th-text transition-colors mb-4"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
