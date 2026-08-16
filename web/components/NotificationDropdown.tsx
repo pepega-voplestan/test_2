@@ -4,6 +4,7 @@ import { useNotifications } from '../context/NotificationsContext';
 import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
+import DonationModal from './DonationModal';
 
 interface AnnouncementItem {
   id: string;
@@ -128,6 +129,7 @@ const NotificationDropdown: React.FC = () => {
   const [announcementLoading, setAnnouncementLoading] = useState(false);
   const [announcementError, setAnnouncementError] = useState<string | null>(null);
   const announcementFetched = useRef(false);
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
 
   useScrollLock(isOpen);
 
@@ -173,6 +175,10 @@ const NotificationDropdown: React.FC = () => {
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
+      // DonationModal is portaled to document.body, outside dropdownRef — while
+      // it's open, clicks on it (e.g. its backdrop) must not also close this
+      // dropdown out from under it.
+      if (isDonationModalOpen) return;
       if (
         buttonRef.current?.contains(e.target as Node) ||
         dropdownRef.current?.contains(e.target as Node)
@@ -186,7 +192,7 @@ const NotificationDropdown: React.FC = () => {
       document.removeEventListener('mousedown', handler);
       window.removeEventListener('resize', closeOnResize);
     };
-  }, [isOpen]);
+  }, [isOpen, isDonationModalOpen]);
 
   // IntersectionObserver on sentinel
   useEffect(() => {
@@ -301,69 +307,86 @@ const NotificationDropdown: React.FC = () => {
 
           {/* Announcements tab */}
           {tab === 'announcements' && (
-            <div className="max-h-[480px] overflow-y-auto">
-              {/* Fixed header — Центральный документ */}
-              <div className="px-4 pt-4 pb-3 border-b border-th-border-2">
-                <div className="text-xs font-bold uppercase tracking-widest text-th-text-3 mb-1">Анонсы / Изменения</div>
-                <p className="text-[15px] text-th-text-3 leading-snug">
-                  <strong className="text-th-text font-medium">Центральный документ</strong> с багами, фичами и направлением:{' '}
-                  <a
-                    href={DOC_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#8fb4ff] hover:underline"
-                  >
-                    открыть таблицу
-                  </a>
-                </p>
+            <div className="flex flex-col">
+              <div className="max-h-[400px] overflow-y-auto">
+                {/* Fixed header — Центральный документ */}
+                <div className="px-4 pt-4 pb-3 border-b border-th-border-2">
+                  <div className="text-xs font-bold uppercase tracking-widest text-th-text-3 mb-1">Анонсы / Изменения</div>
+                  <p className="text-[15px] text-th-text-3 leading-snug">
+                    <strong className="text-th-text font-medium">Центральный документ</strong> с багами, фичами и направлением:{' '}
+                    <a
+                      href={DOC_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#8fb4ff] hover:underline"
+                    >
+                      открыть таблицу
+                    </a>
+                  </p>
+                </div>
+
+                {announcementLoading && (
+                  <div className="flex justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+                  </div>
+                )}
+                {!announcementLoading && announcementError && (
+                  <div className="py-8 text-center text-sm text-red-400">{announcementError}</div>
+                )}
+                {!announcementLoading && !announcementError && announcementItems.length === 0 && (
+                  <div className="py-8 text-center text-sm text-th-text-3">Нет объявлений</div>
+                )}
+                {!announcementLoading && announcementItems.map((item) => (
+                  <div key={item.id} className="px-4 py-4 border-b border-th-border-2 last:border-b-0">
+                    <div className="inline-block bg-th-input text-th-text-3 border border-th-border rounded-full px-2 py-0.5 text-xs font-bold mb-2">
+                      {new Date(item.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </div>
+                    <h3 className="text-base font-semibold text-th-text mb-2">{item.title}</h3>
+                    <div className="text-[15px] text-th-text-2 leading-relaxed prose-announcement">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                          strong: ({ children }) => <strong className="font-semibold text-th-text">{children}</strong>,
+                          em: ({ children }) => <em className="italic">{children}</em>,
+                          ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+                          li: ({ children }) => <li>{children}</li>,
+                          code: ({ children }) => <code className="bg-th-input text-th-text-3 px-1 py-0.5 rounded text-[13px] font-mono">{children}</code>,
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#8fb4ff] hover:underline">
+                              {children}
+                            </a>
+                          ),
+                          h1: ({ children }) => <h1 className="text-base font-bold text-th-text mt-3 mb-1">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-base font-semibold text-th-text mt-3 mb-1">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-sm font-semibold text-th-text mt-2 mb-1">{children}</h3>,
+                        }}
+                      >
+                        {item.content}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {announcementLoading && (
-                <div className="flex justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
-                </div>
-              )}
-              {!announcementLoading && announcementError && (
-                <div className="py-8 text-center text-sm text-red-400">{announcementError}</div>
-              )}
-              {!announcementLoading && !announcementError && announcementItems.length === 0 && (
-                <div className="py-8 text-center text-sm text-th-text-3">Нет объявлений</div>
-              )}
-              {!announcementLoading && announcementItems.map((item) => (
-                <div key={item.id} className="px-4 py-4 border-b border-th-border-2 last:border-b-0">
-                  <div className="inline-block bg-th-input text-th-text-3 border border-th-border rounded-full px-2 py-0.5 text-xs font-bold mb-2">
-                    {new Date(item.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </div>
-                  <h3 className="text-base font-semibold text-th-text mb-2">{item.title}</h3>
-                  <div className="text-[15px] text-th-text-2 leading-relaxed prose-announcement">
-                    <ReactMarkdown
-                      components={{
-                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                        strong: ({ children }) => <strong className="font-semibold text-th-text">{children}</strong>,
-                        em: ({ children }) => <em className="italic">{children}</em>,
-                        ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
-                        li: ({ children }) => <li>{children}</li>,
-                        code: ({ children }) => <code className="bg-th-input text-th-text-3 px-1 py-0.5 rounded text-[13px] font-mono">{children}</code>,
-                        a: ({ href, children }) => (
-                          <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#8fb4ff] hover:underline">
-                            {children}
-                          </a>
-                        ),
-                        h1: ({ children }) => <h1 className="text-base font-bold text-th-text mt-3 mb-1">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-base font-semibold text-th-text mt-3 mb-1">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-sm font-semibold text-th-text mt-2 mb-1">{children}</h3>,
-                      }}
-                    >
-                      {item.content}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              ))}
+              {/* Outside the scroll area so it stays pinned, not scrolled past (FR-010) */}
+              <div className="shrink-0 px-4 pt-3 pb-4 border-t border-th-border text-center">
+                <p className="text-sm text-th-text-3 mb-2">
+                  Хотите чтобы вопли жили? Поддержать проект можно здесь:
+                </p>
+                <button
+                  onClick={() => setIsDonationModalOpen(true)}
+                  className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
+                >
+                  Поддержать
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
+
+      <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
     </div>
   );
 };
