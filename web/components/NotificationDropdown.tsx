@@ -4,6 +4,7 @@ import { useNotifications } from '../context/NotificationsContext';
 import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
+import { notifDiag } from '../utils/notifDiag'; // TEMP DIAG
 import DonationModal from './DonationModal';
 
 interface AnnouncementItem {
@@ -163,6 +164,14 @@ const NotificationDropdown: React.FC = () => {
       return newItems.length > 0 ? [...patched, ...newItems] : patched;
     });
   }, [isOpen, sortedNotifications]);
+
+  // TEMP DIAG: only meaningful while open — frozenList is empty whenever the
+  // dropdown is closed, which would otherwise report every entry as missing.
+  useEffect(() => {
+    if (!isOpen) return;
+    notifDiag.dropdownOpened = true;
+    notifDiag.renderedIds = new Set(frozenList.map((n) => n.id));
+  }, [isOpen, frozenList]);
 
   // Fetch announcements when tab is opened for the first time
   useEffect(() => {

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, useMemo, useCal
 import { Notification } from "../types";
 import { useAuth } from "./AuthContext";
 import { useSSEContext } from "./SSEContext";
+import { notifDiag, describeUnread } from "../utils/notifDiag"; // TEMP DIAG
 
 type NotificationsContextType = {
   sortedNotifications: Notification[];
@@ -78,6 +79,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data.notifications)) {
+          data.notifications.forEach((n: Notification) => notifDiag.origin.set(n.id, "server (first page)")); // TEMP DIAG
           setNotifications(data.notifications);
           setNextCursor(data.nextCursor ?? null);
         }
@@ -95,6 +97,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data.notifications)) {
+          data.notifications.forEach((n: Notification) => { if (!notifDiag.origin.has(n.id)) notifDiag.origin.set(n.id, "server (older page)"); }); // TEMP DIAG
           setNotifications((prev) => dedupeById([...prev, ...data.notifications]));
           setNextCursor(data.nextCursor ?? null);
         }
@@ -110,6 +113,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return subscribe("notification", (raw) => {
       try {
         const data = raw as unknown as Notification;
+        // TEMP DIAG: an id we have seen before means SSE is re-pushing it, and
+        // dedupeById will keep this forced-unread copy over the held one.
+        if (notifDiag.origin.has(data.id)) {
+          notifDiag.redeliveries++;
+          notifDiag.redeliveredIds.add(data.id);
+        } else {
+          notifDiag.origin.set(data.id, "SSE push");
+        }
         // Prepend new notification, dedup in case of reconnect replay
         setNotifications((prev) => dedupeById([{ ...data, isRead: false }, ...prev]));
       } catch (err) {
@@ -143,6 +154,16 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  // TEMP DIAG: one copy-pasteable block per badge change, naming exactly which
+  // entries the badge counts, where each came from, and whether it is on screen.
+  const lastLoggedCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastLoggedCount.current === unreadCount) return;
+    lastLoggedCount.current = unreadCount;
+    const unread = notifications.filter((n) => !n.isRead);
+    console.log(describeUnread(unread, notifications.length));
+  }, [unreadCount, notifications]);
 
   // Sort: chronological, newest first
   const sortedNotifications = useMemo(() => {

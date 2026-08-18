@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, ReactNode } from "react";
 import { useAuth } from "./AuthContext";
+import { notifDiag } from "../utils/notifDiag"; // TEMP DIAG
 
 type SSEHandler = (data: Record<string, unknown>) => void;
 
@@ -45,6 +46,10 @@ export function SSEProvider({ children }: { children: ReactNode }) {
 
     function connect() {
       if (unmounted) return;
+      // TEMP DIAG: a socket still open here is being orphaned — it keeps
+      // delivering events and nothing will ever close it.
+      if (es && es.readyState !== 2) notifDiag.socketsOrphaned++;
+      notifDiag.socketsOpened++;
       es = new EventSource("/api/v1/events");
 
       es.onopen = () => { backoff = 1000; };
@@ -52,6 +57,9 @@ export function SSEProvider({ children }: { children: ReactNode }) {
       es.onerror = () => {
         es?.close();
         if (!unmounted) {
+          // TEMP DIAG: a pending timer here is about to be overwritten without
+          // clearTimeout, so two connects will fire.
+          if (timer) notifDiag.duplicateReconnects++;
           timer = setTimeout(connect, backoff);
           backoff = Math.min(backoff * 2, 30_000);
         }

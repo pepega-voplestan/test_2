@@ -113,7 +113,7 @@ router.post("/upload/media", requireAuth, (req, res) => {
       }
 
       if (meta.width * meta.height > MEDIA_MAX_PIXELS) {
-        return res.status(400).json({ error: "Изображение слишком большое (макс. 16 МП)" });
+        return res.status(400).json({ error: `Изображение слишком большое (макс. ${Math.round(MEDIA_MAX_PIXELS / 1_000_000)} МП)` });
       }
 
       const mediaId = crypto.randomUUID();

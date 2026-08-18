@@ -317,6 +317,43 @@ describe('Lightbox — gallery mode: orientation re-applies per item', () => {
     await user.click(nextButton());
     expect(currentImg().style.transform).toBe('');
   });
+
+  it("applies each neighbour's own orientation transform while a swipe is in flight", () => {
+    // Arrow paging never mounts the neighbours — only a horizontal drag does,
+    // which is why this needs a real pointer gesture rather than a click.
+    const gallery = items(3, { orientation: (i) => (i === 1 ? 6 : undefined) });
+    render(<Lightbox items={gallery} startIndex={0} onClose={vi.fn()} />);
+    const el = overlay();
+
+    fireEvent.pointerDown(el, { button: 0, clientX: 200, clientY: 200 });
+    fireEvent.pointerMove(el, { button: 0, clientX: 150, clientY: 200 }); // past AXIS_LOCK_THRESHOLD
+
+    // DOM order inside the track: prev, current, next.
+    const imgs = screen.getByTestId('lightbox-track').querySelectorAll('img');
+    expect(imgs).toHaveLength(3);
+    // Item 1 is the next neighbour and carries orientation 6.
+    expect((imgs[2] as HTMLElement).style.transform).toBe('rotate(90deg)');
+    expect((imgs[2] as HTMLElement).style.maxWidth).toBe('90vh');
+    // Item 2 is the prev neighbour and has none.
+    expect((imgs[0] as HTMLElement).style.transform).toBe('');
+  });
+
+  // jsdom performs no layout and applies no transforms, so these assert the
+  // styles the fix turns on, not the geometry they produce. The clipping they
+  // guard against only reproduces in a real viewport narrow enough for 90vw to
+  // bind (a phone in portrait) — see the wrapper/img mismatch in maxBox().
+  it('gives the transform wrapper the same swapped max box as a rotated image', () => {
+    render(<Lightbox items={items(2, { orientation: () => 6 })} startIndex={0} onClose={vi.fn()} />);
+    expect(currentImg().style.maxWidth).toBe('90vh');
+    expect(wrapper().style.maxWidth).toBe('90vh');
+    expect(wrapper().style.maxHeight).toBe('90vw');
+  });
+
+  it('leaves the wrapper box unswapped when the image needs no rotation', () => {
+    render(<Lightbox items={items(2)} startIndex={0} onClose={vi.fn()} />);
+    expect(wrapper().style.maxWidth).toBe('90vw');
+    expect(wrapper().style.maxHeight).toBe('90vh');
+  });
 });
 
 describe('Lightbox — gallery mode: ghost-click trap still works when paging is present', () => {
