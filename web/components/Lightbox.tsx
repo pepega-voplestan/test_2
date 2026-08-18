@@ -38,6 +38,20 @@ const ORIENTATION_TRANSFORMS: Record<number, string> = {
 // (max-w:90vh / max-h:90vw) or the rotated image overflows the 90vw×90vh viewport.
 const ORIENTATION_SWAPS_AXES = new Set([5, 6, 7, 8]);
 
+// The CSS that renders an image with this EXIF orientation upright, or undefined
+// when none is needed. Every <img> the lightbox paints goes through this — the
+// paging neighbours are fully visible mid-swipe, not decoration.
+function orientationStyle(orientation?: number): React.CSSProperties | undefined {
+  if (!orientation) return undefined;
+  const transform = ORIENTATION_TRANSFORMS[orientation];
+  if (!transform) return undefined;
+  return {
+    transform,
+    // Swap the fit box for 90°/270° rotations so the image stays within the viewport.
+    ...(ORIENTATION_SWAPS_AXES.has(orientation) ? { maxWidth: '90vh', maxHeight: '90vw' } : {}),
+  };
+}
+
 const DISMISS_THRESHOLD = 120; // px of drag needed to dismiss
 const VELOCITY_THRESHOLD = 0.5; // px/ms — fast flick dismisses even if threshold not met
 const MIN_ZOOM = 1;
@@ -77,17 +91,10 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
   const activeItem = galleryMode ? items![currentIndex] : undefined;
   const activeSrc = activeItem ? activeItem.full : (src as string);
   const activeOrientation = activeItem ? activeItem.orientation : orientation;
+  const prevItem = galleryMode ? items![(currentIndex - 1 + length) % length] : undefined;
+  const nextItem = galleryMode ? items![(currentIndex + 1) % length] : undefined;
 
-  const orientationTransform = activeOrientation ? ORIENTATION_TRANSFORMS[activeOrientation] : undefined;
-  const imgStyle: React.CSSProperties | undefined = orientationTransform
-    ? {
-        transform: orientationTransform,
-        // Swap the fit box for 90°/270° rotations so the image stays within the viewport.
-        ...(activeOrientation && ORIENTATION_SWAPS_AXES.has(activeOrientation)
-          ? { maxWidth: '90vh', maxHeight: '90vw' }
-          : {}),
-      }
-    : undefined;
+  const imgStyle = orientationStyle(activeOrientation);
   const overlayRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -547,7 +554,13 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
         <div ref={trackRef} data-testid="lightbox-track" className="relative w-screen h-screen" style={{ willChange: 'transform' }}>
           {neighborsMounted && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'translateX(-100%)' }}>
-              <img src={items![(currentIndex - 1 + length) % length].full} alt="" draggable={false} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" />
+              <img
+                src={prevItem?.full}
+                alt=""
+                draggable={false}
+                className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+                style={orientationStyle(prevItem?.orientation)}
+              />
             </div>
           )}
           <div className="absolute inset-0 flex items-center justify-center">
@@ -563,7 +576,13 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
           </div>
           {neighborsMounted && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'translateX(100%)' }}>
-              <img src={items![(currentIndex + 1) % length].full} alt="" draggable={false} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" />
+              <img
+                src={nextItem?.full}
+                alt=""
+                draggable={false}
+                className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+                style={orientationStyle(nextItem?.orientation)}
+              />
             </div>
           )}
         </div>
