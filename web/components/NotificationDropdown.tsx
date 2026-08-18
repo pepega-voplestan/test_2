@@ -4,6 +4,7 @@ import { useNotifications } from '../context/NotificationsContext';
 import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
+import { notifDiag } from '../utils/notifDiag'; // TEMP DIAG
 import DonationModal from './DonationModal';
 
 interface AnnouncementItem {
@@ -163,6 +164,11 @@ const NotificationDropdown: React.FC = () => {
       return newItems.length > 0 ? [...patched, ...newItems] : patched;
     });
   }, [isOpen, sortedNotifications]);
+
+  // TEMP DIAG: lets the diagnostic block say whether an unread entry is on screen.
+  useEffect(() => {
+    notifDiag.renderedIds = new Set(frozenList.map((n) => n.id));
+  }, [frozenList]);
 
   // Fetch announcements when tab is opened for the first time
   useEffect(() => {
