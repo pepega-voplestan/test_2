@@ -38,6 +38,16 @@ const ORIENTATION_TRANSFORMS: Record<number, string> = {
 // (max-w:90vh / max-h:90vw) or the rotated image overflows the 90vw×90vh viewport.
 const ORIENTATION_SWAPS_AXES = new Set([5, 6, 7, 8]);
 
+// The box an image is fitted into *before* its orientation transform runs.
+// A 90°/270° rotation swaps the axes, and the transform's own wrapper must be
+// given the same box: if the wrapper stays narrower the <img> overflows it, which
+// moves the rotation's pivot off-centre and shears the image off the screen edge.
+function maxBox(orientation?: number): React.CSSProperties {
+  return orientation && ORIENTATION_SWAPS_AXES.has(orientation)
+    ? { maxWidth: '90vh', maxHeight: '90vw' }
+    : { maxWidth: '90vw', maxHeight: '90vh' };
+}
+
 // The CSS that renders an image with this EXIF orientation upright, or undefined
 // when none is needed. Every <img> the lightbox paints goes through this — the
 // paging neighbours are fully visible mid-swipe, not decoration.
@@ -45,11 +55,7 @@ function orientationStyle(orientation?: number): React.CSSProperties | undefined
   if (!orientation) return undefined;
   const transform = ORIENTATION_TRANSFORMS[orientation];
   if (!transform) return undefined;
-  return {
-    transform,
-    // Swap the fit box for 90°/270° rotations so the image stays within the viewport.
-    ...(ORIENTATION_SWAPS_AXES.has(orientation) ? { maxWidth: '90vh', maxHeight: '90vw' } : {}),
-  };
+  return { transform, ...maxBox(orientation) };
 }
 
 const DISMISS_THRESHOLD = 120; // px of drag needed to dismiss
@@ -564,7 +570,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
             </div>
           )}
           <div className="absolute inset-0 flex items-center justify-center">
-            <div ref={imgRef} className="relative max-w-[90vw] max-h-[90vh]" style={{ willChange: 'transform' }}>
+            <div ref={imgRef} className="relative" style={{ willChange: 'transform', ...maxBox(activeOrientation) }}>
               <img
                 src={activeSrc}
                 alt={alt}
@@ -587,7 +593,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
           )}
         </div>
       ) : (
-        <div ref={imgRef} className="relative max-w-[90vw] max-h-[90vh]" style={{ willChange: 'transform' }}>
+        <div ref={imgRef} className="relative" style={{ willChange: 'transform', ...maxBox(activeOrientation) }}>
           <img
             src={activeSrc}
             alt={alt}

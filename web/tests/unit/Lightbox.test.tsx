@@ -337,6 +337,23 @@ describe('Lightbox — gallery mode: orientation re-applies per item', () => {
     // Item 2 is the prev neighbour and has none.
     expect((imgs[0] as HTMLElement).style.transform).toBe('');
   });
+
+  // jsdom performs no layout and applies no transforms, so these assert the
+  // styles the fix turns on, not the geometry they produce. The clipping they
+  // guard against only reproduces in a real viewport narrow enough for 90vw to
+  // bind (a phone in portrait) — see the wrapper/img mismatch in maxBox().
+  it('gives the transform wrapper the same swapped max box as a rotated image', () => {
+    render(<Lightbox items={items(2, { orientation: () => 6 })} startIndex={0} onClose={vi.fn()} />);
+    expect(currentImg().style.maxWidth).toBe('90vh');
+    expect(wrapper().style.maxWidth).toBe('90vh');
+    expect(wrapper().style.maxHeight).toBe('90vw');
+  });
+
+  it('leaves the wrapper box unswapped when the image needs no rotation', () => {
+    render(<Lightbox items={items(2)} startIndex={0} onClose={vi.fn()} />);
+    expect(wrapper().style.maxWidth).toBe('90vw');
+    expect(wrapper().style.maxHeight).toBe('90vh');
+  });
 });
 
 describe('Lightbox — gallery mode: ghost-click trap still works when paging is present', () => {
