@@ -21,7 +21,9 @@ export const notifDiag = {
   redeliveredIds: new Set<string>(),
   /** notification id -> where it first entered client state. */
   origin: new Map<string, string>(),
-  /** ids currently rendered in the dropdown; null until it is first opened. */
+  /** whether the dropdown has been opened at least once this session. */
+  dropdownOpened: false,
+  /** ids that had a row the last time the dropdown was open; null before that. */
   renderedIds: null as Set<string> | null,
 };
 
@@ -34,12 +36,13 @@ export function describeUnread(
     const age = Number.isFinite(t) ? `${Math.round((Date.now() - t) / 60000)} min old` : "unknown age";
     const origin = notifDiag.origin.get(n.id) ?? "unknown";
     const redelivered = notifDiag.redeliveredIds.has(n.id) ? " RE-DELIVERED BY SSE" : "";
-    const visible =
-      notifDiag.renderedIds === null
-        ? "dropdown not opened yet"
-        : notifDiag.renderedIds.has(n.id)
-          ? "shown in dropdown"
-          : "NOT SHOWN IN DROPDOWN";
+    // "row exists" is not "on screen" — a row below the scroll fold still counts
+    // as having a row. Only meaningful once the dropdown has actually been opened.
+    const visible = !notifDiag.dropdownOpened
+      ? "dropdown never opened — cannot tell"
+      : notifDiag.renderedIds?.has(n.id)
+        ? "HAS a row in the list (may be scrolled out of view)"
+        : "has NO row in the list";
     return `    - id=${n.id}\n      ${n.type}, ${age}, arrived via ${origin}${redelivered}\n      ${visible}`;
   });
 

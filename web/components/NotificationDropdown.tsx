@@ -165,10 +165,13 @@ const NotificationDropdown: React.FC = () => {
     });
   }, [isOpen, sortedNotifications]);
 
-  // TEMP DIAG: lets the diagnostic block say whether an unread entry is on screen.
+  // TEMP DIAG: only meaningful while open — frozenList is empty whenever the
+  // dropdown is closed, which would otherwise report every entry as missing.
   useEffect(() => {
+    if (!isOpen) return;
+    notifDiag.dropdownOpened = true;
     notifDiag.renderedIds = new Set(frozenList.map((n) => n.id));
-  }, [frozenList]);
+  }, [isOpen, frozenList]);
 
   // Fetch announcements when tab is opened for the first time
   useEffect(() => {
