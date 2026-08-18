@@ -37,8 +37,10 @@ export const ORIGINAL_QUALITY_WINDOW_HOURS = Number(process.env.ORIGINAL_QUALITY
 export const ORIGINAL_QUALITY_FORMATS = new Set(["jpeg", "png"]);
 
 export const MEDIA_MAX_BYTES = ORIGINAL_QUALITY_MAX_BYTES;
-export const MEDIA_MAX_DIM = 4096;
-export const MEDIA_MAX_PIXELS = 16_000_000; // 16 MP
+// Sized for a modern phone's default output (iPhone 15 shoots 24 MP / 5712x4284).
+// DIM guards absurd aspect ratios; PIXELS guards decode cost — they bind separately.
+export const MEDIA_MAX_DIM = 6144;
+export const MEDIA_MAX_PIXELS = 26_000_000; // 26 MP
 export const MEDIA_VARIANTS = [320, 960, 1600];
 export const MEDIA_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"]);
 
