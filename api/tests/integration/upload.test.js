@@ -290,6 +290,61 @@ describe("Upload routes", () => {
       expect(after).toBe(before); // nothing persisted
     });
 
+    it("rejects an image past the dimension cap and stores nothing", async () => {
+      const user = await createUser({ username: "gina", email: "gina@test.local" });
+      const agent = await authenticatedAgent(user);
+      // Over MEDIA_MAX_DIM on one side but only 0.6 MP, so the dimension guard
+      // is necessarily what rejects it rather than the pixel guard.
+      const tooWide = await makeJpeg(6200, 100);
+
+      const before = await getTestPrisma().media.count();
+      const res = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", tooWide, { filename: "wide.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain("Максимальный размер");
+      const after = await getTestPrisma().media.count();
+      expect(after).toBe(before);
+    });
+
+    it("rejects an image past the pixel cap whose sides both fit the dimension cap", async () => {
+      const user = await createUser({ username: "hugo", email: "hugo@test.local" });
+      const agent = await authenticatedAgent(user);
+      // 30 MP with both sides under MEDIA_MAX_DIM — isolates the pixel guard.
+      const tooManyPixels = await makeJpeg(6000, 5000);
+
+      const before = await getTestPrisma().media.count();
+      const res = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", tooManyPixels, { filename: "huge-mp.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(400);
+      // Message interpolates MEDIA_MAX_PIXELS, so it tracks the constant.
+      expect(res.body.error).toMatch(/\d+ МП/);
+      const after = await getTestPrisma().media.count();
+      expect(after).toBe(before);
+    });
+
+    it("accepts a 24 MP phone photo at the iPhone 15 default resolution", async () => {
+      const user = await createUser({ username: "iris", email: "iris@test.local" });
+      const agent = await authenticatedAgent(user);
+      const photo = await makeJpeg(5712, 4284); // 24.5 MP — rejected before the caps were raised
+
+      const res = await agent
+        .post("/api/v1/upload/media")
+        .attach("file", photo, { filename: "iphone.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+
+      const row = await getTestPrisma().media.findUnique({ where: { id: res.body.mediaId } });
+      expect(row).not.toBeNull();
+      const meta = JSON.parse(row.media_meta);
+      expect(meta.w).toBe(5712);
+      expect(meta.h).toBe(4284);
+    });
+
     it("rejects a corrupt image with a Russian message and stores nothing (US3, FR-003)", async () => {
       const user = await createUser({ username: "frank", email: "frank@test.local" });
       const agent = await authenticatedAgent(user);
