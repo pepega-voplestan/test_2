@@ -3,6 +3,7 @@ import { Notification } from "../types";
 import { useAuth } from "./AuthContext";
 import { useSSEContext } from "./SSEContext";
 import { notifDiag, describeUnread } from "../utils/notifDiag"; // TEMP DIAG
+import { isInAppPush } from "../hooks/useRoute";
 
 type NotificationsContextType = {
   sortedNotifications: Notification[];
@@ -20,6 +21,11 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 const PAGE_SIZE = 20;
 // Safety flush: if the dropdown stays open for a long time, don't hold reads indefinitely
 const SAFETY_FLUSH_MS = 5000;
+const DEFAULT_TITLE = "Вопли";
+
+function titleFor(count: number): string {
+  return count > 0 ? `(${count > 9 ? '9+' : count}) ${DEFAULT_TITLE}` : DEFAULT_TITLE;
+}
 
 function dedupeById(items: Notification[]): Notification[] {
   const seen = new Set<string>();
@@ -134,6 +140,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
+    // Written here rather than left to the effect: the click handler navigates
+    // in this same tick, and the browser records the departing entry's title as
+    // it goes. By the time React commits, that record already holds the count
+    // from before the read, and back restores it until a re-assert catches up.
+    if (notifications.some((n) => n.id === id && !n.isRead)) {
+      document.title = titleFor(unreadCount - 1);
+    }
     pendingReadIds.current.add(id);
     if (!safetyTimer.current) {
       safetyTimer.current = setTimeout(flushReads, SAFETY_FLUSH_MS);
@@ -174,12 +187,26 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   // Browser tab indicator: title prefix + favicon badge
   useEffect(() => {
-    const defaultTitle = "Вопли";
+    const defaultTitle = DEFAULT_TITLE;
     const defaultFaviconHref = "/favicon.svg";
+    const wantedTitle = titleFor(unreadCount);
+
+    // Held so a re-assert can repaint the icon without rebuilding the canvas.
+    let badgedHref: string | null = null;
+    // The badge is drawn asynchronously; by the time it is ready the count may
+    // already have moved on, and this run no longer owns the tab.
+    let superseded = false;
+
+    function paintFavicon() {
+      const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+      if (!link) return;
+      const href = unreadCount > 0 ? badgedHref : defaultFaviconHref;
+      if (href) link.href = href;
+    }
+
+    document.title = wantedTitle;
 
     if (unreadCount > 0) {
-      document.title = `(${unreadCount > 9 ? '9+' : unreadCount}) ${defaultTitle}`;
-
       const canvas = document.createElement("canvas");
       canvas.width = 32;
       canvas.height = 32;
@@ -187,6 +214,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       if (ctx) {
         const img = new Image();
         img.onload = () => {
+          if (superseded) return;
           ctx.drawImage(img, 0, 0, 32, 32);
           ctx.beginPath();
           ctx.arc(24, 8, 7, 0, 2 * Math.PI);
@@ -196,20 +224,45 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           ctx.lineWidth = 2;
           ctx.stroke();
 
-          const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
-          if (link) {
-            link.href = canvas.toDataURL("image/png");
-          }
+          badgedHref = canvas.toDataURL("image/png");
+          paintFavicon();
         };
         img.src = defaultFaviconHref;
       }
     } else {
-      document.title = defaultTitle;
-      const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
-      if (link) link.href = defaultFaviconHref;
+      paintFavicon();
     }
 
+    // The browser records the tab's presentation — title and icon both — per
+    // history entry and repaints from that record when one is traversed, so
+    // back from a notification's shout restores the "(N)" and the badged icon
+    // that predate the read, without anything here changing. Re-writing the
+    // title we already hold cannot undo that: an unchanged title never reaches
+    // the browser process, so the write has to move off it first.
+    let deferred: ReturnType<typeof setTimeout> | undefined;
+    const reassert = (e: Event) => {
+      if (isInAppPush(e)) return; // navigateTo synthesises popstate for in-app links
+      if (e.type === "pageshow" && !(e as PageTransitionEvent).persisted) return; // first load, not a restore
+
+      const write = () => {
+        if (document.title === wantedTitle) document.title = "";
+        document.title = wantedTitle;
+        paintFavicon();
+      };
+      write();
+      // The restore can land after the handler. setTimeout, not rAF: a tab
+      // backgrounded right after the traversal still needs the second pass.
+      clearTimeout(deferred);
+      deferred = setTimeout(write, 0);
+    };
+    window.addEventListener("popstate", reassert);
+    window.addEventListener("pageshow", reassert);
+
     return () => {
+      superseded = true;
+      clearTimeout(deferred);
+      window.removeEventListener("popstate", reassert);
+      window.removeEventListener("pageshow", reassert);
       document.title = defaultTitle;
       const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
       if (link) link.href = defaultFaviconHref;

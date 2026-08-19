@@ -66,9 +66,24 @@ export function useRoute(): Route {
   return route;
 }
 
+// navigateTo fabricates a popstate so the router re-parses the location after a
+// pushState. That event is indistinguishable from a real back/forward unless we
+// say so, and listeners that only care about actual history traversals need to
+// tell them apart (see the tab-title re-assert in NotificationsContext), so the
+// synthetic one carries a marker. Not `isTrusted`: it is unforgeable, which
+// makes the distinction impossible to cover in tests.
+const IN_APP_PUSH = "__vopleyInAppPush";
+
+/** True for the synthetic popstate navigateTo fires for a forward in-app push. */
+export function isInAppPush(event: Event): boolean {
+  return (event as Event & Record<string, unknown>)[IN_APP_PUSH] === true;
+}
+
 export function navigateTo(path: string) {
   history.pushState({ inApp: true }, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
+  const event = new PopStateEvent("popstate");
+  Object.defineProperty(event, IN_APP_PUSH, { value: true });
+  window.dispatchEvent(event);
 }
 
 // Goes back to the previous in-app entry when one exists (the current entry
