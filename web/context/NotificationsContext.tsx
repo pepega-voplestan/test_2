@@ -21,6 +21,11 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 const PAGE_SIZE = 20;
 // Safety flush: if the dropdown stays open for a long time, don't hold reads indefinitely
 const SAFETY_FLUSH_MS = 5000;
+const DEFAULT_TITLE = "Вопли";
+
+function titleFor(count: number): string {
+  return count > 0 ? `(${count > 9 ? '9+' : count}) ${DEFAULT_TITLE}` : DEFAULT_TITLE;
+}
 
 function dedupeById(items: Notification[]): Notification[] {
   const seen = new Set<string>();
@@ -135,6 +140,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
+    // Written here rather than left to the effect: the click handler navigates
+    // in this same tick, and the browser records the departing entry's title as
+    // it goes. By the time React commits, that record already holds the count
+    // from before the read, and back restores it until a re-assert catches up.
+    if (notifications.some((n) => n.id === id && !n.isRead)) {
+      document.title = titleFor(unreadCount - 1);
+    }
     pendingReadIds.current.add(id);
     if (!safetyTimer.current) {
       safetyTimer.current = setTimeout(flushReads, SAFETY_FLUSH_MS);
@@ -175,12 +187,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   // Browser tab indicator: title prefix + favicon badge
   useEffect(() => {
-    const defaultTitle = "Вопли";
+    const defaultTitle = DEFAULT_TITLE;
     const defaultFaviconHref = "/favicon.svg";
-    const wantedTitle =
-      unreadCount > 0
-        ? `(${unreadCount > 9 ? '9+' : unreadCount}) ${defaultTitle}`
-        : defaultTitle;
+    const wantedTitle = titleFor(unreadCount);
 
     // Held so a re-assert can repaint the icon without rebuilding the canvas.
     let badgedHref: string | null = null;

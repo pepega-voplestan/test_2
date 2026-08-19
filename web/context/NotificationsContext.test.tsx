@@ -627,6 +627,25 @@ describe("NotificationsContext — tab title across history navigation", () => {
     };
   }
 
+  it("writes the read count to the tab before a navigation can record it", async () => {
+    mockNotifFetch([notif1]);
+    mockPatchOk();
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+    // handleClick calls markAsRead and then navigateTo in one tick, so what
+    // matters is the title mid-tick — React has not committed the read yet
+    let titleAtPush = "";
+    act(() => {
+      result.current.markAsRead("n1");
+      titleAtPush = document.title;
+    });
+
+    expect(titleAtPush).toBe("Вопли");
+  });
+
   it("re-applies the title when the browser restores a stale one on back", async () => {
     mockNotifFetch([notif1]);
     mockPatchOk();
