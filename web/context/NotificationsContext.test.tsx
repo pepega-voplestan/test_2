@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { NotificationsProvider, useNotifications } from "./NotificationsContext";
 import { SSEProvider } from "./SSEContext";
 import type { Notification } from "../types";
+import { navigateTo } from "../hooks/useRoute";
 
 // ── Mock useAuth ──────────────────────────────────────────────────────────────
 
@@ -568,6 +569,64 @@ describe("NotificationsContext — tab title across history navigation", () => {
     return { writes, restore: () => delete (document as unknown as { title?: string }).title };
   }
 
+  /** A real back/forward: a popstate with none of navigateTo's push marker. */
+  function dispatchTraversal(event: Event) {
+    act(() => {
+      window.dispatchEvent(event);
+    });
+  }
+
+  /** index.html's icon link is absent in jsdom; the effect needs one to paint. */
+  function installFaviconLink() {
+    const link = document.createElement("link");
+    link.setAttribute("rel", "icon");
+    link.setAttribute("href", "/favicon.svg");
+    document.head.appendChild(link);
+    return { link, restore: () => link.remove() };
+  }
+
+  /**
+   * jsdom has neither a canvas nor image loading. Stand in for both so the
+   * badged icon the effect builds can actually be observed. With `defer`, the
+   * queued onload is held back so a badge can be made to land late.
+   */
+  function stubBadgeCanvas({ defer = false } = {}) {
+    const dataUrl = "data:image/png;base64,BADGED";
+    const ctx = {
+      drawImage: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(),
+      stroke: vi.fn(), fillStyle: "", strokeStyle: "", lineWidth: 0,
+    };
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    const toDataURL = vi
+      .spyOn(HTMLCanvasElement.prototype, "toDataURL")
+      .mockReturnValue(dataUrl);
+
+    const pending: (() => void)[] = [];
+    const srcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
+    Object.defineProperty(HTMLImageElement.prototype, "src", {
+      configurable: true,
+      get(this: HTMLImageElement) { return srcDesc.get!.call(this); },
+      set(this: HTMLImageElement, v: string) {
+        srcDesc.set!.call(this, v);
+        const fire = () => this.onload?.(new Event("load"));
+        if (defer) pending.push(fire);
+        else fire();
+      },
+    });
+
+    return {
+      dataUrl,
+      flushImageLoads: () => { pending.splice(0).forEach((fire) => fire()); },
+      restore: () => {
+        getContext.mockRestore();
+        toDataURL.mockRestore();
+        Object.defineProperty(HTMLImageElement.prototype, "src", srcDesc);
+      },
+    };
+  }
+
   it("re-applies the title when the browser restores a stale one on back", async () => {
     mockNotifFetch([notif1]);
     mockPatchOk();
@@ -583,7 +642,7 @@ describe("NotificationsContext — tab title across history navigation", () => {
     // Stands in for the browser repainting the tab from the title it recorded
     // with the history entry, which predates the read
     document.title = "(1) Вопли";
-    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    dispatchTraversal(new PopStateEvent("popstate"));
 
     expect(document.title).toBe("Вопли");
   });
@@ -600,11 +659,30 @@ describe("NotificationsContext — tab title across history navigation", () => {
     const { writes, restore } = spyOnTitleWrites();
     try {
       // document.title already reads correct here while the tab does not
-      act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+      dispatchTraversal(new PopStateEvent("popstate"));
 
       expect(writes).toEqual(["", "Вопли"]);
     } finally {
       restore();
+    }
+  });
+
+  it("re-applies once more after the restore may have landed", async () => {
+    mockNotifFetch([notif1]);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+    vi.useFakeTimers();
+    try {
+      dispatchTraversal(new PopStateEvent("popstate"));
+      document.title = "Вопли"; // restore lands after the synchronous pass
+      act(() => vi.advanceTimersByTime(0));
+
+      expect(document.title).toBe("(1) Вопли");
+    } finally {
+      vi.useRealTimers();
     }
   });
 
@@ -616,9 +694,43 @@ describe("NotificationsContext — tab title across history navigation", () => {
     await waitFor(() => expect(result.current.unreadCount).toBe(1));
 
     document.title = "Вопли";
-    act(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    dispatchTraversal(new PageTransitionEvent("pageshow", { persisted: true }));
 
     expect(document.title).toBe("(1) Вопли");
+  });
+
+  it("ignores the synthetic popstate navigateTo fires on in-app links", async () => {
+    mockNotifFetch([notif1]);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+    const { writes, restore } = spyOnTitleWrites();
+    try {
+      act(() => navigateTo("/shout/s1"));
+
+      expect(writes).toEqual([]); // no blank write onto the entry being pushed
+    } finally {
+      restore();
+    }
+  });
+
+  it("ignores the pageshow of an ordinary page load", async () => {
+    mockNotifFetch([notif1]);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+    const { writes, restore } = spyOnTitleWrites();
+    try {
+      dispatchTraversal(new PageTransitionEvent("pageshow", { persisted: false }));
+
+      expect(writes).toEqual([]);
+    } finally {
+      restore();
+    }
   });
 
   it("stops re-applying the title once unmounted", async () => {
@@ -630,8 +742,77 @@ describe("NotificationsContext — tab title across history navigation", () => {
 
     unmount();
     document.title = "something else";
-    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    dispatchTraversal(new PopStateEvent("popstate"));
 
     expect(document.title).toBe("something else");
+  });
+
+  it("re-applies the badged favicon, not just the title, on back", async () => {
+    mockNotifFetch([notif1]);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const canvas = stubBadgeCanvas();
+    const favicon = installFaviconLink();
+    try {
+      const { result } = renderHook(() => useNotifications(), { wrapper });
+      await waitFor(() => expect(result.current.unreadCount).toBe(1));
+      expect(favicon.link.getAttribute("href")).toBe(canvas.dataUrl);
+
+      // The browser repaints the tab — icon included — from what it recorded
+      // with the entry being restored, which predates the badge.
+      favicon.link.setAttribute("href", "/favicon.svg");
+      dispatchTraversal(new PopStateEvent("popstate"));
+
+      expect(favicon.link.getAttribute("href")).toBe(canvas.dataUrl);
+    } finally {
+      favicon.restore();
+      canvas.restore();
+    }
+  });
+
+  it("clears a restored badge on back once the notification has been read", async () => {
+    mockNotifFetch([notif1]);
+    mockPatchOk();
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const canvas = stubBadgeCanvas();
+    const favicon = installFaviconLink();
+    try {
+      const { result } = renderHook(() => useNotifications(), { wrapper });
+      await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+      act(() => result.current.markAsRead("n1"));
+      expect(favicon.link.getAttribute("href")).toBe("/favicon.svg");
+
+      favicon.link.setAttribute("href", canvas.dataUrl); // stale badge restored
+      dispatchTraversal(new PopStateEvent("popstate"));
+
+      expect(favicon.link.getAttribute("href")).toBe("/favicon.svg");
+    } finally {
+      favicon.restore();
+      canvas.restore();
+    }
+  });
+
+  it("drops a badge that finishes drawing after the count already went to zero", async () => {
+    mockNotifFetch([notif1]);
+    mockPatchOk();
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const canvas = stubBadgeCanvas({ defer: true });
+    const favicon = installFaviconLink();
+    try {
+      const { result } = renderHook(() => useNotifications(), { wrapper });
+      await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+      // Read it before the badge finishes drawing, then let the draw land.
+      act(() => result.current.markAsRead("n1"));
+      act(() => canvas.flushImageLoads());
+
+      expect(favicon.link.getAttribute("href")).toBe("/favicon.svg");
+    } finally {
+      favicon.restore();
+      canvas.restore();
+    }
   });
 });
