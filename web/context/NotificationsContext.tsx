@@ -176,9 +176,23 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const defaultTitle = "Вопли";
     const defaultFaviconHref = "/favicon.svg";
+    const wantedTitle =
+      unreadCount > 0
+        ? `(${unreadCount > 9 ? '9+' : unreadCount}) ${defaultTitle}`
+        : defaultTitle;
+
+    // The browser records the title per history entry and repaints the tab from
+    // that record on back/forward, pushState entries included — so back from a
+    // notification's shout restores the "(N)" that predates the read. Writing
+    // the value we already hold cannot undo it: an unchanged title never reaches
+    // the browser process, so the write has to actually move off it.
+    function setTitle(next: string) {
+      if (document.title === next) document.title = "";
+      document.title = next;
+    }
 
     if (unreadCount > 0) {
-      document.title = `(${unreadCount > 9 ? '9+' : unreadCount}) ${defaultTitle}`;
+      setTitle(wantedTitle);
 
       const canvas = document.createElement("canvas");
       canvas.width = 32;
@@ -204,12 +218,27 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         img.src = defaultFaviconHref;
       }
     } else {
-      document.title = defaultTitle;
+      setTitle(defaultTitle);
       const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
       if (link) link.href = defaultFaviconHref;
     }
 
+    // History navigation is the only point the tab can drift from unreadCount
+    // (pageshow for a bfcache restore). The repaint can land after the handler,
+    // hence the second pass a frame later.
+    let raf = 0;
+    const reassertTitle = () => {
+      setTitle(wantedTitle);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setTitle(wantedTitle));
+    };
+    window.addEventListener("popstate", reassertTitle);
+    window.addEventListener("pageshow", reassertTitle);
+
     return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("popstate", reassertTitle);
+      window.removeEventListener("pageshow", reassertTitle);
       document.title = defaultTitle;
       const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
       if (link) link.href = defaultFaviconHref;

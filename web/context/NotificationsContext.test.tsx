@@ -551,3 +551,87 @@ describe("NotificationsContext — guard", () => {
     );
   });
 });
+
+describe("NotificationsContext — tab title across history navigation", () => {
+  /** Records writes without swallowing them — jsdom's own setter still runs. */
+  function spyOnTitleWrites(): { writes: string[]; restore: () => void } {
+    const proto = Object.getOwnPropertyDescriptor(Document.prototype, "title")!;
+    const writes: string[] = [];
+    Object.defineProperty(document, "title", {
+      configurable: true,
+      get: () => proto.get!.call(document),
+      set: (v: string) => {
+        writes.push(v);
+        proto.set!.call(document, v);
+      },
+    });
+    return { writes, restore: () => delete (document as unknown as { title?: string }).title };
+  }
+
+  it("re-applies the title when the browser restores a stale one on back", async () => {
+    mockNotifFetch([notif1]);
+    mockPatchOk();
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+    expect(document.title).toBe("(1) Вопли");
+
+    act(() => result.current.markAsRead("n1"));
+    expect(document.title).toBe("Вопли");
+
+    // Stands in for the browser repainting the tab from the title it recorded
+    // with the history entry, which predates the read
+    document.title = "(1) Вопли";
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+
+    expect(document.title).toBe("Вопли");
+  });
+
+  it("forces a real title change on back even when document.title already matches", async () => {
+    mockNotifFetch([notif1]);
+    mockPatchOk();
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.sortedNotifications).toHaveLength(1));
+    act(() => result.current.markAsRead("n1"));
+
+    const { writes, restore } = spyOnTitleWrites();
+    try {
+      // document.title already reads correct here while the tab does not
+      act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+
+      expect(writes).toEqual(["", "Вопли"]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("re-applies the unread title on a bfcache restore", async () => {
+    mockNotifFetch([notif1]);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+    document.title = "Вопли";
+    act(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+
+    expect(document.title).toBe("(1) Вопли");
+  });
+
+  it("stops re-applying the title once unmounted", async () => {
+    mockNotifFetch([notif1]);
+    mockUseAuth.mockReturnValue({ user: mockUser });
+
+    const { result, unmount } = renderHook(() => useNotifications(), { wrapper });
+    await waitFor(() => expect(result.current.unreadCount).toBe(1));
+
+    unmount();
+    document.title = "something else";
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+
+    expect(document.title).toBe("something else");
+  });
+});
