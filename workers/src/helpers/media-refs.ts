@@ -55,3 +55,31 @@ export async function hasAnyReference(db: RefDb, mediaId: string): Promise<boole
   ]);
   return Boolean(shout || comment || gif);
 }
+
+/**
+ * Which of `mediaIds` are saved in someone's personal GIF library.
+ *
+ * Batch-shaped on purpose: the age-based image sweep (feature 011) calls this
+ * once per page, never once per item.
+ *
+ * Deliberately NOT `hasLiveReference`/`hasAnyReference`. Both also match
+ * `shout_media`/`comment_media`, and the age sweep's target population IS media
+ * attached to live posts — reusing either would skip every candidate and reduce
+ * the sweep to a no-op that still reports success.
+ *
+ * No `is_deleted` filter, for the same reason the constant above lists `2` as a
+ * protecting state: a missed protection retains data, a missed filter destroys
+ * it. Constitution §III exempts personal-library media from losing a file on
+ * ANY ground, so library membership protects regardless of the row's state.
+ */
+export async function libraryMediaIds(
+  db: Pick<RefDb, "userGif">,
+  mediaIds: string[]
+): Promise<Set<string>> {
+  if (mediaIds.length === 0) return new Set();
+  const rows = await db.userGif.findMany({
+    where: { media_id: { in: mediaIds } },
+    select: { media_id: true },
+  });
+  return new Set(rows.map((r) => r.media_id));
+}
