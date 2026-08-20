@@ -3,6 +3,8 @@ import {
   dbBackupQueue,
   originalDowngradeQueue,
   mediaReclaimQueue,
+  imageVariantExpiryQueue,
+  videoExpiryQueue,
 } from "./queues.js";
 
 export async function registerScheduledJobs(): Promise<void> {
@@ -34,6 +36,23 @@ export async function registerScheduledJobs(): Promise<void> {
   await mediaReclaimQueue.upsertJobScheduler(
     "daily-media-reclaim",
     { pattern: "0 3 * * *" },
+    { name: "run", data: {} }
+  );
+
+  // Image full-size variant expiry — daily at 04:00 UTC. After the 02:00
+  // db-backup and clear of the 03:00 media-reclaim, so the two media sweeps
+  // never contend for the volume.
+  await imageVariantExpiryQueue.upsertJobScheduler(
+    "daily-image-variant-expiry",
+    { pattern: "0 4 * * *" },
+    { name: "run", data: {} }
+  );
+
+  // Video expiry — daily at 04:30 UTC. Staggered half an hour behind the image
+  // sweep so the two never contend for the media volume.
+  await videoExpiryQueue.upsertJobScheduler(
+    "daily-video-expiry",
+    { pattern: "30 4 * * *" },
     { name: "run", data: {} }
   );
 

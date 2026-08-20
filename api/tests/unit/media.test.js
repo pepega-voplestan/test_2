@@ -127,6 +127,61 @@ describe("buildMedia", () => {
     }
   });
 
+  // Feature 011: past the image retention window the 1600 is gone. `full` must
+  // be omitted, never quietly repointed at `url` — advertising the display copy
+  // as the full one is what §III "Advertised state" prohibits.
+  it("omits full once the 1600 variant has expired", () => {
+    const media = {
+      media_type: "image",
+      media_url: "old-1",
+      media_meta: JSON.stringify({
+        w: 1600,
+        h: 1200,
+        reclaimed: { variants: ["1600"], at: "2026-08-20T04:00:00.000Z" },
+      }),
+    };
+    const result = buildMedia(media);
+    expect(result).not.toHaveProperty("full");
+    expect(result.url).toBe("/media/old-1/960.webp");
+    expect(result.width).toBe(1600);
+  });
+
+  it("keeps full for a fresh image with no reclaim marker", () => {
+    const media = {
+      media_type: "image",
+      media_url: "new-1",
+      media_meta: JSON.stringify({ w: 1600, h: 1200 }),
+    };
+    expect(buildMedia(media).full).toBe("/media/new-1/1600.webp");
+  });
+
+  // A 320 reclaimed by feature 008 must not be mistaken for an expired 1600.
+  it("keeps full when only the 320 variant was reclaimed", () => {
+    const media = {
+      media_type: "image",
+      media_url: "v320",
+      media_meta: JSON.stringify({
+        w: 1600,
+        h: 1200,
+        reclaimed: { variants: ["320"], at: "2026-08-01T00:00:00.000Z" },
+      }),
+    };
+    expect(buildMedia(media).full).toBe("/media/v320/1600.webp");
+  });
+
+  it("still returns undefined when every file was reclaimed", () => {
+    const media = {
+      media_type: "image",
+      media_url: "gone",
+      media_meta: JSON.stringify({
+        w: 10,
+        h: 10,
+        reclaimed: { variants: ["1600"], files: true, at: "2026-08-20T04:00:00.000Z" },
+      }),
+    };
+    expect(buildMedia(media)).toBeUndefined();
+  });
+
   it("still serves the pending original as full during the 24h window", () => {
     const media = {
       media_type: "image",
@@ -170,6 +225,46 @@ describe("buildMedia", () => {
 
     it("returns undefined for a reclaimed video", () => {
       expect(buildMedia({ media_type: "video", media_url: "gone", media_meta: reclaimed() })).toBeUndefined();
+    });
+
+    // Feature 011: an expired video keeps its row and its DTO, but advertises
+    // no address at all. `thumb` must not survive either — it points at a
+    // 320.webp that upload never writes for video (research R10).
+    it("returns an expired shape with no url and no thumb for an expired video", () => {
+      const media = {
+        media_type: "video",
+        media_url: "vid-old",
+        media_meta: JSON.stringify({
+          w: 1280,
+          h: 720,
+          reclaimed: { video: true, at: "2026-08-20T04:30:00.000Z" },
+        }),
+      };
+      const result = buildMedia(media);
+      expect(result).toEqual({ type: "video", expired: true, width: 1280, height: 720 });
+      expect(result).not.toHaveProperty("url");
+      expect(result).not.toHaveProperty("thumb");
+    });
+
+    it("still builds a playable video DTO before expiry", () => {
+      const media = {
+        media_type: "video",
+        media_url: "vid-new",
+        media_meta: JSON.stringify({ w: 1280, h: 720 }),
+      };
+      const result = buildMedia(media);
+      expect(result.url).toBe("/media/vid-new/original.mp4");
+      expect(result.expired).toBeUndefined();
+    });
+
+    // `files: true` outranks `video: true` — the row cannot render at all.
+    it("returns undefined when an expired video was later wholesale-reclaimed", () => {
+      const media = {
+        media_type: "video",
+        media_url: "vid-gone",
+        media_meta: JSON.stringify({ reclaimed: { video: true, files: true, at: "x" } }),
+      };
+      expect(buildMedia(media)).toBeUndefined();
     });
 
     // Only `files` means unrenderable. A variants-only marker must not hide media.

@@ -216,13 +216,20 @@ export function buildMedia(mediaObj) {
     // plays from the GIF so it has no 1600, a still image has no reader for its
     // 320. Advertising the missing one would hand clients a 404.
     const thumb = animated ? { thumb: `/media/${mediaObj.media_url}/320.webp` } : {};
-    const full = animated
-      ? {}
-      : {
-          full: pendingOriginal
-            ? `/media/${mediaObj.media_url}/${meta.orig}`
-            : `/media/${mediaObj.media_url}/1600.webp`,
-        };
+    // Past the image retention window the 1600 is gone (feature 011). Omitted
+    // entirely, never swapped for `url`: presenting the display copy as though
+    // it were the full one is exactly what §III "Advertised state" forbids. The
+    // Lightbox falls back to `url` on its own, so the loss is a resolution
+    // change, not a broken image.
+    const expired1600 = Boolean(meta.reclaimed?.variants?.includes("1600"));
+    const full =
+      animated || (expired1600 && !pendingOriginal)
+        ? {}
+        : {
+            full: pendingOriginal
+              ? `/media/${mediaObj.media_url}/${meta.orig}`
+              : `/media/${mediaObj.media_url}/1600.webp`,
+          };
     return {
       type: "image",
       url: `/media/${mediaObj.media_url}/960.webp`,
@@ -238,6 +245,13 @@ export function buildMedia(mediaObj) {
   }
   if (mediaObj.media_type === "video") {
     const meta = JSON.parse(mediaObj.media_meta || "{}");
+    // Past the video retention window the file is gone and nothing replaces it
+    // (feature 011). No `url` and no `thumb`: the card must render an explicit
+    // Russian tombstone, never a player that looks like it is still loading.
+    // Dimensions stay so the space can be reserved without a layout jump.
+    if (meta.reclaimed?.video) {
+      return { type: "video", expired: true, width: meta.w || 0, height: meta.h || 0 };
+    }
     return {
       type: "video",
       url: `/media/${mediaObj.media_url}/original.mp4`,

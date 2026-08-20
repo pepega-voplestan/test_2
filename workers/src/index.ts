@@ -8,12 +8,16 @@ import {
   dbBackupQueue,
   originalDowngradeQueue,
   mediaReclaimQueue,
+  imageVariantExpiryQueue,
+  videoExpiryQueue,
 } from "./queues.js";
 import { registerScheduledJobs } from "./scheduler.js";
 import { createNotificationCleanupWorker } from "./jobs/notification-cleanup.js";
 import { createDbBackupWorker } from "./jobs/db-backup.js";
 import { createOriginalDowngradeWorker } from "./jobs/original-downgrade.js";
 import { createMediaReclaimWorker } from "./jobs/media-reclaim.js";
+import { createImageVariantExpiryWorker } from "./jobs/image-variant-expiry.js";
+import { createVideoExpiryWorker } from "./jobs/video-expiry.js";
 import { prisma } from "./db.js";
 
 const PORT = Number(process.env.WORKERS_PORT ?? 3001);
@@ -26,6 +30,8 @@ async function main() {
     createDbBackupWorker(),
     createOriginalDowngradeWorker(),
     createMediaReclaimWorker(),
+    createImageVariantExpiryWorker(),
+    createVideoExpiryWorker(),
   ];
 
   // Register repeatable schedules (upsert — safe to run on every startup)
@@ -41,6 +47,8 @@ async function main() {
       new BullMQAdapter(dbBackupQueue),
       new BullMQAdapter(originalDowngradeQueue),
       new BullMQAdapter(mediaReclaimQueue),
+      new BullMQAdapter(imageVariantExpiryQueue),
+      new BullMQAdapter(videoExpiryQueue),
     ],
     serverAdapter,
   });
