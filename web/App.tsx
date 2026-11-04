@@ -9,7 +9,9 @@ import { SSEProvider } from './context/SSEContext';
 import { NotificationsProvider } from './context/NotificationsContext';
 import { ContentPreferencesProvider } from './context/ContentPreferencesContext';
 import { IgnoredUsersProvider } from './context/IgnoredUsersContext';
+import { CommentFeedProvider } from './context/CommentFeedContext';
 import AuthModal from './components/AuthModal';
+import CommentFeedPanel from './components/CommentFeedPanel';
 import { useRoute, navigateTo } from './hooks/useRoute';
 
 const App: React.FC = () => {
@@ -53,6 +55,7 @@ const App: React.FC = () => {
       <SSEProvider>
       <ContentPreferencesProvider>
         <IgnoredUsersProvider>
+        <CommentFeedProvider>
         <NotificationsProvider>
           <div className="min-h-screen font-sans bg-th-page transition-colors">
             <Header />
@@ -69,9 +72,11 @@ const App: React.FC = () => {
               </div>
             </main>
 
+            <CommentFeedPanel />
             <AuthModal />
           </div>
         </NotificationsProvider>
+        </CommentFeedProvider>
         </IgnoredUsersProvider>
       </ContentPreferencesProvider>
       </SSEProvider>

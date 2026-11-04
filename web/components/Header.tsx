@@ -5,6 +5,7 @@ import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
 import NotificationDropdown from './NotificationDropdown';
 import SearchDropdown from './SearchDropdown';
+import CommentFeedToggle from './CommentFeedToggle';
 
 const Header: React.FC = () => {
   const { user, openModal, logout } = useAuth();
@@ -41,6 +42,9 @@ const Header: React.FC = () => {
           <div className="flex items-center gap-2 text-th-text-3">
             {/* Search */}
             {user && <SearchDropdown onFocusChange={setSearchOpen} />}
+
+            {/* Live comments feed — immediately before the bell */}
+            {user && <CommentFeedToggle />}
 
             {/* Notifications */}
             {user && <NotificationDropdown />}

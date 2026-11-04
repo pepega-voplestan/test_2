@@ -5,6 +5,7 @@ import { SSEProvider } from "../context/SSEContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
 import { ContentPreferencesProvider } from "../context/ContentPreferencesContext";
 import { IgnoredUsersProvider } from "../context/IgnoredUsersContext";
+import { CommentFeedProvider } from "../context/CommentFeedContext";
 import { type ReactElement } from "react";
 
 /**
@@ -25,7 +26,9 @@ function renderWithProviders(
           <SSEProvider>
             <ContentPreferencesProvider>
               <IgnoredUsersProvider>
-                <NotificationsProvider>{children}</NotificationsProvider>
+                <CommentFeedProvider>
+                  <NotificationsProvider>{children}</NotificationsProvider>
+                </CommentFeedProvider>
               </IgnoredUsersProvider>
             </ContentPreferencesProvider>
           </SSEProvider>
