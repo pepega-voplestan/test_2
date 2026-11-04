@@ -474,6 +474,25 @@ const MediaPlaceholder: React.FC<MediaPlaceholderProps> = ({ className = '' }) =
   );
 };
 
+/**
+ * Shown in place of a video whose file has passed its retention window
+ * (feature 011, FR-013).
+ *
+ * Text only, by design: no play control, no imagery, and no disabled player
+ * chrome. Anything resembling a player would read as "still loading" and send
+ * the reader back to retry something that is permanently gone. The wording
+ * matches the `_deleted.mp4` placeholder nginx serves to stale cached
+ * addresses, so the two layers say the same thing.
+ */
+const ExpiredVideo: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div
+    data-testid="expired-video"
+    className={`bg-th-elevated/60 rounded-lg px-4 py-3 text-sm text-th-muted ${className}`}
+  >
+    Срок хранения видео истёк
+  </div>
+);
+
 /* ---------- Inline spoiler component ---------- */
 
 const InlineSpoiler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -928,19 +947,23 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 
           {lightboxOpen && comment.media?.type === 'image' && (
             <Lightbox
-              src={comment.media.animated && comment.media.gif ? comment.media.gif : comment.media.full}
+              src={comment.media.animated && comment.media.gif ? comment.media.gif : (comment.media.full ?? comment.media.url)}
               orientation={comment.media.orientation}
               onClose={() => setLightboxOpen(false)}
             />
           )}
 
-          {showMedia && comment.media?.type === 'video' && (
+          {comment.media?.type === 'video' && comment.media.expired && (
+            <ExpiredVideo className="mb-2" />
+          )}
+
+          {showMedia && comment.media?.type === 'video' && !comment.media.expired && (
             <div className="mb-2 rounded-lg overflow-hidden">
               <video src={comment.media.url} controls loop className="max-h-[200px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={setVideoVolume} />
             </div>
           )}
 
-          {!showMedia && comment.media?.type === 'video' && (
+          {!showMedia && comment.media?.type === 'video' && !comment.media.expired && (
             <MediaPlaceholder className="mb-2" />
           )}
 
@@ -1435,13 +1458,17 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
 
       {lightboxOpen && shout.media?.type === 'image' && (
         <Lightbox
-          src={shout.media.animated && shout.media.gif ? shout.media.gif : shout.media.full}
+          src={shout.media.animated && shout.media.gif ? shout.media.gif : (shout.media.full ?? shout.media.url)}
           orientation={shout.media.orientation}
           onClose={() => setLightboxOpen(false)}
         />
       )}
 
-      {shout.media?.type === 'video' && (
+      {shout.media?.type === 'video' && shout.media.expired && (
+        <ExpiredVideo className="mb-2" />
+      )}
+
+      {shout.media?.type === 'video' && !shout.media.expired && (
         <div className="mb-2 rounded-lg overflow-hidden">
           <video src={shout.media.url} controls loop className="max-h-[300px] max-w-full rounded-lg" style={{ minWidth: 'min(300px, 100%)' }} ref={setVideoVolume} />
         </div>

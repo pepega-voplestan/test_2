@@ -110,6 +110,36 @@ describe("mergeReclaimed", () => {
     const second = mergeReclaimed(first, { variants: ["320"] }, NOW);
     expect(second.reclaimed?.files).toBe(true);
   });
+
+  // Feature 011: video expiry marks its own key rather than pushing
+  // "original.mp4" into `variants`, which is keyed by width strings.
+  it("carries video:true through", () => {
+    const out = mergeReclaimed({}, { video: true }, NOW);
+    expect(out.reclaimed?.video).toBe(true);
+    expect(out.reclaimed?.variants).toBeUndefined();
+  });
+
+  it("keeps video:true sticky once set", () => {
+    const first = mergeReclaimed({}, { video: true }, NOW);
+    const second = mergeReclaimed(first, { variants: ["1600"] }, NOW);
+    expect(second.reclaimed?.video).toBe(true);
+    expect(second.reclaimed?.variants).toEqual(["1600"]);
+  });
+
+  it("still unions variants across runs when video is also set", () => {
+    const first = mergeReclaimed({}, { variants: ["320"] }, NOW);
+    const second = mergeReclaimed(first, { video: true }, NOW);
+    const third = mergeReclaimed(second, { variants: ["1600"] }, NOW);
+    expect(third.reclaimed?.variants).toEqual(["320", "1600"]);
+    expect(third.reclaimed?.video).toBe(true);
+  });
+
+  it("files:true still dominates alongside video", () => {
+    const first = mergeReclaimed({}, { video: true }, NOW);
+    const second = mergeReclaimed(first, { files: true }, NOW);
+    expect(second.reclaimed?.files).toBe(true);
+    expect(second.reclaimed?.video).toBe(true);
+  });
 });
 
 describe("performReclaim — survivor verification (FR-016)", () => {

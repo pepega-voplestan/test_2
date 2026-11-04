@@ -21,6 +21,26 @@ export const originalDowngradeQueue = new Queue("original-downgrade", {
   },
 });
 
+export const imageVariantExpiryQueue = new Queue("image-variant-expiry", {
+  connection: redisConnection,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 30000 },
+  },
+});
+
+export const videoExpiryQueue = new Queue("video-expiry", {
+  connection: redisConnection,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 30000 },
+  },
+});
+
 export const mediaReclaimQueue = new Queue("media-reclaim", {
   connection: redisConnection,
   defaultJobOptions: {

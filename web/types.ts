@@ -22,7 +22,11 @@ export type ShoutMedia =
   // `thumb` is present only for animated images, `full` only for still ones —
   // the other variant is not generated (feature 008). `url` is always present.
   | { type: 'image'; url: string; thumb?: string; full?: string; width: number; height: number; animated?: boolean; gif?: string; orientation?: number }
-  | { type: 'video'; url: string; thumb?: string; width?: number; height?: number }
+  // `url` is optional because an expired video has no file to point at
+  // (feature 011). Optional rather than absent-by-convention so every
+  // `<video src=…>` call site is forced to be revisited by the type checker
+  // instead of silently receiving undefined.
+  | { type: 'video'; url?: string; thumb?: string; width?: number; height?: number; expired?: boolean }
   | { type: 'youtube'; videoId: string; embedUrl: string; title?: string | null; channel?: string | null }
   | { type: 'giphy'; giphyId: string; url: string; still: string; width: number; height: number };
 

@@ -95,7 +95,10 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
   const [closing, setClosing] = useState(false);
 
   const activeItem = galleryMode ? items![currentIndex] : undefined;
-  const activeSrc = activeItem ? activeItem.full : (src as string);
+  // `full` is absent once the 1600 has expired (feature 011); the display copy
+  // is the remaining resolution, not a fallback for an error. Never `undefined`
+  // into src — that renders a broken image, which §III prohibits.
+  const activeSrc = activeItem ? (activeItem.full ?? activeItem.url) : (src as string);
   const activeOrientation = activeItem ? activeItem.orientation : orientation;
   const prevItem = galleryMode ? items![(currentIndex - 1 + length) % length] : undefined;
   const nextItem = galleryMode ? items![(currentIndex + 1) % length] : undefined;
@@ -561,7 +564,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
           {neighborsMounted && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'translateX(-100%)' }}>
               <img
-                src={prevItem?.full}
+                src={prevItem ? (prevItem.full ?? prevItem.url) : undefined}
                 alt=""
                 draggable={false}
                 className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
@@ -583,7 +586,7 @@ const Lightbox: React.FC<LightboxProps> = ({ src, alt = 'attachment', onClose, o
           {neighborsMounted && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'translateX(100%)' }}>
               <img
-                src={nextItem?.full}
+                src={nextItem ? (nextItem.full ?? nextItem.url) : undefined}
                 alt=""
                 draggable={false}
                 className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"

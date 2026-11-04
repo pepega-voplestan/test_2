@@ -14,6 +14,11 @@ export interface ReclaimedMarker {
   variants?: string[];
   /** True once EVERY file is gone — the media is permanently unrenderable. */
   files?: boolean;
+  /**
+   * True once the uploaded `original.mp4` has been reclaimed by age (feature
+   * 011). Kept out of `variants`, which is keyed by width strings.
+   */
+  video?: boolean;
   at: string;
 }
 
@@ -70,7 +75,7 @@ export function parseMeta(json: string | null | undefined): MediaMeta | null {
  */
 export function mergeReclaimed(
   meta: MediaMeta,
-  patch: { variants?: string[]; files?: boolean },
+  patch: { variants?: string[]; files?: boolean; video?: boolean },
   now: Date
 ): MediaMeta {
   const prior = meta.reclaimed;
@@ -80,9 +85,23 @@ export function mergeReclaimed(
     reclaimed: {
       ...(variants.length > 0 ? { variants } : {}),
       ...(patch.files || prior?.files ? { files: true } : {}),
+      ...(patch.video || prior?.video ? { video: true } : {}),
       at: now.toISOString(),
     },
   };
+}
+
+/**
+ * The survivor check refused the removal — the last usable copy is missing or
+ * empty. Typed rather than a bare Error so a caller can attribute it to that
+ * cause specifically: a database outage also throws out of `performReclaim`,
+ * and reporting one as the other sends an operator to the wrong system.
+ */
+export class SurvivorMissingError extends Error {
+  constructor(survivor: string, mediaId: string) {
+    super(`survivor ${survivor} missing or empty for media ${mediaId}`);
+    this.name = "SurvivorMissingError";
+  }
 }
 
 export interface RemovalPlan {
@@ -103,7 +122,7 @@ export interface RemovalPlan {
    * Null when the whole item is being reclaimed and nothing is meant to survive.
    */
   survivor: string | null;
-  markerPatch: { variants?: string[]; files?: boolean };
+  markerPatch: { variants?: string[]; files?: boolean; video?: boolean };
 }
 
 export interface PerformDeps {
@@ -147,7 +166,7 @@ export async function performReclaim(
   if (plan.survivor) {
     const survivorPath = path.join(dir, plan.survivor);
     if (!fileSystem.existsSync(survivorPath) || fileSystem.statSync(survivorPath).size === 0) {
-      throw new Error(`survivor ${plan.survivor} missing or empty for media ${plan.mediaId}`);
+      throw new SurvivorMissingError(plan.survivor, plan.mediaId);
     }
   }
 
