@@ -47,7 +47,7 @@ make prod             # Docker production (ports 80/443)
 ## Common Mistakes to Avoid
 
 - **`visibility_tag` strip** — backend strips spoiler/nsfw if no `media_id`; frontend blocks selection too but is not the only guard; both must be in sync
-- **SSEProvider order** — `SSEProvider` must be ancestor of `NotificationsProvider` and any `useSSE` consumer; wrong order = silent runtime errors
+- **SSEProvider order** — `SSEProvider` must be ancestor of `NotificationsProvider`, `CommentFeedProvider`, and any `useSSE` consumer; `CommentFeedProvider` must sit under `IgnoredUsersProvider`; wrong order = silent runtime errors
 - **Admin panel fatality in prod** — any uncaught error in `admin.js` exits with code 1 in production; always test admin changes before deploying
 - **`@mention` token format** — serialized as `@[username:userId]`, not plain `@username`; rendering, char counting, and notification extraction all depend on this exact format
 - **Notification dedup** — reply notification suppressed if commenter already mentioned in the same comment; both cases in `routes/comments.js`; don't split this logic
@@ -79,6 +79,7 @@ make prod             # Docker production (ports 80/443)
 | Change media file reclamation | `workers/src/jobs/media-reclaim.ts` (unreachable/orphaned) + `image-variant-expiry.ts` / `video-expiry.ts` (age-based) + `workers/src/helpers/reclaim.ts` — `performReclaim` (crash-safe removal, sole deletion path) + `media-refs.ts` (what protects media) + `retention.ts` (the two age windows, constants not env) |
 | Change char counting logic | `api/src/helpers/common.js` + `web/tests/unit/effectiveLength.test.ts` |
 | Add a new context provider | Follow order in `web/App.tsx` (see provider order in [web docs](docs/web.md)) |
+| Change live comments sidebar | `web/context/CommentFeedContext.tsx` + `CommentFeedPanel.tsx` / `CommentFeedToggle.tsx` + Header slot (feature 012) |
 | Extend search (add type) | `api/src/routes/search.js` — add handler to `searchHandlers` map + Zod enum |
 
 <!-- ESSENTIAL:END -->
@@ -93,5 +94,5 @@ make prod             # Docker production (ports 80/443)
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/011-media-retention-windows/plan.md
+at specs/012-comments-feed/plan.md
 <!-- SPECKIT END -->

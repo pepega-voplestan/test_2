@@ -30,6 +30,8 @@ interface ShoutCardProps {
   onCommentEdited?: (shoutId: string, commentId: string, newContent: string) => void;
   isThreadOpen?: boolean;
   onThreadToggle?: (shoutId: string) => void;
+  /** Expand a collapsed pin so jump-to-comment can find `#comment-…` (feature 012). */
+  forcePinnedExpanded?: boolean;
 }
 
 const SHOUT_MAX_LENGTH = 1000;
@@ -1079,7 +1081,8 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
 const ShoutCard: React.FC<ShoutCardProps> = ({
   shout, showMedia = true, onCommentAdded, onDelete, onCommentDeleted,
   onShoutEdited, onCommentEdited,
-  isThreadOpen, onThreadToggle
+  isThreadOpen, onThreadToggle,
+  forcePinnedExpanded = false,
 }) => {
   const { user, openModal } = useAuth();
   const { prefs } = useContentPreferences();
@@ -1180,6 +1183,14 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
     if (next) localStorage.setItem(pinnedCollapseKey, '1');
     else localStorage.removeItem(pinnedCollapseKey);
   };
+
+  // Jump-to-comment from the live comments feed: expand inside this component
+  // (never poke localStorage from the feed module — Constitution I / feature 012).
+  useEffect(() => {
+    if (!forcePinnedExpanded || !pinnedCollapseKey || !isPinnedCollapsed) return;
+    setIsPinnedCollapsed(false);
+    localStorage.removeItem(pinnedCollapseKey);
+  }, [forcePinnedExpanded, pinnedCollapseKey, isPinnedCollapsed]);
 
   const isDeleted = !!shout.isDeleted;
   const isShoutAuthorIgnored = !isDeleted && !!shout.user && isIgnored(shout.user.id);
