@@ -44,6 +44,8 @@ Credentials: include
 | Jump | К новым ↑ |
 | Soft-hide | Контент от этого пользователя скрыт |
 | Media label | [медиа] |
+| Shout quote hover | Перейти к воплю |
+| Comment body hover | Перейти к комментарию |
 | Spoiler titles | Нажмите, чтобы раскрыть спойлер / Нажмите, чтобы скрыть |
 
 ## Navigation

@@ -256,6 +256,7 @@ function FeedRow({
       <div
         role="link"
         tabIndex={0}
+        title="Перейти к воплю"
         data-testid="comment-feed-shout-quote"
         className="flex flex-col gap-[0.2625rem] no-underline text-th-text-4 text-[0.5625rem] leading-3 font-normal mb-[7.5px] px-[0.375rem] py-[0.1875rem] rounded-[0.1875rem] bg-th-inset/40 hover:bg-th-inset/70 cursor-pointer"
         onClick={(e) => {
@@ -335,6 +336,7 @@ function FeedRow({
               <div
                 role="link"
                 tabIndex={0}
+                title="Перейти к комментарию"
                 className="text-th-text-2 text-[11.25px] font-normal leading-relaxed break-words whitespace-pre-wrap cursor-pointer line-clamp-4 direction-ltr [unicode-bidi:isolate]"
                 onClick={(e) => {
                   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
