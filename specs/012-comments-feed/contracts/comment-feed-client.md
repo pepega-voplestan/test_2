@@ -15,11 +15,11 @@ Credentials: include
 
 1. For each shout: remember `ShoutMeta` from `content` (via `previewText`) + attachment flags from `media`/`gallery`.
 2. Flatten `shout.comments[]` into `CommentFeedItem`s.
-3. Take newest 50 of that page as seed candidates.
+3. Take newest 40 of that page as seed candidates.
 4. **Upsert-only merge** into current buffer:
    - Existing buffer ids keep rows that are missing from the response (SSE may have added them during fetch).
    - Matching ids update content/meta fields preferring non-empty shout preview / attachment flags.
-5. Re-sort newest-first; slice to 50.
+5. Re-sort newest-first; slice to 40.
 6. **Do not** remove buffer rows solely because they are absent from this page.
 7. Throttle: skip if last successful hydrate was &lt; 60s ago unless `force: true` (cold start / resume).
 
@@ -27,7 +27,7 @@ Credentials: include
 
 | Event | Action |
 |-------|--------|
-| `new_comment` | If id not in buffer, prepend `CommentFeedItem` from `data.comment`; bump unseen if panel closed; cap 50 |
+| `new_comment` | If id not in buffer, prepend `CommentFeedItem` from `data.comment`; bump unseen if panel closed; cap 40 |
 | `edit_comment` | If id in buffer, replace `content` |
 | `delete_comment` | Remove id from buffer |
 | `new_shout` | Update `ShoutMeta` from `data.shout`; refresh quote strips |

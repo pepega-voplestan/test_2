@@ -22,7 +22,7 @@ Port the VopleXtender live comments sidebar into the React web app as a first-cl
 
 **Project Type**: Web frontend only (`web/`); no `api/` or `workers/` changes
 
-**Performance Goals**: Single batched hydrate (limit 40 shouts); buffer cap 50; hydrate throttle ≥60s; no per-row `/shouts/:id` fetches
+**Performance Goals**: Single batched hydrate (limit 40 shouts); buffer cap 40; hydrate throttle ≥60s; no per-row `/shouts/:id` fetches
 
 **Constraints**: Constitution I (no auth in localStorage); II (Russian UI); III (never advertise/render missing media as broken images — label only); provider order `SSEProvider` → `IgnoredUsersProvider` → consumers; Russian `@[username:userId]` mention format
 

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { Comment, Shout } from '../types';
+import type { Comment, CommentQuote, Shout } from '../types';
 import { useAuth } from './AuthContext';
 import { useIgnoredUsers } from './IgnoredUsersContext';
 import { useSSE } from '../hooks/useSSE';
@@ -18,7 +18,8 @@ import {
   sanitizeShoutPreviewText,
 } from '../utils/commentFeedPreview';
 
-export const COMMENT_FEED_BUFFER_MAX = 50;
+/** Cap sidebar rows (newest N, no pagination) — matches extension 0.12.17. */
+export const COMMENT_FEED_BUFFER_MAX = 40;
 export const COMMENT_FEED_HYDRATE_LIMIT = 40;
 export const COMMENT_FEED_HYDRATE_MIN_INTERVAL_MS = 60_000;
 export const COMMENT_FEED_MOBILE_MQ = '(max-width: 767px)';
@@ -29,11 +30,14 @@ export type CommentFeedItem = {
   shoutId: string;
   userId: string;
   name: string;
+  avatar: string;
   content: string;
   timestamp: string;
   hasMedia: boolean;
   shoutPreview: string;
   shoutHasMedia: boolean;
+  replyToId: string | null;
+  quote: CommentQuote | null;
 };
 
 type ShoutMeta = {
@@ -71,16 +75,20 @@ function itemFromComment(comment: Comment, shoutId: string, meta: ShoutMeta): Co
   const id = String(comment.id || '');
   const sid = String(comment.shoutId || shoutId || '');
   if (!id || !sid) return null;
+  const replyToId = comment.replyToId ? String(comment.replyToId) : null;
   return {
     id,
     shoutId: sid,
     userId: String(comment.user?.id || ''),
     name: String(comment.user?.name || '…'),
+    avatar: String(comment.user?.avatar || ''),
     content: String(comment.content || ''),
     timestamp: String(comment.timestamp || new Date().toISOString()),
     hasMedia: hasAttachment(comment.media, comment.gallery),
     shoutPreview: sanitizeShoutPreviewText(meta.text),
     shoutHasMedia: meta.hasMedia,
+    replyToId,
+    quote: replyToId && comment.quote ? comment.quote : null,
   };
 }
 
@@ -255,6 +263,9 @@ export function CommentFeedProvider({ children }: { children: ReactNode }) {
                     sanitizeShoutPreviewText(existing.shoutPreview),
                   shoutHasMedia: item.shoutHasMedia || existing.shoutHasMedia,
                   hasMedia: item.hasMedia || existing.hasMedia,
+                  avatar: item.avatar || existing.avatar,
+                  replyToId: item.replyToId || existing.replyToId,
+                  quote: item.quote || existing.quote,
                 }
               : item,
           );
@@ -281,6 +292,10 @@ export function CommentFeedProvider({ children }: { children: ReactNode }) {
               x.shoutPreview,
               x.shoutHasMedia,
               x.hasMedia,
+              x.avatar,
+              x.replyToId || '',
+              x.quote?.text || '',
+              x.quote?.deleted ? 1 : 0,
             ]),
           );
         changed = fingerprint(prev) !== fingerprint(next);

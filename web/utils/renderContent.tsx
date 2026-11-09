@@ -21,7 +21,17 @@ export const InlineSpoiler: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
-function renderMentionsAndUrls(text: string, keyPrefix: string): React.ReactNode[] {
+type RenderInlineOptions = {
+  /** When false, http(s) URLs stay plain text (comments feed sidebar). Default true. */
+  linkifyUrls?: boolean;
+};
+
+function renderMentionsAndUrls(
+  text: string,
+  keyPrefix: string,
+  options: RenderInlineOptions = {},
+): React.ReactNode[] {
+  const linkifyUrls = options.linkifyUrls !== false;
   const parts = text.split(/((?:@\[[^\]]+:[^\]]+\])|(?:@[a-zA-Z0-9_-]+)|(?:https?:\/\/[^\s]+))/);
   return parts.map((part, i) => {
     if (!part) return null;
@@ -40,6 +50,9 @@ function renderMentionsAndUrls(text: string, keyPrefix: string): React.ReactNode
       );
     }
     if (/^https?:\/\//.test(part)) {
+      if (!linkifyUrls) {
+        return <React.Fragment key={`${keyPrefix}-${i}`}>{part}</React.Fragment>;
+      }
       return (
         <a
           key={`${keyPrefix}-${i}`}
@@ -65,17 +78,29 @@ function renderMentionsAndUrls(text: string, keyPrefix: string): React.ReactNode
 }
 
 /** Comment/shout body: spoilers + mentions + URLs (no truncation). */
-export function renderCommentContent(text: string): React.ReactNode {
+export function renderCommentContent(
+  text: string,
+  options: RenderInlineOptions = {},
+): React.ReactNode {
   const spoilerParts = String(text || '').split(/(\|\|[\s\S]*?\|\|)/);
   return spoilerParts.map((spoilerPart, si) => {
     const spoilerMatch = spoilerPart.match(/^\|\|([\s\S]*?)\|\|$/);
     if (spoilerMatch) {
       return (
         <InlineSpoiler key={`sp-${si}`}>
-          {renderMentionsAndUrls(spoilerMatch[1], `sp-${si}`)}
+          {renderMentionsAndUrls(spoilerMatch[1], `sp-${si}`, options)}
         </InlineSpoiler>
       );
     }
-    return <React.Fragment key={`p-${si}`}>{renderMentionsAndUrls(spoilerPart, `${si}`)}</React.Fragment>;
+    return (
+      <React.Fragment key={`p-${si}`}>
+        {renderMentionsAndUrls(spoilerPart, `${si}`, options)}
+      </React.Fragment>
+    );
   });
+}
+
+/** Sidebar feed: spoilers + mentions, URLs as plain text. */
+export function renderCommentFeedContent(text: string): React.ReactNode {
+  return renderCommentContent(text, { linkifyUrls: false });
 }

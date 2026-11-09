@@ -117,8 +117,17 @@ beforeEach(() => {
 });
 
 describe('commentFeedPreview helpers', () => {
-  it('previewText flattens mentions and spoilers', () => {
-    expect(previewText('привет @[alice:uuid] ||secret||')).toBe('привет @alice secret');
+  it('previewText keeps mention and spoiler tokens for rich render', () => {
+    expect(previewText('привет @[alice:uuid] ||secret||')).toBe(
+      'привет @[alice:uuid] ||secret||',
+    );
+  });
+
+  it('previewText truncates by visible length without cutting mid-mention', () => {
+    const long = `${'слово '.repeat(40)}@[alice:uuid] хвост`;
+    const out = previewText(long);
+    expect(out.endsWith('…') || out.includes('@[alice:uuid]')).toBe(true);
+    expect(out.includes('@[alice:')).toBe(out.includes('@[alice:uuid]'));
   });
 
   it('hasAttachment detects media and gallery', () => {
@@ -330,5 +339,82 @@ describe('CommentFeed — navigate closes on mobile (US4/US5)', () => {
     expect(mockNavigateTo).toHaveBeenCalledWith(
       '/shout/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa?comment=bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
     );
+  });
+});
+
+describe('CommentFeed — Discord-compact reply + avatar (extension 0.12.17)', () => {
+  it('renders a clickable reply bar and avatar for replies', async () => {
+    stubHydrate([]);
+    renderFeed();
+    await screen.findByLabelText('Лента комментов');
+
+    await act(async () => {
+      sseHandlers.new_comment?.({
+        shoutId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        commentId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        comment: {
+          id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+          shoutId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          user: { id: 'u2', name: 'Аня', avatar: '/ava.png' },
+          content: 'ответ',
+          timestamp: new Date().toISOString(),
+          likes: 0,
+          replyToId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+          quote: {
+            text: 'цитата',
+            deleted: false,
+            author: { id: 'u3', name: 'Боря' },
+          },
+        },
+      });
+    });
+
+    expect(screen.getByText((t) => t.startsWith('@Боря:'))).toBeInTheDocument();
+    expect(screen.getByText('цитата')).toBeInTheDocument();
+    expect(screen.getByAltText('Аня')).toHaveAttribute('src', '/ava.png');
+
+    fireEvent.click(screen.getByTestId('comment-feed-reply'));
+    expect(mockNavigateTo).toHaveBeenCalledWith(
+      '/shout/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa?comment=cccccccc-cccc-cccc-cccc-cccccccccccc',
+    );
+  });
+
+  it('shows ignored-quote copy when reply author is ignored', async () => {
+    mockUseIgnoredUsers.mockReturnValue({
+      ignoredUserIds: ['u3'],
+      isIgnored: (id: string) => id === 'u3',
+      addIgnoredUser: vi.fn(),
+      removeIgnoredUser: vi.fn(),
+      refreshIgnoredUsers: vi.fn(),
+    });
+    stubHydrate([]);
+    renderFeed();
+    await screen.findByLabelText('Лента комментов');
+
+    await act(async () => {
+      sseHandlers.new_comment?.({
+        shoutId: 's1',
+        commentId: 'c1',
+        comment: {
+          id: 'c1',
+          shoutId: 's1',
+          user: { id: 'u2', name: 'Аня', avatar: '' },
+          content: 'ответ',
+          timestamp: new Date().toISOString(),
+          likes: 0,
+          replyToId: 'parent',
+          quote: {
+            text: 'скрыто',
+            deleted: false,
+            author: { id: 'u3', name: 'Игнор' },
+          },
+        },
+      });
+    });
+
+    expect(
+      screen.getByText('Ответ на комментарий игнорируемого пользователя'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('скрыто')).not.toBeInTheDocument();
   });
 });

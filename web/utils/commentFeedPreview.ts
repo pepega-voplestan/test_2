@@ -11,15 +11,12 @@ export function sanitizeShoutPreviewText(text: unknown): string {
 
 /**
  * Compact one-line text for shout quote strip.
- * Unwrap spoilers, flatten mentions to @name, trim trailing embed URLs.
+ * Keeps ||spoilers|| and @[name:id] for InlineSpoiler / mention render;
+ * trailing media URLs dropped — attachments use MEDIA_LABEL.
+ * Truncates by visible length without cutting mid-spoiler / mid-mention.
  */
 export function previewText(content: string): string {
   const raw = String(content || '')
-    .replace(/@\[[^\]]+:[^\]]+\]/g, (m) => {
-      const name = m.slice(2, -1).split(':')[0];
-      return name ? `@${name}` : '@…';
-    })
-    .replace(/\|\|([\s\S]*?)\|\|/g, '$1')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(
@@ -28,8 +25,56 @@ export function previewText(content: string): string {
     )
     .trim();
   if (!raw || raw === '…' || raw === '...') return '';
-  if (raw.length > 180) return `${raw.slice(0, 177).trimEnd()}…`;
-  return raw;
+
+  const MAX = 180;
+  let visible = 0;
+  let out = '';
+  let i = 0;
+  while (i < raw.length) {
+    if (raw.startsWith('||', i)) {
+      const end = raw.indexOf('||', i + 2);
+      if (end !== -1) {
+        const token = raw.slice(i, end + 2);
+        const innerVis = token
+          .slice(2, -2)
+          .replace(/@\[([^\]:]+):[^\]]+\]/g, '@$1').length;
+        if (visible > 0 && visible + Math.max(innerVis, 1) > MAX) {
+          out += '…';
+          break;
+        }
+        out += token;
+        visible += Math.max(innerVis, 1);
+        i = end + 2;
+        continue;
+      }
+    }
+
+    if (raw[i] === '@' && raw[i + 1] === '[') {
+      const close = raw.indexOf(']', i + 2);
+      if (close !== -1) {
+        const token = raw.slice(i, close + 1);
+        const name = token.slice(2, -1).split(':')[0];
+        const vis = 1 + (name || '').length;
+        if (visible > 0 && visible + vis > MAX) {
+          out += '…';
+          break;
+        }
+        out += token;
+        visible += vis;
+        i = close + 1;
+        continue;
+      }
+    }
+
+    if (visible >= MAX) {
+      out += '…';
+      break;
+    }
+    out += raw[i];
+    visible += 1;
+    i += 1;
+  }
+  return out;
 }
 
 export function hasAttachment(

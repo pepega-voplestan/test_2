@@ -12,15 +12,18 @@ No new database tables or API entities. Client-only shapes derived from existing
 | `shoutId` | string (uuid) | Parent shout |
 | `userId` | string | Author id (for ignore checks) |
 | `name` | string | Author display name |
+| `avatar` | string | Author avatar URL (compact Discord-style glyph in UI) |
 | `content` | string | Raw markup (`||spoilers||`, `@[name:id]`) |
 | `timestamp` | string (ISO) | Sort key (newest first) |
 | `hasMedia` | boolean | Comment has `media` and/or non-empty `gallery` |
-| `shoutPreview` | string | One-line quote text (may be empty for media-only) |
+| `shoutPreview` | string | One-line quote text keeping spoiler/mention tokens |
 | `shoutHasMedia` | boolean | Parent shout has attachment(s) |
+| `replyToId` | string \| null | Parent comment id when this is a reply |
+| `quote` | CommentQuote \| null | Reply strip DTO (present only with `replyToId`) |
 
 **Invariants**
 
-- Buffer holds at most 50 items, sorted newest-first (`timestamp` desc, then `id` desc).
+- Buffer holds at most 40 items, sorted newest-first (`timestamp` desc, then `id` desc).
 - Soft-deleted comments never enter via hydrate (`is_deleted=0` server-side); removal from buffer only on `delete_comment` SSE (or hard filter N/A).
 - `hasMedia` / `shoutHasMedia` never imply a media URL is still on disk — UI uses label only.
 

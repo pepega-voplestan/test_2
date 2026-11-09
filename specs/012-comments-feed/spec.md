@@ -95,7 +95,7 @@ On viewports ≤767px the open panel covers the full width as an overlay (main c
 ### Edge Cases
 
 - Hydrate from `GET /api/v1/shouts` must upsert into the buffer and MUST NOT drop rows that arrived via SSE during the fetch; deletes remain exclusive to `delete_comment`.
-- Buffer capped at 50 newest comments; older rows fall off.
+- Buffer capped at 40 newest comments; older rows fall off.
 - Hydrate requests are throttled (≥60s between non-forced calls) to avoid 429 storms on reopen/visibility.
 - Media-only shouts/comments show «[медиа]» with empty or dash quote text — never broken image tags.
 - While shout quote meta is still resolving, do not flash a premature «—»; show a blank placeholder until resolved or given up.
@@ -109,10 +109,13 @@ On viewports ≤767px the open panel covers the full width as an overlay (main c
 
 - **FR-001**: Logged-in users MUST see a comments-feed toggle in the header immediately before the notifications bell; guests MUST NOT.
 - **FR-002**: Activating the toggle MUST open/close a right-side panel labeled «Лента комментов».
-- **FR-003**: Initial fill MUST come from flattening comments on a recent `sortBy=new` shouts page (limit 40), keeping at most the 50 newest comments.
+- **FR-003**: Initial fill MUST come from flattening comments on a recent `sortBy=new` shouts page (limit 40), keeping at most the 40 newest comments.
 - **FR-004**: Live add/edit/delete MUST be driven exclusively by site SSE events `new_comment`, `edit_comment`, `delete_comment` (via existing `SSEProvider` / `useSSE`).
 - **FR-005**: Shout quote meta MAY be updated from `new_shout` / `edit_shout` SSE and from hydrate payloads; the client MUST NOT N× fetch `/shouts/:id` per row.
-- **FR-006**: Rows MUST NOT render avatars; attachments MUST render only as the Russian label «[медиа]», never as embeds/thumbnails.
+- **FR-006**: Rows MAY render a compact Discord-style avatar (≈ nick glyph height) next to the author name; attachments MUST render only as the Russian label «[медиа]», never as embeds/thumbnails.
+- **FR-015**: When a comment has `replyToId`/`quote`, the row MUST show a reply bar (site QuoteBlock semantics: ignored / deleted / `@name:` + text; clickable jump to parent comment when allowed).
+- **FR-016**: Sidebar bodies and shout quotes MUST keep `||spoiler||` / `@[name:id]` tokens for rich render; URLs in the sidebar MUST stay plain text (no external navigation from the panel).
+- **FR-017**: Buffer MUST keep at most the 40 newest comments (no pagination).
 - **FR-007**: Comment bodies MUST render `@[username:userId]` mentions, URLs, and `||spoiler||` tokens consistently with the site.
 - **FR-008**: Ignored authors MUST soft-hide like CommentCard; hard-ignore from the Chrome extension MUST NOT be implemented.
 - **FR-009**: Unseen comments while the panel is closed MUST update a badge (display cap «9+»); opening clears unseen.
