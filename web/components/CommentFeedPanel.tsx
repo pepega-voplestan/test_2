@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  COMMENT_FEED_MOBILE_MQ,
   COMMENT_FEED_SIDEBAR_WIDTH_PX,
+  isCommentFeedMobileLayout,
   useCommentFeed,
   type CommentFeedItem,
 } from '../context/CommentFeedContext';
@@ -13,14 +13,6 @@ import { formatCommentFeedTime } from '../utils/commentFeedTime';
 import { renderCommentFeedContent } from '../utils/renderContent';
 
 const STICK_TOP_PX = 48;
-
-function isMobileFeedLayout(): boolean {
-  try {
-    return window.matchMedia(COMMENT_FEED_MOBILE_MQ).matches;
-  } catch {
-    return false;
-  }
-}
 
 function MediaLabel({
   href,
@@ -244,7 +236,7 @@ function FeedRow({
   if (item.shoutPreview) {
     quoteBody = (
       <div className="overflow-hidden text-ellipsis whitespace-nowrap w-full direction-ltr [unicode-bidi:isolate]">
-        {renderCommentFeedContent(item.shoutPreview)}
+        {renderCommentFeedContent(item.shoutPreview, onNavigate)}
       </div>
     );
   } else if (item.shoutHasMedia) {
@@ -363,7 +355,7 @@ function FeedRow({
                   }
                 }}
               >
-                {renderCommentFeedContent(item.content)}
+                {renderCommentFeedContent(item.content, onNavigate)}
               </div>
             ) : null}
 
@@ -394,8 +386,9 @@ const CommentFeedPanel: React.FC = () => {
     if (listRef.current) listRef.current.scrollTop = 0;
   }, [panelOpen, stickToTop, items]);
 
+  // Close overlay only on mobile — desktop keeps the sidebar while navigating.
   const onNavigate = (href: string) => {
-    if (isMobileFeedLayout() && panelOpen) setPanelOpen(false);
+    if (isCommentFeedMobileLayout() && panelOpen) setPanelOpen(false);
     navigateTo(href);
   };
 

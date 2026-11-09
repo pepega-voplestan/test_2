@@ -24,6 +24,43 @@ export const COMMENT_FEED_HYDRATE_LIMIT = 40;
 export const COMMENT_FEED_HYDRATE_MIN_INTERVAL_MS = 60_000;
 export const COMMENT_FEED_MOBILE_MQ = '(max-width: 767px)';
 export const COMMENT_FEED_SIDEBAR_WIDTH_PX = 340;
+/** Desktop-only UI preference (not auth) — mobile overlay must not survive refresh. */
+export const COMMENT_FEED_PANEL_OPEN_KEY = 'commentFeedPanelOpen';
+
+export function isCommentFeedMobileLayout(): boolean {
+  try {
+    return window.matchMedia(COMMENT_FEED_MOBILE_MQ).matches;
+  } catch {
+    return false;
+  }
+}
+
+function readPersistedPanelOpen(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (isCommentFeedMobileLayout()) {
+    // Stale desktop flag must not reopen the overlay after a mobile refresh.
+    writePersistedPanelOpen(false);
+    return false;
+  }
+  try {
+    return sessionStorage.getItem(COMMENT_FEED_PANEL_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writePersistedPanelOpen(open: boolean): void {
+  try {
+    // Overlay layout: never remember open across refresh / never write while mobile.
+    if (!open || isCommentFeedMobileLayout()) {
+      sessionStorage.removeItem(COMMENT_FEED_PANEL_OPEN_KEY);
+      return;
+    }
+    sessionStorage.setItem(COMMENT_FEED_PANEL_OPEN_KEY, '1');
+  } catch {
+    // ignore quota / privacy mode
+  }
+}
 
 export type CommentFeedItem = {
   id: string;
@@ -96,7 +133,7 @@ export function CommentFeedProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { isIgnored, ignoredUserIds } = useIgnoredUsers();
 
-  const [panelOpen, setPanelOpenState] = useState(false);
+  const [panelOpen, setPanelOpenState] = useState(() => readPersistedPanelOpen());
   const [items, setItems] = useState<CommentFeedItem[]>([]);
   const [unseenWhileClosed, setUnseenWhileClosed] = useState(0);
   const [stickToTop, setStickToTop] = useState(true);
@@ -153,6 +190,7 @@ export function CommentFeedProvider({ children }: { children: ReactNode }) {
   const setPanelOpen = useCallback((open: boolean) => {
     setPanelOpenState(open);
     document.documentElement.classList.toggle('comment-feed-open', open);
+    writePersistedPanelOpen(open);
     if (open) {
       setUnseenWhileClosed(0);
       setStickToTop(true);
@@ -161,6 +199,18 @@ export function CommentFeedProvider({ children }: { children: ReactNode }) {
 
   const togglePanel = useCallback(() => {
     setPanelOpen(!panelOpenRef.current);
+  }, [setPanelOpen]);
+
+  // Keep <html> class in sync (also covers desktop restore from sessionStorage).
+  useEffect(() => {
+    document.documentElement.classList.toggle('comment-feed-open', panelOpen);
+  }, [panelOpen]);
+
+  // Mobile overlay must never start open after refresh (even with a stale desktop flag).
+  useEffect(() => {
+    if (!isCommentFeedMobileLayout()) return;
+    writePersistedPanelOpen(false);
+    if (panelOpenRef.current) setPanelOpen(false);
   }, [setPanelOpen]);
 
   useEffect(() => {

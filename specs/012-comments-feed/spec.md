@@ -122,7 +122,7 @@ On viewports ≤767px the open panel covers the full width as an overlay (main c
 - **FR-010**: Desktop open state MUST shift main content by the sidebar width; mobile (≤767px) MUST use a full-width overlay.
 - **FR-011**: Navigation from a row MUST use the existing SPA router; mobile overlay MUST close on navigate.
 - **FR-012**: Jumping to a comment on a collapsed pinned shout MUST expand that pin via ShoutCard React state/props (not by poking `localStorage` from the feed module).
-- **FR-013**: Panel open state and buffer MUST be in-memory only (no chrome.storage / no new localStorage keys for this feature).
+- **FR-013**: Comment buffer and soft-hide reveals MUST be in-memory only. Desktop panel-open MAY persist across refresh via `sessionStorage` (UI preference, not auth). Mobile overlay MUST start closed after refresh and MUST close the panel when navigating away from a feed row (including @mentions). Desktop navigation from the feed MUST keep the panel open.
 - **FR-014**: All new user-visible strings MUST be Russian with correct declensions.
 
 ### Key Entities

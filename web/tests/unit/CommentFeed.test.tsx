@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import React, { useEffect } from 'react';
 import {
+  COMMENT_FEED_PANEL_OPEN_KEY,
   CommentFeedProvider,
   useCommentFeed,
   type CommentFeedItem,
@@ -37,7 +38,22 @@ vi.mock('../../hooks/useRoute', () => ({
 afterEach(() => {
   cleanup();
   document.documentElement.classList.remove('comment-feed-open');
+  sessionStorage.clear();
   vi.unstubAllGlobals();
+  // Restore default desktop matchMedia from setup.ts after mobile stubs.
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
   sseHandlers = {};
   mockNavigateTo.mockReset();
 });
@@ -416,5 +432,83 @@ describe('CommentFeed — Discord-compact reply + avatar (extension 0.12.17)', (
       screen.getByText('Ответ на комментарий игнорируемого пользователя'),
     ).toBeInTheDocument();
     expect(screen.queryByText('скрыто')).not.toBeInTheDocument();
+  });
+});
+
+describe('CommentFeed — desktop mention keeps panel open', () => {
+  it('SPA-navigates @mention without closing the sidebar on desktop', async () => {
+    stubHydrate([]);
+    renderFeed();
+    await screen.findByLabelText('Лента комментов');
+
+    await act(async () => {
+      sseHandlers.new_comment?.({
+        shoutId: 's1',
+        commentId: 'c1',
+        comment: {
+          id: 'c1',
+          shoutId: 's1',
+          user: { id: 'u2', name: 'Аня', avatar: '' },
+          content: 'смотри @[alice:dddddddd-dddd-dddd-dddd-dddddddddddd]',
+          timestamp: new Date().toISOString(),
+          likes: 0,
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByRole('link', { name: '@alice' }));
+    expect(mockNavigateTo).toHaveBeenCalledWith(
+      '/profile/dddddddd-dddd-dddd-dddd-dddddddddddd',
+    );
+    expect(screen.getByLabelText('Лента комментов')).toBeInTheDocument();
+    expect(document.documentElement.classList.contains('comment-feed-open')).toBe(true);
+  });
+});
+
+describe('CommentFeed — panel open persistence', () => {
+  it('persists open state for desktop refresh and restores it', async () => {
+    stubHydrate([]);
+    const { unmount } = renderFeed();
+    await screen.findByLabelText('Лента комментов');
+    expect(sessionStorage.getItem(COMMENT_FEED_PANEL_OPEN_KEY)).toBe('1');
+
+    unmount();
+    cleanup();
+    stubHydrate([]);
+    render(
+      <CommentFeedProvider>
+        <CommentFeedToggle />
+        <CommentFeedPanel />
+      </CommentFeedProvider>,
+    );
+    expect(await screen.findByLabelText('Лента комментов')).toBeInTheDocument();
+  });
+
+  it('does not restore open state on mobile overlay layout', async () => {
+    sessionStorage.setItem(COMMENT_FEED_PANEL_OPEN_KEY, '1');
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: String(query).includes('max-width: 767px'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
+    stubHydrate([]);
+    render(
+      <CommentFeedProvider>
+        <CommentFeedToggle />
+        <CommentFeedPanel />
+      </CommentFeedProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Лента комментов')).not.toBeInTheDocument();
+    });
+    expect(sessionStorage.getItem(COMMENT_FEED_PANEL_OPEN_KEY)).toBeNull();
   });
 });

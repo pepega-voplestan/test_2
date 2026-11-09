@@ -24,6 +24,11 @@ export const InlineSpoiler: React.FC<{ children: React.ReactNode }> = ({ childre
 type RenderInlineOptions = {
   /** When false, http(s) URLs stay plain text (comments feed sidebar). Default true. */
   linkifyUrls?: boolean;
+  /**
+   * Sidebar: SPA-navigate mentions via this callback (preventDefault) so desktop
+   * can keep the panel open; mobile callers close the overlay themselves.
+   */
+  onMentionNavigate?: (href: string) => void;
 };
 
 function renderMentionsAndUrls(
@@ -32,18 +37,26 @@ function renderMentionsAndUrls(
   options: RenderInlineOptions = {},
 ): React.ReactNode[] {
   const linkifyUrls = options.linkifyUrls !== false;
+  const onMentionNavigate = options.onMentionNavigate;
   const parts = text.split(/((?:@\[[^\]]+:[^\]]+\])|(?:@[a-zA-Z0-9_-]+)|(?:https?:\/\/[^\s]+))/);
   return parts.map((part, i) => {
     if (!part) return null;
     const mentionMatch = part.match(/^@\[([^\]]+):([^\]]+)\]$/);
     if (mentionMatch) {
       const [, name, id] = mentionMatch;
+      const href = `/profile/${id}`;
       return (
         <a
           key={`${keyPrefix}-${i}`}
-          href={`/profile/${id}`}
+          href={href}
           className="text-blue-400 hover:underline font-medium"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!onMentionNavigate) return;
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            onMentionNavigate(href);
+          }}
         >
           @{name}
         </a>
@@ -101,6 +114,9 @@ export function renderCommentContent(
 }
 
 /** Sidebar feed: spoilers + mentions, URLs as plain text. */
-export function renderCommentFeedContent(text: string): React.ReactNode {
-  return renderCommentContent(text, { linkifyUrls: false });
+export function renderCommentFeedContent(
+  text: string,
+  onMentionNavigate?: (href: string) => void,
+): React.ReactNode {
+  return renderCommentContent(text, { linkifyUrls: false, onMentionNavigate });
 }
