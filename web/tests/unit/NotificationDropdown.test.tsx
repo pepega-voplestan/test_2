@@ -171,6 +171,20 @@ describe('NotificationDropdown — notification click navigation (Назад bug
   });
 });
 
+describe('NotificationDropdown — VPN-server donation footer', () => {
+  it('shows the VPN-server section under the project donation button and opens its widget', async () => {
+    const fetchMock = stubAnnouncementsFetch([]);
+    render(<NotificationDropdown />);
+    await openAnnouncementsTab(fetchMock);
+
+    expect(screen.getByText("Хотите поддержать VPN сервер DHARVED'а? Жмите здесь:")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Поддержать VPN-сервер' }));
+    const iframe = await screen.findByTitle('Поддержать VPN-сервер');
+    expect(iframe.getAttribute('src')).toContain('billNumber=1K0OOH7MLRH.260831');
+    expect(screen.queryByTitle('Поддержать проект')).not.toBeInTheDocument();
+  });
+});
+
 describe('NotificationDropdown — closing the donation modal preserves state (US3: FR-008, FR-012)', () => {
   it('leaves the announcements list and active tab unchanged after opening and closing the modal via the backdrop', async () => {
     const fetchMock = stubAnnouncementsFetch([{ id: '1', title: 'Заголовок', content: 'Текст', createdAt: new Date().toISOString() }]);

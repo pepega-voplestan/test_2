@@ -1,11 +1,30 @@
 import { createPortal } from 'react-dom';
 
-interface DonationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+export interface DonationWidget {
+  title: string;
+  src: string;
+  width: number;
+  height: number;
 }
 
-const DONATION_WIDGET_SRC = 'https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1JMM32H01K8.260816&';
+export const PROJECT_DONATION: DonationWidget = {
+  title: 'Поддержать проект',
+  src: 'https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1JMM32H01K8.260816&',
+  width: 500,
+  height: 480,
+};
+
+export const VPN_DONATION: DonationWidget = {
+  title: 'Поддержать VPN-сервер',
+  src: 'https://yoomoney.ru/quickpay/fundraise/button?billNumber=1K0OOH7MLRH.260831&',
+  width: 330,
+  height: 50,
+};
+
+interface DonationModalProps {
+  widget: DonationWidget | null;
+  onClose: () => void;
+}
 
 /**
  * Rendered via a portal to document.body: NotificationDropdown (the only
@@ -13,8 +32,8 @@ const DONATION_WIDGET_SRC = 'https://yoomoney.ru/quickpay/fundraise/widget?billN
  * which would otherwise clip this modal's `fixed inset-0` backdrop to the
  * small dropdown box instead of the full viewport.
  */
-const DonationModal = ({ isOpen, onClose }: DonationModalProps) => {
-  if (!isOpen) return null;
+const DonationModal = ({ widget, onClose }: DonationModalProps) => {
+  if (!widget) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[60]">
@@ -26,7 +45,7 @@ const DonationModal = ({ isOpen, onClose }: DonationModalProps) => {
 
       <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-th-card text-th-text shadow-2xl ring-1 ring-th-ring/10">
         <div className="flex items-center justify-between px-5 py-4">
-          <div className="text-lg font-semibold">Поддержать проект</div>
+          <div className="text-lg font-semibold">{widget.title}</div>
           <button
             onClick={onClose}
             aria-label="Закрыть"
@@ -37,14 +56,14 @@ const DonationModal = ({ isOpen, onClose }: DonationModalProps) => {
         </div>
 
         <div className="px-5 pb-5 flex justify-center">
-          <div className="max-w-[500px] w-full">
+          <div className="w-full" style={{ maxWidth: widget.width }}>
             <iframe
-              src={DONATION_WIDGET_SRC}
-              width={500}
-              height={480}
+              src={widget.src}
+              width={widget.width}
+              height={widget.height}
               frameBorder={0}
               scrolling="no"
-              title="Поддержать проект"
+              title={widget.title}
               className="w-full"
             />
           </div>

@@ -5,7 +5,7 @@ import { Notification } from '../types';
 import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { notifDiag } from '../utils/notifDiag'; // TEMP DIAG
-import DonationModal from './DonationModal';
+import DonationModal, { PROJECT_DONATION, VPN_DONATION, type DonationWidget } from './DonationModal';
 
 interface AnnouncementItem {
   id: string;
@@ -135,7 +135,7 @@ const NotificationDropdown: React.FC = () => {
   const [announcementLoading, setAnnouncementLoading] = useState(false);
   const [announcementError, setAnnouncementError] = useState<string | null>(null);
   const announcementFetched = useRef(false);
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const [donationWidget, setDonationWidget] = useState<DonationWidget | null>(null);
 
   useScrollLock(isOpen);
 
@@ -192,7 +192,7 @@ const NotificationDropdown: React.FC = () => {
       // DonationModal is portaled to document.body, outside dropdownRef — while
       // it's open, clicks on it (e.g. its backdrop) must not also close this
       // dropdown out from under it.
-      if (isDonationModalOpen) return;
+      if (donationWidget) return;
       if (
         buttonRef.current?.contains(e.target as Node) ||
         dropdownRef.current?.contains(e.target as Node)
@@ -206,7 +206,7 @@ const NotificationDropdown: React.FC = () => {
       document.removeEventListener('mousedown', handler);
       window.removeEventListener('resize', closeOnResize);
     };
-  }, [isOpen, isDonationModalOpen]);
+  }, [isOpen, donationWidget]);
 
   // IntersectionObserver on sentinel
   useEffect(() => {
@@ -389,7 +389,17 @@ const NotificationDropdown: React.FC = () => {
                   Хотите чтобы вопли жили? Поддержать проект можно здесь:
                 </p>
                 <button
-                  onClick={() => setIsDonationModalOpen(true)}
+                  onClick={() => setDonationWidget(PROJECT_DONATION)}
+                  className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
+                >
+                  Поддержать
+                </button>
+                <p className="text-sm text-th-text-3 mt-4 mb-2">
+                  Хотите поддержать VPN сервер DHARVED'а? Жмите здесь:
+                </p>
+                <button
+                  onClick={() => setDonationWidget(VPN_DONATION)}
+                  aria-label="Поддержать VPN-сервер"
                   className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
                 >
                   Поддержать
@@ -400,7 +410,7 @@ const NotificationDropdown: React.FC = () => {
         </div>
       )}
 
-      <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
+      <DonationModal widget={donationWidget} onClose={() => setDonationWidget(null)} />
     </div>
   );
 };
