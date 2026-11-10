@@ -42,6 +42,19 @@ describe('DonationModal — open/closed rendering', () => {
   });
 });
 
+describe('DonationModal — direct card transfer note', () => {
+  it('shows the card number under the VPN-server widget', () => {
+    render(<DonationModal widget={VPN_DONATION} onClose={vi.fn()} />);
+    expect(screen.getByText(/Если хотите поддержать прямым переводом на карту:/)).toBeInTheDocument();
+    expect(screen.getByText('2200700157869917')).toBeInTheDocument();
+  });
+
+  it('shows no card note under the project widget', () => {
+    render(<DonationModal widget={PROJECT_DONATION} onClose={vi.fn()} />);
+    expect(screen.queryByText(/прямым переводом на карту/)).not.toBeInTheDocument();
+  });
+});
+
 describe('DonationModal — responsive containment (FR-006, FR-007)', () => {
   it('caps the iframe wrapper width so it scales down instead of overflowing', () => {
     render(<DonationModal widget={PROJECT_DONATION} onClose={vi.fn()} />);

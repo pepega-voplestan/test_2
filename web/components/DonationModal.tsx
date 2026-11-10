@@ -5,6 +5,7 @@ export interface DonationWidget {
   src: string;
   width: number;
   height: number;
+  cardNumber?: string;
 }
 
 export const PROJECT_DONATION: DonationWidget = {
@@ -19,6 +20,7 @@ export const VPN_DONATION: DonationWidget = {
   src: 'https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OPEMDT9I.260831&',
   width: 500,
   height: 480,
+  cardNumber: '2200700157869917',
 };
 
 interface DonationModalProps {
@@ -66,6 +68,12 @@ const DonationModal = ({ widget, onClose }: DonationModalProps) => {
               title={widget.title}
               className="w-full"
             />
+            {widget.cardNumber && (
+              <p className="mt-2 text-center text-xs text-th-text-3">
+                Если хотите поддержать прямым переводом на карту:{' '}
+                <span className="select-all font-mono text-th-text-2">{widget.cardNumber}</span>
+              </p>
+            )}
           </div>
         </div>
       </div>
