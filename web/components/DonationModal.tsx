@@ -16,7 +16,7 @@ export const PROJECT_DONATION: DonationWidget = {
 
 export const VPN_DONATION: DonationWidget = {
   title: 'Поддержать VPN-сервер',
-  src: 'https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OOH7MLRH.260831&',
+  src: 'https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OPEMDT9I.260831&',
   width: 500,
   height: 480,
 };

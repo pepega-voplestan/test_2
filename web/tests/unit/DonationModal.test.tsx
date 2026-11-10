@@ -22,7 +22,7 @@ describe('DonationModal — open/closed rendering', () => {
   it('renders the VPN-server widget iframe with its own src, title and size', () => {
     render(<DonationModal widget={VPN_DONATION} onClose={vi.fn()} />);
     const iframe = screen.getByTitle('Поддержать VPN-сервер') as HTMLIFrameElement;
-    expect(iframe.getAttribute('src')).toBe('https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OOH7MLRH.260831&');
+    expect(iframe.getAttribute('src')).toBe('https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OPEMDT9I.260831&');
     expect(iframe.getAttribute('width')).toBe('500');
     expect(iframe.getAttribute('height')).toBe('480');
     expect((iframe.parentElement as HTMLElement).style.maxWidth).toBe('500px');

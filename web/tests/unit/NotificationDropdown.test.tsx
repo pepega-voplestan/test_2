@@ -179,7 +179,7 @@ describe('NotificationDropdown — VPN-server donation footer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'VPN (DHARVED)' }));
     const iframe = await screen.findByTitle('Поддержать VPN-сервер');
-    expect(iframe.getAttribute('src')).toContain('billNumber=1K0OOH7MLRH.260831');
+    expect(iframe.getAttribute('src')).toContain('billNumber=1K0OPEMDT9I.260831');
     expect(screen.queryByTitle('Поддержать проект')).not.toBeInTheDocument();
   });
 });
