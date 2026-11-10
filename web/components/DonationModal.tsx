@@ -5,8 +5,9 @@ export interface DonationWidget {
   src: string;
   width: number;
   height: number;
-  cardNumber?: string;
 }
+
+const DIRECT_CARD_NUMBER = '2200700157869917';
 
 export const PROJECT_DONATION: DonationWidget = {
   title: 'Поддержать проект',
@@ -19,8 +20,9 @@ export const VPN_DONATION: DonationWidget = {
   title: 'Поддержать VPN-сервер',
   src: 'https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OPEMDT9I.260831&',
   width: 500,
-  height: 480,
-  cardNumber: '2200700157869917',
+  // The fundraiser has no goal, so YooMoney omits the progress block and the
+  // content ends ~360px down; the 480px from its embed code left a blank gap.
+  height: 370,
 };
 
 interface DonationModalProps {
@@ -68,12 +70,12 @@ const DonationModal = ({ widget, onClose }: DonationModalProps) => {
               title={widget.title}
               className="w-full"
             />
-            {widget.cardNumber && (
-              <p className="mt-2 text-center text-xs text-th-text-3">
-                Если хотите поддержать прямым переводом на карту:{' '}
-                <span className="select-all font-mono text-th-text-2">{widget.cardNumber}</span>
-              </p>
-            )}
+            <p className="mt-1 text-center text-xs text-th-text-3">
+              Если хотите поддержать прямым переводом на карту:{' '}
+              <span className="select-all font-mono text-th-text-2">{DIRECT_CARD_NUMBER}</span>
+              <br />
+              Укажите в комментариях, на что донатите!
+            </p>
           </div>
         </div>
       </div>

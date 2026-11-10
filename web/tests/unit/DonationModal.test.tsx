@@ -24,7 +24,7 @@ describe('DonationModal — open/closed rendering', () => {
     const iframe = screen.getByTitle('Поддержать VPN-сервер') as HTMLIFrameElement;
     expect(iframe.getAttribute('src')).toBe('https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OPEMDT9I.260831&');
     expect(iframe.getAttribute('width')).toBe('500');
-    expect(iframe.getAttribute('height')).toBe('480');
+    expect(iframe.getAttribute('height')).toBe('370');
     expect((iframe.parentElement as HTMLElement).style.maxWidth).toBe('500px');
   });
 
@@ -43,15 +43,11 @@ describe('DonationModal — open/closed rendering', () => {
 });
 
 describe('DonationModal — direct card transfer note', () => {
-  it('shows the card number under the VPN-server widget', () => {
-    render(<DonationModal widget={VPN_DONATION} onClose={vi.fn()} />);
+  it.each([PROJECT_DONATION, VPN_DONATION])('shows the card number and comment hint under the $title widget', (widget) => {
+    render(<DonationModal widget={widget} onClose={vi.fn()} />);
     expect(screen.getByText(/Если хотите поддержать прямым переводом на карту:/)).toBeInTheDocument();
     expect(screen.getByText('2200700157869917')).toBeInTheDocument();
-  });
-
-  it('shows no card note under the project widget', () => {
-    render(<DonationModal widget={PROJECT_DONATION} onClose={vi.fn()} />);
-    expect(screen.queryByText(/прямым переводом на карту/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Укажите в комментариях, на что донатите!/)).toBeInTheDocument();
   });
 });
 
