@@ -386,24 +386,22 @@ const NotificationDropdown: React.FC = () => {
               {/* Outside the scroll area so it stays pinned, not scrolled past (FR-010) */}
               <div className="shrink-0 px-4 pt-3 pb-4 border-t border-th-border text-center">
                 <p className="text-sm text-th-text-3 mb-2">
-                  Хотите чтобы вопли жили? Поддержать проект можно здесь:
+                  Хотите поддержать сервер или VPN? Поддержать проекты можно здесь:
                 </p>
-                <button
-                  onClick={() => setDonationWidget(PROJECT_DONATION)}
-                  className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
-                >
-                  Поддержать
-                </button>
-                <p className="text-sm text-th-text-3 mt-4 mb-2">
-                  Хотите поддержать VPN сервер DHARVED'а? Жмите здесь:
-                </p>
-                <button
-                  onClick={() => setDonationWidget(VPN_DONATION)}
-                  aria-label="Поддержать VPN-сервер"
-                  className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
-                >
-                  Поддержать
-                </button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={() => setDonationWidget(PROJECT_DONATION)}
+                    className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
+                  >
+                    Помочь с оплатой воплей
+                  </button>
+                  <button
+                    onClick={() => setDonationWidget(VPN_DONATION)}
+                    className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
+                  >
+                    Поддержать VPN сервер DHARVED'а
+                  </button>
+                </div>
               </div>
             </div>
           )}
