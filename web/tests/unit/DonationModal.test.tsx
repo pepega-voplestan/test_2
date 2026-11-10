@@ -19,13 +19,13 @@ describe('DonationModal — open/closed rendering', () => {
     expect(iframe.getAttribute('src')).toBe(DONATION_WIDGET_SRC);
   });
 
-  it('renders the VPN-server button iframe with its own src, title and size', () => {
+  it('renders the VPN-server widget iframe with its own src, title and size', () => {
     render(<DonationModal widget={VPN_DONATION} onClose={vi.fn()} />);
     const iframe = screen.getByTitle('Поддержать VPN-сервер') as HTMLIFrameElement;
-    expect(iframe.getAttribute('src')).toBe('https://yoomoney.ru/quickpay/fundraise/button?billNumber=1K0OOH7MLRH.260831&');
-    expect(iframe.getAttribute('width')).toBe('330');
-    expect(iframe.getAttribute('height')).toBe('50');
-    expect((iframe.parentElement as HTMLElement).style.maxWidth).toBe('330px');
+    expect(iframe.getAttribute('src')).toBe('https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1K0OOH7MLRH.260831&');
+    expect(iframe.getAttribute('width')).toBe('500');
+    expect(iframe.getAttribute('height')).toBe('480');
+    expect((iframe.parentElement as HTMLElement).style.maxWidth).toBe('500px');
   });
 
   it('portals its content to document.body, escaping any clipped ancestor', () => {
