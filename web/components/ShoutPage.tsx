@@ -248,6 +248,7 @@ const ShoutPage: React.FC<ShoutPageProps> = ({ shoutId, focusCommentId }) => {
             shout={shout}
             showMedia={prefs.showMedia}
             isThreadOpen
+            forcePinnedExpanded={Boolean(focusCommentId)}
             onCommentAdded={handleCommentAdded}
             onDelete={handleDelete}
             onCommentDeleted={handleCommentDeleted}

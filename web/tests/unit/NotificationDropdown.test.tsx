@@ -11,7 +11,7 @@ vi.mock('../../context/NotificationsContext', () => ({
 
 afterEach(cleanup);
 
-const FOOTER_TEXT = 'Хотите чтобы вопли жили? Поддержать проект можно здесь:';
+const FOOTER_TEXT = 'Хотите поддержать сервер или VPN? Поддержать проекты можно здесь:';
 
 function baseNotificationsContext() {
   return {
@@ -53,7 +53,7 @@ describe('NotificationDropdown — donation footer (US1: FR-001..FR-004, FR-009,
     await screen.findByText('Заголовок');
 
     expect(screen.getByText(FOOTER_TEXT)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Поддержать' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Оплата Воплей' })).toBeInTheDocument();
   });
 
   it('still shows the donation footer when the announcement list is empty (FR-010)', async () => {
@@ -63,7 +63,7 @@ describe('NotificationDropdown — donation footer (US1: FR-001..FR-004, FR-009,
     await screen.findByText('Нет объявлений');
 
     expect(screen.getByText(FOOTER_TEXT)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Поддержать' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Оплата Воплей' })).toBeInTheDocument();
   });
 
   it('does not show the donation footer on the Уведомления tab (FR-009)', () => {
@@ -78,7 +78,7 @@ describe('NotificationDropdown — donation footer (US1: FR-001..FR-004, FR-009,
     await openAnnouncementsTab(fetchMock);
     await screen.findByText('Нет объявлений');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Поддержать' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Оплата Воплей' }));
     expect(await screen.findByTitle('Поддержать проект')).toBeInTheDocument();
   });
 });
@@ -171,6 +171,19 @@ describe('NotificationDropdown — notification click navigation (Назад bug
   });
 });
 
+describe('NotificationDropdown — VPN-server donation footer', () => {
+  it('shows the VPN-server button next to the project donation button and opens its widget', async () => {
+    const fetchMock = stubAnnouncementsFetch([]);
+    render(<NotificationDropdown />);
+    await openAnnouncementsTab(fetchMock);
+
+    fireEvent.click(screen.getByRole('button', { name: 'VPN (DHARVED)' }));
+    const iframe = await screen.findByTitle('Поддержать VPN-сервер');
+    expect(iframe.getAttribute('src')).toContain('billNumber=1K0OPEMDT9I.260831');
+    expect(screen.queryByTitle('Поддержать проект')).not.toBeInTheDocument();
+  });
+});
+
 describe('NotificationDropdown — closing the donation modal preserves state (US3: FR-008, FR-012)', () => {
   it('leaves the announcements list and active tab unchanged after opening and closing the modal via the backdrop', async () => {
     const fetchMock = stubAnnouncementsFetch([{ id: '1', title: 'Заголовок', content: 'Текст', createdAt: new Date().toISOString() }]);
@@ -178,7 +191,7 @@ describe('NotificationDropdown — closing the donation modal preserves state (U
     await openAnnouncementsTab(fetchMock);
     await screen.findByText('Заголовок');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Поддержать' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Оплата Воплей' }));
     await screen.findByTitle('Поддержать проект');
 
     // userEvent (not fireEvent) so the backdrop click dispatches a real

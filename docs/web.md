@@ -5,13 +5,15 @@
 ```
 web/
 ├── components/
-│   ├── Header.tsx              # Auth, navigation, theme toggle, search (auth-only), notification dropdown; logo hides on mobile while search open
+│   ├── Header.tsx              # Auth, navigation, theme toggle, search (auth-only), comments-feed toggle, notification dropdown; logo hides on mobile while search open
 │   ├── AuthModal.tsx           # Login/register/password-reset modal (multi-step, email verification)
 │   ├── ShoutFeed.tsx           # Feed: new/popular/announcements tabs, SSE updates; popular has dual sort
 │   ├── ShoutInput.tsx          # Composer: gallery (up to 5 images via PendingMediaStrip), emoji/GIF, polls, drag-drop, Ctrl+Enter; spoiler/nsfw require media
-│   ├── ShoutCard.tsx           # Shout display: comments, likes, delete, inline edit (60s window with countdown); inline embeds; collapsible pinned shout (eye icon, localStorage); reply composer mirrors ShoutInput's media handling via useMediaAttachments
-│   ├── ShoutPage.tsx           # Single shout detail view (#/shout/:id)
+│   ├── ShoutCard.tsx           # Shout display: comments, likes, delete, inline edit (60s window with countdown); inline embeds; collapsible pinned shout (eye icon, localStorage); forcePinnedExpanded for jump-to-comment; reply composer mirrors ShoutInput's media handling via useMediaAttachments
+│   ├── ShoutPage.tsx           # Single shout detail view (#/shout/:id); passes forcePinnedExpanded when ?comment= is set
 │   ├── MentionInput.tsx        # contenteditable composer with @mention autocomplete; ref handle: clear/focus/scrollIntoView/insertText/insertMention/wrapSpoiler/populate
+│   ├── CommentFeedToggle.tsx   # Header icon (before bell) + unseen badge for the live comments sidebar (feature 012)
+│   ├── CommentFeedPanel.tsx    # Right sidebar / mobile overlay: compact comment rows, «[медиа]» labels, soft-hide, jump-to-comment
 │   ├── NotificationDropdown.tsx # Bell + unread badge + hover-to-read list + infinite scroll
 │   ├── SearchDropdown.tsx      # Search pill in header: user/shout search via pg_trgm, backdrop close, scroll lock; hidden for guests
 │   ├── ProfilePage.tsx         # Profile view/edit + social links
@@ -30,7 +32,13 @@ web/
 │   ├── SSEContext.tsx          # Single shared EventSource (authenticated only); subscribe(event, handler) pattern
 │   ├── NotificationsContext.tsx # useNotifications()
 │   ├── ContentPreferencesContext.tsx # useContentPreferences()
-│   └── IgnoredUsersContext.tsx # useIgnoredUsers()
+│   ├── IgnoredUsersContext.tsx # useIgnoredUsers()
+│   └── CommentFeedContext.tsx  # useCommentFeed() — live comments sidebar buffer + SSE (feature 012)
+├── utils/
+│   ├── plural.ts               # Russian declension helpers
+│   ├── commentFeedPreview.ts   # previewText / hasAttachment / «[медиа]» for comments feed
+│   ├── commentFeedTime.ts      # relative Russian timestamps for comments feed
+│   └── renderContent.tsx       # InlineSpoiler + mention/URL render shared by comments feed
 ├── hooks/
 │   ├── useRoute.ts             # Hash-based routing
 │   ├── useSSE.ts               # Thin wrapper around SSEContext.subscribe
@@ -41,7 +49,7 @@ web/
 ├── tests/
 │   ├── setup.ts                # DOM mocks (matchMedia, scrollTo)
 │   ├── helpers.tsx             # renderWithProviders()
-│   └── unit/                   # effectiveLength, plural, GalleryCarousel, Lightbox, PendingMediaStrip, useMediaAttachments, composerParity, ShoutFeed, ShoutPage
+│   └── unit/                   # effectiveLength, plural, GalleryCarousel, Lightbox, PendingMediaStrip, useMediaAttachments, composerParity, ShoutFeed, ShoutPage, CommentFeed
 ├── public/                     # favicon.svg, manifest.json, robots.txt, sitemap.xml, social icons (steam.svg, xbox.svg, playstation.svg, epicgames.png, boosty.png, retroachievements.png, battlenet.webp, exophase-com-icon.png, backloggd-icon-filled-256.webp, myshows.png)
 ├── App.tsx, index.tsx, types.ts, index.html
 ├── vite.config.ts              # Dev proxy: /api and /media → localhost:3000
@@ -51,15 +59,16 @@ web/
 ## Frontend Code Conventions
 
 - Functional components, TypeScript strict; source directly under `web/` (no `src/` subdirectory)
-- Context hooks: `useAuth()`, `useTheme()`, `useSSEContext()` / `useSSE(listeners)`, `useNotifications()`, `useContentPreferences()`, `useIgnoredUsers()`
+- Context hooks: `useAuth()`, `useTheme()`, `useSSEContext()` / `useSSE(listeners)`, `useNotifications()`, `useContentPreferences()`, `useIgnoredUsers()`, `useCommentFeed()`
 - `useIgnoredUsers()` provides: `ignoredUserIds`, `isIgnored()`, `addIgnoredUser()`, `removeIgnoredUser()`
+- `useCommentFeed()` provides: `panelOpen`, `setPanelOpen`/`togglePanel`, `items`, `unseenWhileClosed`, soft-hide helpers, `hydrateFromFeed`
 - Auth flow: 2-step registration (send code → verify); password reset (send code → verify → new password)
 - Hash routing via `useRoute.ts`: `#/` (feed), `#/profile/:id`, `#/shout/:id`
 - Tailwind via CDN; theme tokens `th-*` classes backed by CSS vars `--th-*`; dark mode via `.dark` on `<html>`
 - Fetch with `credentials: "include"`; optimistic UI (likes, delete) with rollback on error
 - PascalCase components, camelCase functions/variables; all UI text in Russian with proper declensions
-- Context provider order (outermost first): `ThemeProvider → AuthProvider → SSEProvider → ContentPreferencesProvider → IgnoredUsersProvider → NotificationsProvider`
-- `SSEProvider` must wrap `NotificationsProvider` and any component using `useSSE`/`useSSEContext`; `AuthProvider` must stay an ancestor of `SSEProvider` (it consumes `useAuth`)
+- Context provider order (outermost first): `ThemeProvider → AuthProvider → SSEProvider → ContentPreferencesProvider → IgnoredUsersProvider → CommentFeedProvider → NotificationsProvider`
+- `SSEProvider` must wrap `NotificationsProvider`, `CommentFeedProvider`, and any component using `useSSE`/`useSSEContext`; `AuthProvider` must stay an ancestor of `SSEProvider` (it consumes `useAuth`); `CommentFeedProvider` must sit under `IgnoredUsersProvider` (soft-hide)
 - `SSEProvider` consumes `useAuth()` and opens the `EventSource` **only for an authenticated user** — never while auth is `loading`, never for anonymous visitors. It connects on sign-in and tears the connection down on sign-out (effect keyed on the user id); this mirrors the server-side 401 gate on `/api/v1/events`
 - Unused vars prefixed `_`
 
@@ -74,7 +83,8 @@ web/
 - **Social links**: 14 platforms (steam, playstation, xbox, battlenet, epicgames, retroachievements, exophase, backloggd, youtube, myshows, telegram, x, discord, boosty), one per platform per user. Plain-text socials (Battle.net, Epic Games, Discord, Telegram) are stored as raw values; any social whose stored value isn't an `http(s)` URL renders as a copy-to-clipboard badge rather than a link.
 - Lightbox: drag-to-dismiss (vertical swipe + velocity), Escape, click-outside, scroll lock. Pointer events (unified mouse/touch). Pinch-to-zoom, scroll-to-zoom, pan when zoomed, double-tap/click to toggle zoom.
 - **`NotificationDropdown.tsx`**: bell icon + unread badge in Header; notifications as `<a>` elements (right-click open in new tab); actor avatar, text, snippet, relative timestamp; "mark all read" button; infinite scroll via `IntersectionObserver`.
-- **Collapsible pinned shout**: eye icon in ShoutCard owner header toggles collapse. State persisted in `localStorage` at `pinnedCollapsed:${shoutId}`; stale keys pruned on feed reset (when current pinned id changes); `unpin_shout` SSE clears the key immediately.
+- **Collapsible pinned shout**: eye icon in ShoutCard owner header toggles collapse. State persisted in `localStorage` at `pinnedCollapsed:${shoutId}`; stale keys pruned on feed reset (when current pinned id changes); `unpin_shout` SSE clears the key immediately. `forcePinnedExpanded` (from ShoutPage when `?comment=` is present) expands inside ShoutCard — do not poke that localStorage key from other modules.
+- **Live comments feed (feature 012)**: auth-only header toggle before the bell opens a right sidebar (desktop 340px, shifts `main`; mobile ≤767px full overlay). Buffer (max 40) hydrates from `GET /api/v1/shouts?sortBy=new` (upsert-only) and stays live via SSE `new_comment` / `edit_comment` / `delete_comment` (+ shout meta from `new_shout` / `edit_shout`). Compact Discord-ish rows (−25% chrome vs feed cards): tiny avatar ≈ nick height, reply bar (`replyToId`/`quote`), spoilers/mentions in bodies and shout quotes; URLs stay plain text in the sidebar; attachments → «[медиа]» only (Constitution III). Soft-hide via `IgnoredUsersContext`. Buffer is in-memory; desktop panel-open persists in `sessionStorage` (`commentFeedPanelOpen`) across refresh, mobile overlay always starts closed. Navigating from a row (including @mentions via SPA) closes the panel only on mobile. Jump navigates to `/shout/:id?comment=:id`. Spec: `specs/012-comments-feed/`.
 - **Inline editing (shout/comment)**: edit button appears for the author within 60s of creation, with a live countdown. Uses `MentionInput` with `populate()` to pre-fill existing content. Saves via `PUT /shouts/:id` or `PUT /comments/:id`; result broadcast via `edit_shout`/`edit_comment` SSE to all clients.
 
 ## Mobile & iOS — Known Issues and Rules
