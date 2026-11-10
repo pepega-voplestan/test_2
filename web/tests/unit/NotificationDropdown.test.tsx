@@ -53,7 +53,7 @@ describe('NotificationDropdown — donation footer (US1: FR-001..FR-004, FR-009,
     await screen.findByText('Заголовок');
 
     expect(screen.getByText(FOOTER_TEXT)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Помочь с оплатой воплей' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Оплата Воплей' })).toBeInTheDocument();
   });
 
   it('still shows the donation footer when the announcement list is empty (FR-010)', async () => {
@@ -63,7 +63,7 @@ describe('NotificationDropdown — donation footer (US1: FR-001..FR-004, FR-009,
     await screen.findByText('Нет объявлений');
 
     expect(screen.getByText(FOOTER_TEXT)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Помочь с оплатой воплей' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Оплата Воплей' })).toBeInTheDocument();
   });
 
   it('does not show the donation footer on the Уведомления tab (FR-009)', () => {
@@ -78,7 +78,7 @@ describe('NotificationDropdown — donation footer (US1: FR-001..FR-004, FR-009,
     await openAnnouncementsTab(fetchMock);
     await screen.findByText('Нет объявлений');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Помочь с оплатой воплей' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Оплата Воплей' }));
     expect(await screen.findByTitle('Поддержать проект')).toBeInTheDocument();
   });
 });
@@ -177,7 +177,7 @@ describe('NotificationDropdown — VPN-server donation footer', () => {
     render(<NotificationDropdown />);
     await openAnnouncementsTab(fetchMock);
 
-    fireEvent.click(screen.getByRole('button', { name: "Поддержать VPN сервер DHARVED'а" }));
+    fireEvent.click(screen.getByRole('button', { name: 'VPN (DHARVED)' }));
     const iframe = await screen.findByTitle('Поддержать VPN-сервер');
     expect(iframe.getAttribute('src')).toContain('billNumber=1K0OOH7MLRH.260831');
     expect(screen.queryByTitle('Поддержать проект')).not.toBeInTheDocument();
@@ -191,7 +191,7 @@ describe('NotificationDropdown — closing the donation modal preserves state (U
     await openAnnouncementsTab(fetchMock);
     await screen.findByText('Заголовок');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Помочь с оплатой воплей' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Оплата Воплей' }));
     await screen.findByTitle('Поддержать проект');
 
     // userEvent (not fireEvent) so the backdrop click dispatches a real

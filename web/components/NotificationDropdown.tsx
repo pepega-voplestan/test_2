@@ -393,13 +393,13 @@ const NotificationDropdown: React.FC = () => {
                     onClick={() => setDonationWidget(PROJECT_DONATION)}
                     className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
                   >
-                    Помочь с оплатой воплей
+                    Оплата Воплей
                   </button>
                   <button
                     onClick={() => setDonationWidget(VPN_DONATION)}
                     className="rounded-xl bg-th-text px-4 py-2 text-sm font-semibold text-th-page hover:opacity-90 transition-opacity"
                   >
-                    Поддержать VPN сервер DHARVED'а
+                    VPN (DHARVED)
                   </button>
                 </div>
               </div>
