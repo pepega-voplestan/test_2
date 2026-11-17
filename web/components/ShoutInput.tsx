@@ -6,6 +6,7 @@ import PollEditor, { PollPayload, PollEditorHandle } from './PollEditor';
 import { Shout } from '../types';
 import { useMediaAttachments, SUBMIT_FAILED_MESSAGE } from '../hooks/useMediaAttachments';
 import PendingMediaStrip from './PendingMediaStrip';
+import { useGta6 } from '../hooks/useGta6';
 
 interface ShoutInputProps {
   onShoutCreated: (shout: Shout) => void;
@@ -33,6 +34,7 @@ function detectYouTubeId(text: string): string | null {
 
 const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const { user, openModal } = useAuth();
+  const gta6 = useGta6();
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -259,7 +261,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`bg-th-card rounded-lg p-4 shadow-sm border transition-colors ${isDragging ? 'border-[#0087ff] bg-[#0087ff]/5' : 'border-th-border-2/50'}`}
+        className={`${gta6 ? 'neon-frame ' : ''}bg-th-card rounded-lg p-4 shadow-sm border transition-colors ${isDragging ? 'border-[#0087ff] bg-[#0087ff]/5' : 'border-th-border-2/50'}`}
       >
         {/* Drag overlay */}
         {isDragging && (

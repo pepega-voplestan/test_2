@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useGta6 } from '../hooks/useGta6';
 
 // GTA VI releases November 19, 2026 at midnight CET (UTC+1)
 const RELEASE_DATE = new Date('2026-11-19T00:00:00+01:00');
-const STORAGE_KEY = 'vopley_gta6';
 
 function getTimeLeft() {
   const diff = RELEASE_DATE.getTime() - Date.now();
@@ -18,19 +18,8 @@ function getTimeLeft() {
 const pad = (n: number) => String(n).padStart(2, '0');
 
 const Gta6Banner: React.FC = () => {
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(STORAGE_KEY) !== 'false');
+  const enabled = useGta6();
   const [timeLeft, setTimeLeft] = useState(getTimeLeft());
-
-  // window.gta6() — toggle; window.gta6(true/false) — set
-  useEffect(() => {
-    (window as any).gta6 = (val?: boolean) => {
-      const next = val !== undefined ? val : !enabled;
-      setEnabled(next);
-      localStorage.setItem(STORAGE_KEY, String(next));
-      console.log(`GTA6 banner: ${next ? 'включён ✅' : 'выключен ❌'}`);
-    };
-    return () => { delete (window as any).gta6; };
-  }, [enabled]);
 
   useEffect(() => {
     const id = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
