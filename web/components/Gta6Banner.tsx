@@ -55,7 +55,7 @@ const Gta6Banner: React.FC = () => {
           bottom: 0;
           z-index: 10;
           pointer-events: none;
-          background-image: url(/gta6-banner.jpg);
+          background-image: url(/gta6-banner.webp);
           background-repeat: no-repeat;
           background-size: auto 100%;
         }
