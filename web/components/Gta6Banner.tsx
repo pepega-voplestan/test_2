@@ -64,6 +64,10 @@ const Gta6Banner: React.FC = () => {
           html.gta6-active body {
             background: url(/gta6-banner.jpg) center top / cover fixed !important;
           }
+          /* Make the page wrapper transparent so the body background shows through */
+          html.gta6-active #root > div {
+            background-color: transparent !important;
+          }
           /* Give the feed column a solid background so the banner doesn't bleed through card gaps */
           html.gta6-active main > div {
             background-color: rgb(var(--th-page));
