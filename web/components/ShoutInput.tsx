@@ -91,8 +91,24 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const isPolitics = activeTag === 'politics';
 
   const [gta6AutoSubmit, setGta6AutoSubmit] = useState(false);
-  const [diceCooldown, setDiceCooldown] = useState(false);
+  const [diceCooldown, setDiceCooldown] = useState(() => {
+    try {
+      const until = Number(localStorage.getItem('vopley_dice_cd'));
+      return until > Date.now();
+    } catch { return false; }
+  });
   const diceCooldownTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (!diceCooldown) return;
+    try {
+      const until = Number(localStorage.getItem('vopley_dice_cd'));
+      const remaining = until - Date.now();
+      if (remaining <= 0) { setDiceCooldown(false); return; }
+      diceCooldownTimer.current = setTimeout(() => setDiceCooldown(false), remaining);
+      return () => clearTimeout(diceCooldownTimer.current);
+    } catch { setDiceCooldown(false); }
+  }, [diceCooldown]);
 
 
   // Poll state
@@ -349,12 +365,11 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                                   mentionInputRef.current?.insertText(text);
                                   setContent(text);
                                   setGta6AutoSubmit(true);
+                                  const cd = 60000 + Math.random() * 60000;
+                                  try { localStorage.setItem('vopley_dice_cd', String(Date.now() + cd)); } catch {}
                                   setDiceCooldown(true);
-                                  clearTimeout(diceCooldownTimer.current);
-                                  diceCooldownTimer.current = setTimeout(() => setDiceCooldown(false), 60000 + Math.random() * 60000);
                                 }}
                                 className="neon-dice p-1"
-                                title="Случайный GTA шитпост"
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="2" y="2" width="20" height="20" rx="3" />
