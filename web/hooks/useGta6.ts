@@ -6,9 +6,9 @@ const STORAGE_KEY = 'vopley_gta6';
 
 const readStored = (): boolean => {
   try {
-    return localStorage.getItem(STORAGE_KEY) !== 'false';
+    return localStorage.getItem(STORAGE_KEY) === 'true';
   } catch {
-    return true;
+    return false;
   }
 };
 
@@ -30,5 +30,7 @@ const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
 };
+
+export const toggleGta6 = () => setGta6(!enabled);
 
 export const useGta6 = (): boolean => useSyncExternalStore(subscribe, () => enabled);

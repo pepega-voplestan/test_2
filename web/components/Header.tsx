@@ -5,7 +5,7 @@ import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
 import NotificationDropdown from './NotificationDropdown';
 import SearchDropdown from './SearchDropdown';
-import { useGta6 } from '../hooks/useGta6';
+import { useGta6, toggleGta6 } from '../hooks/useGta6';
 
 const randomFps = () => 1 + Math.floor(Math.random() * 30);
 const nextDelay = () => 3000 + Math.random() * 2000;
@@ -66,6 +66,15 @@ const Header: React.FC = () => {
 
         <div className={`flex items-center gap-4 sm:ml-auto sm:flex-none${searchOpen ? ' flex-1' : ' ml-auto'}`}>
           <div className="flex items-center gap-2 text-th-text-3">
+            {/* GTA6 toggle */}
+            <button
+              onClick={toggleGta6}
+              className={`neon-toggle${gta6 ? ' active' : ''}`}
+              title={gta6 ? 'Выключить GTA VI режим' : 'Включить GTA VI режим'}
+            >
+              ?
+            </button>
+
             {/* Search */}
             {user && <SearchDropdown onFocusChange={setSearchOpen} />}
 
