@@ -22,7 +22,7 @@ function getTimeLeft() {
 const pad = (n: number) => String(n).padStart(2, '0');
 
 const Gta6Banner: React.FC = () => {
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(STORAGE_KEY) !== 'false');
+  const [enabled, setEnabled] = useState(() => localStorage.getItem(STORAGE_KEY) === 'true');
   const [timeLeft, setTimeLeft] = useState(getTimeLeft());
 
   // window.gta6() — toggle; window.gta6(true/false) — set
