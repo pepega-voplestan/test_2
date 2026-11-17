@@ -63,15 +63,15 @@ const Gta6Banner: React.FC = () => {
           left: 0;
           right: calc(50vw + 354px);
           background-position: left top;
-          -webkit-mask-image: linear-gradient(to right, black 50%, transparent 100%);
-          mask-image: linear-gradient(to right, black 50%, transparent 100%);
+          -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%, black 50%, transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0%, black 15%, black 50%, transparent 100%);
         }
         .gta6-right {
           left: calc(50vw + 354px);
           right: 0;
           background-position: 80% top;
-          -webkit-mask-image: linear-gradient(to left, black 50%, transparent 100%);
-          mask-image: linear-gradient(to left, black 50%, transparent 100%);
+          -webkit-mask-image: linear-gradient(to left, transparent 0%, black 15%, black 50%, transparent 100%);
+          mask-image: linear-gradient(to left, transparent 0%, black 15%, black 50%, transparent 100%);
         }
         @keyframes gta6-pulse {
           from { transform: scale(1) rotate(-1deg); }
