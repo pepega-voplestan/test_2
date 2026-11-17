@@ -6,6 +6,7 @@ import PollEditor, { PollPayload, PollEditorHandle } from './PollEditor';
 import { Shout } from '../types';
 import { useMediaAttachments, SUBMIT_FAILED_MESSAGE } from '../hooks/useMediaAttachments';
 import PendingMediaStrip from './PendingMediaStrip';
+import { useGta6 } from '../hooks/useGta6';
 
 interface ShoutInputProps {
   onShoutCreated: (shout: Shout) => void;
@@ -13,6 +14,34 @@ interface ShoutInputProps {
 
 const SHOUT_MAX_LENGTH = 1000;
 const NEWLINE_CHAR_COST = 40;
+
+const GTA6_RANDOM_SHOUTS = [
+  'Купил PS5 ради ГТА 6. Нищие с ПК, держитесь там.',
+  'Пекари будут смотреть прохождение ГТА 6 на ютубе в 4К и называть это геймингом',
+  'Я не собираюсь платить 100 долларов за ГТА 6. Я заплачу 120 за Deluxe',
+  'Ради ГТА 6 купил телевизор за две тысячи евро. Денег на саму игру нет. Пидоры подарите',
+  'Только конченый будет проходить ГТА 6 с включёнными субтитрами',
+  'Я гей',
+  'Если в ГТА 6 опять будут миссии с йогой, я разобью геймпад нахуй',
+  'Я не хейтер ГТА 6, просто заебали эти фанатики с предзаказами',
+  'Не понимаю хайпа вокруг ГТА 6. Обычная игра про американских долбоёбов',
+  'Сонибои называют 30 фпс кинематографичностью. Клоуны ебаные',
+  'Если ГТА 6 окажется говном, я всё равно никому не признаюсь.',
+  'Я не буду читать обзоры ГТА 6. Журналисты и так нихуя не понимают в играх',
+  'Не хочу реализма в ГТА 6. Хочу украсть вертолёт и приземлиться на проститутку',
+  'Если ГТА 6 получит меньше 10/10, значит обзорщик просто конченый',
+  'Жаль кот Марио не дожил до релиза',
+  'Так-то похуй, но жду, но на пк',
+  'Порно с карликами онлайн скачать',
+  'Sex gifs',
+  'Пидоры подарите гта',
+  'Пидоры подарите плойку',
+  'Пидоры подарите гта и плойку',
+  'Пекари будут смотреть на ГТА 6 через окно Twitch, как нищие на витрину ресторана',
+  'Как же хочеца сладкие булочки Люсии',
+  'Как же хочеца сладкие булочки Джейсона',
+  'Мне одному похуй на гта6?))))',
+];
 // MEDIA_MAX_MB now lives in useMediaAttachments — single source for both composers.
 
 const YT_PATTERNS = [
@@ -33,6 +62,7 @@ function detectYouTubeId(text: string): string | null {
 
 const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const { user, openModal } = useAuth();
+  const gta6 = useGta6();
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +89,27 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const isSpoiler = activeTag === 'spoiler';
   const isNsfw = activeTag === 'nsfw';
   const isPolitics = activeTag === 'politics';
+
+  const [gta6AutoSubmit, setGta6AutoSubmit] = useState(false);
+  const [diceCooldown, setDiceCooldown] = useState(() => {
+    try {
+      const until = Number(localStorage.getItem('vopley_dice_cd'));
+      return until > Date.now();
+    } catch { return false; }
+  });
+  const diceCooldownTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (!diceCooldown) return;
+    try {
+      const until = Number(localStorage.getItem('vopley_dice_cd'));
+      const remaining = until - Date.now();
+      if (remaining <= 0) { setDiceCooldown(false); return; }
+      diceCooldownTimer.current = setTimeout(() => setDiceCooldown(false), remaining);
+      return () => clearTimeout(diceCooldownTimer.current);
+    } catch { setDiceCooldown(false); }
+  }, [diceCooldown]);
+
 
   // Poll state
   const [showPollEditor, setShowPollEditor] = useState(false);
@@ -251,6 +302,13 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
     }
   };
 
+  useEffect(() => {
+    if (gta6AutoSubmit && content.trim()) {
+      setGta6AutoSubmit(false);
+      submitShout();
+    }
+  }, [gta6AutoSubmit, content]);
+
   return (
     <div className="mb-6">
       <form
@@ -259,7 +317,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`bg-th-card rounded-lg p-4 shadow-sm border transition-colors ${isDragging ? 'border-[#0087ff] bg-[#0087ff]/5' : 'border-th-border-2/50'}`}
+        className={`${gta6 ? 'neon-frame ' : ''}bg-th-card rounded-lg p-4 shadow-sm border transition-colors ${isDragging ? 'border-[#0087ff] bg-[#0087ff]/5' : 'border-th-border-2/50'}`}
       >
         {/* Drag overlay */}
         {isDragging && (
@@ -289,6 +347,40 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                         />
                         <div className="flex items-center gap-2 justify-end flex-wrap">
                           <div className="flex items-center gap-1 shrink-0">
+                            {gta6 && (diceCooldown ? (
+                              <span className="p-1 neon-dice-charging" title="Перезарядка...">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="1" y="6" width="18" height="12" rx="2" />
+                                  <line x1="23" y1="10" x2="23" y2="14" />
+                                  <line x1="7" y1="10" x2="7" y2="14" />
+                                  <line x1="11" y1="10" x2="11" y2="14" />
+                                </svg>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const text = GTA6_RANDOM_SHOUTS[Math.floor(Math.random() * GTA6_RANDOM_SHOUTS.length)];
+                                  mentionInputRef.current?.clear();
+                                  mentionInputRef.current?.insertText(text);
+                                  setContent(text);
+                                  setGta6AutoSubmit(true);
+                                  const cd = 60000 + Math.random() * 60000;
+                                  try { localStorage.setItem('vopley_dice_cd', String(Date.now() + cd)); } catch {}
+                                  setDiceCooldown(true);
+                                }}
+                                className="neon-dice p-1"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="2" y="2" width="20" height="20" rx="3" />
+                                  <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
+                                  <circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none" />
+                                  <circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none" />
+                                  <circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none" />
+                                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+                                </svg>
+                              </button>
+                            ))}
                             <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} onSelectGif={!detectedYtId && !gifPickerBlocked ? handleGifSelect : undefined} />
                             <button
                               type="button"
