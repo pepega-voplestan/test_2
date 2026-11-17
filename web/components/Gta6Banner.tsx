@@ -69,7 +69,7 @@ const Gta6Banner: React.FC = () => {
         .gta6-right {
           left: calc(50vw + 354px);
           right: 0;
-          background-position: 80% top;
+          background-position: right top;
           -webkit-mask-image: linear-gradient(to left, transparent 0%, black 15%, black 50%, transparent 100%);
           mask-image: linear-gradient(to left, transparent 0%, black 15%, black 50%, transparent 100%);
         }
