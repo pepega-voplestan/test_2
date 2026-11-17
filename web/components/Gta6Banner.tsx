@@ -83,6 +83,12 @@ const Gta6Banner: React.FC = () => {
         style={{ ...panelBase, left: 0, right: `calc(50vw + ${HALF_FEED}px)` }}
       >
         <img src="/gta6-banner.jpg" alt="" style={{ ...imgBase, objectPosition: 'left top' }} draggable={false} />
+        {/* Fade inner edge to match page background */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `linear-gradient(to left, rgb(var(--th-page)) 0%, transparent 35%)`,
+          pointerEvents: 'none',
+        }} />
       </div>
 
       {/* Right panel — shows right portion of the banner image + countdown timer */}
@@ -90,7 +96,14 @@ const Gta6Banner: React.FC = () => {
         className="hidden xl:block"
         style={{ ...panelBase, left: `calc(50vw + ${HALF_FEED}px)`, right: 0 }}
       >
-        <img src="/gta6-banner.jpg" alt="" style={{ ...imgBase, objectPosition: 'right top' }} draggable={false} />
+        {/* 85% positions the viewport over the reviews section rather than the far right edge */}
+        <img src="/gta6-banner.jpg" alt="" style={{ ...imgBase, objectPosition: '85% top' }} draggable={false} />
+        {/* Fade inner edge to match page background */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `linear-gradient(to right, rgb(var(--th-page)) 0%, transparent 35%)`,
+          pointerEvents: 'none',
+        }} />
 
         {/* Countdown + buy button — lower part of right panel, below the reviews */}
         <div style={{ position: 'absolute', bottom: '5%', left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
