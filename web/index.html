@@ -244,6 +244,17 @@
         color: #ff2d95;
         filter: drop-shadow(0 0 6px #ff2d95);
       }
+      .neon-dice-charging {
+        display: inline-block;
+        color: #ffd23f;
+        opacity: 0.5;
+        animation: neon-charge-pulse 1.2s ease-in-out infinite alternate;
+        cursor: not-allowed;
+      }
+      @keyframes neon-charge-pulse {
+        from { opacity: 0.3; filter: drop-shadow(0 0 1px rgba(255,210,63,0.2)); }
+        to   { opacity: 0.7; filter: drop-shadow(0 0 4px rgba(255,210,63,0.5)); }
+      }
       @keyframes neon-dice-glow {
         0%   { filter: drop-shadow(0 0 2px rgba(0,229,255,0.3)); color: #00e5ff; }
         33%  { filter: drop-shadow(0 0 5px rgba(177,75,255,0.5)); color: #b14bff; }

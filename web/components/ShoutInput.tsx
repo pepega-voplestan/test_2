@@ -91,6 +91,9 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
   const isPolitics = activeTag === 'politics';
 
   const [gta6AutoSubmit, setGta6AutoSubmit] = useState(false);
+  const [diceCooldown, setDiceCooldown] = useState(false);
+  const diceCooldownTimer = useRef<ReturnType<typeof setTimeout>>();
+
 
   // Poll state
   const [showPollEditor, setShowPollEditor] = useState(false);
@@ -328,7 +331,16 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                         />
                         <div className="flex items-center gap-2 justify-end flex-wrap">
                           <div className="flex items-center gap-1 shrink-0">
-                            {gta6 && (
+                            {gta6 && (diceCooldown ? (
+                              <span className="p-1 neon-dice-charging" title="Перезарядка...">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="1" y="6" width="18" height="12" rx="2" />
+                                  <line x1="23" y1="10" x2="23" y2="14" />
+                                  <line x1="7" y1="10" x2="7" y2="14" />
+                                  <line x1="11" y1="10" x2="11" y2="14" />
+                                </svg>
+                              </span>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -337,6 +349,9 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                                   mentionInputRef.current?.insertText(text);
                                   setContent(text);
                                   setGta6AutoSubmit(true);
+                                  setDiceCooldown(true);
+                                  clearTimeout(diceCooldownTimer.current);
+                                  diceCooldownTimer.current = setTimeout(() => setDiceCooldown(false), 60000 + Math.random() * 60000);
                                 }}
                                 className="neon-dice p-1"
                                 title="Случайный GTA шитпост"
@@ -350,7 +365,7 @@ const ShoutInput: React.FC<ShoutInputProps> = ({ onShoutCreated }) => {
                                   <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
                                 </svg>
                               </button>
-                            )}
+                            ))}
                             <EmojiPicker onSelect={(emoji) => mentionInputRef.current?.insertText(emoji)} onSelectGif={!detectedYtId && !gifPickerBlocked ? handleGifSelect : undefined} />
                             <button
                               type="button"
