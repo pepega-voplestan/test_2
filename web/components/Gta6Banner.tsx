@@ -37,16 +37,6 @@ const Gta6Banner: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Toggle class on <html> so the CSS rules in the <style> tag below kick in
-  useEffect(() => {
-    if (enabled) {
-      document.documentElement.classList.add('gta6-active');
-    } else {
-      document.documentElement.classList.remove('gta6-active');
-    }
-    return () => document.documentElement.classList.remove('gta6-active');
-  }, [enabled]);
-
   if (!enabled) return null;
 
   const localReleaseTime = RELEASE_DATE.toLocaleString('ru-RU', {
@@ -59,36 +49,48 @@ const Gta6Banner: React.FC = () => {
   return (
     <>
       <style>{`
-        /* Background image on the body — visible in the gutters on xl+ screens */
-        @media (min-width: 1280px) {
-          html.gta6-active body {
-            background: url(/gta6-banner.jpg) center top / cover fixed !important;
-          }
-          /* Make the page wrapper transparent so the body background shows through */
-          html.gta6-active #root > div {
-            background-color: transparent !important;
-          }
-          /* Give the feed column a solid background so the banner doesn't bleed through card gaps */
-          html.gta6-active main > div {
-            background-color: rgb(var(--th-page));
-            border-radius: 12px;
-          }
+        .gta6-panel {
+          position: fixed;
+          top: 52px;
+          bottom: 0;
+          z-index: 10;
+          pointer-events: none;
+          background-image: url(/gta6-banner.jpg);
+          background-repeat: no-repeat;
+          background-size: auto 100%;
         }
-
+        .gta6-left {
+          left: 0;
+          right: calc(50vw + 354px);
+          background-position: left top;
+          -webkit-mask-image: linear-gradient(to right, black 50%, transparent 100%);
+          mask-image: linear-gradient(to right, black 50%, transparent 100%);
+        }
+        .gta6-right {
+          left: calc(50vw + 354px);
+          right: 0;
+          background-position: 80% top;
+          -webkit-mask-image: linear-gradient(to left, black 50%, transparent 100%);
+          mask-image: linear-gradient(to left, black 50%, transparent 100%);
+        }
         @keyframes gta6-pulse {
           from { transform: scale(1) rotate(-1deg); }
           to   { transform: scale(1.07) rotate(1deg); }
         }
       `}</style>
 
-      {/* Timer + buy button — fixed in the bottom-right gutter */}
+      {/* Side panels — left shows characters, right shows reviews */}
+      <div className="hidden xl:block gta6-panel gta6-left" />
+      <div className="hidden xl:block gta6-panel gta6-right" />
+
+      {/* Timer + buy button — fixed bottom-right, above the panels */}
       <div
         className="hidden xl:flex"
         style={{
           position: 'fixed',
           bottom: 24,
           right: 24,
-          zIndex: 10,
+          zIndex: 11,
           flexDirection: 'column',
           alignItems: 'center',
           gap: 8,
@@ -162,6 +164,7 @@ const Gta6Banner: React.FC = () => {
             textShadow: '1px 1px 0 #ffff00, -1px -1px 0 #000',
             animation: 'gta6-pulse 0.8s ease-in-out infinite alternate',
             cursor: 'pointer',
+            pointerEvents: 'auto',
           }}
         >
           🛒 КУПИТЬ
