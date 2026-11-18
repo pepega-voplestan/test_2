@@ -10,7 +10,6 @@ import { NotificationsProvider } from './context/NotificationsContext';
 import { ContentPreferencesProvider } from './context/ContentPreferencesContext';
 import { IgnoredUsersProvider } from './context/IgnoredUsersContext';
 import AuthModal from './components/AuthModal';
-import Gta6Banner from './components/Gta6Banner';
 import { useRoute, navigateTo } from './hooks/useRoute';
 
 const App: React.FC = () => {
@@ -57,7 +56,6 @@ const App: React.FC = () => {
         <NotificationsProvider>
           <div className="min-h-screen font-sans bg-th-page transition-colors">
             <Header />
-            <Gta6Banner />
 
             <main className="flex justify-center max-w-[1200px] mx-auto px-4 pb-20 pt-6 gap-8">
               <div className="w-full max-w-[700px] px-1 py-6 sm:px-0">

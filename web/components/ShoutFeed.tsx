@@ -6,10 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { useContentPreferences } from '../context/ContentPreferencesContext';
 import { useSSE } from '../hooks/useSSE';
 import { scrollToAnchorWhenRendered } from '../utils/scrollAnchor';
-import { useGta6 } from '../hooks/useGta6';
 
 const PAGE_SIZE = 25;
-const GTA_PAGE_SIZE = 20;
 
 // How many pages (of PAGE_SIZE) the restore effect will load while searching
 // for a remembered anchor shout before giving up and falling back to a
@@ -82,11 +80,10 @@ function clientSnippet(content: string): string {
   return stripped.length > QUOTE_MAX_LEN ? stripped.slice(0, QUOTE_MAX_LEN) + '…' : stripped;
 }
 
-type FeedTab = 'new' | 'popular' | 'gta';
+type FeedTab = 'new' | 'popular';
 
 const ShoutFeed: React.FC = () => {
   const { user } = useAuth();
-  const gta6 = useGta6();
   const { prefs, setShowMedia } = useContentPreferences();
   // Computed once, synchronously, on the very first render — needs to be
   // available immediately (not discovered later in a useEffect) so the tab/
@@ -108,8 +105,6 @@ const ShoutFeed: React.FC = () => {
   type PopularSort = 'likes' | 'comments';
   const [popularSort, setPopularSort] = useState<PopularSort>(restoreState?.popularSort ?? 'likes');
   const popularSortRef = useRef<PopularSort>(restoreState?.popularSort ?? 'likes');
-  const [gtaPage, setGtaPage] = useState(1);
-  const [gtaHasMore, setGtaHasMore] = useState(true);
 
   const [shouts, setShouts] = useState<Shout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -216,7 +211,6 @@ const ShoutFeed: React.FC = () => {
   // `shouts` state update this same call also triggers via setShouts.
   const fetchShouts = useCallback(async (reset = false): Promise<{ hasMore: boolean; added: number; shouts: Shout[] }> => {
     const currentTab = activeTabRef.current;
-    if (currentTab === 'gta') return { hasMore: false, added: 0, shouts: [] };
 
     if (reset) {
       setIsLoading(true);
@@ -273,54 +267,6 @@ const ShoutFeed: React.FC = () => {
     }
   }, []);
   fetchShoutsRef.current = fetchShouts;
-
-  const fetchGtaShouts = useCallback(async (page: number) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const offset = (page - 1) * GTA_PAGE_SIZE;
-      const perTerm = GTA_PAGE_SIZE;
-      const [resEn, resRu] = await Promise.all([
-        fetch(`/api/v1/search?q=gta&type=shouts&limit=${perTerm}&offset=${offset}`, { credentials: 'include' }),
-        fetch(`/api/v1/search?q=%D0%B3%D1%82%D0%B0&type=shouts&limit=${perTerm}&offset=${offset}`, { credentials: 'include' }),
-      ]);
-      if (!resEn.ok || !resRu.ok) throw new Error('Ошибка поиска');
-      const [dataEn, dataRu] = await Promise.all([resEn.json(), resRu.json()]);
-      const seen = new Set<string>();
-      const merged: Shout[] = [];
-      for (const s of [...(dataEn.shouts || []), ...(dataRu.shouts || [])]) {
-        if (seen.has(s.id)) continue;
-        seen.add(s.id);
-        merged.push({
-          id: s.id,
-          content: s.content,
-          visibilityTag: s.visibilityTag || '',
-          timestamp: s.timestamp,
-          user: s.user,
-          likes: 0,
-          comments: [],
-        });
-      }
-      merged.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-      const pageItems = merged.slice(0, GTA_PAGE_SIZE);
-      setShouts(pageItems);
-      setGtaHasMore(dataEn.shouts?.length === perTerm || dataRu.shouts?.length === perTerm);
-      setHasMore(false);
-    } catch (err) {
-      console.error('[ShoutFeed] GTA fetch error:', err);
-      setError('Не удалось загрузить вопли про GTA');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!gta6 && activeTab === 'gta') {
-      setActiveTab('new');
-      activeTabRef.current = 'new';
-      fetchShoutsRef.current(true);
-    }
-  }, [gta6]);
 
   // Scrolls to an ESTIMATED position immediately, before the first paint —
   // approxItemsAbove comes from the saved anchor itself, so it's available
@@ -448,12 +394,7 @@ const ShoutFeed: React.FC = () => {
     activeTabRef.current = newTab;
     setOpenThreadId(null);
 
-    if (newTab === 'gta') {
-      setGtaPage(1);
-      fetchGtaShouts(1);
-    } else {
-      fetchShouts(true);
-    }
+    fetchShouts(true);
   };
 
   const handlePopularSortChange = (sort: PopularSort) => {
@@ -707,16 +648,6 @@ const ShoutFeed: React.FC = () => {
             >
               Все
             </button>
-            {gta6 ? (
-              <button
-                onClick={() => handleTabChange('gta')}
-                className={`neon-tab px-3 py-1 text-sm font-black rounded shadow-sm transition-all ${
-                  activeTab === 'gta' ? 'neon-tab-active' : ''
-                }`}
-              >
-                GTA VI
-              </button>
-            ) : (
             <div className="relative">
               {activeTab === 'popular' && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 flex bg-th-card rounded p-1 border border-th-border-2 shadow-sm">
@@ -752,7 +683,6 @@ const ShoutFeed: React.FC = () => {
                 Популярные
               </button>
             </div>
-            )}
           </div>
 
           <button
@@ -808,7 +738,7 @@ const ShoutFeed: React.FC = () => {
 
               {!isLoading && !error && shouts.length === 0 && (
                 <div className="text-center text-th-text-4 text-sm py-8">
-                  {activeTab === 'gta' ? 'Нет воплей про GTA' : activeTab === 'popular' ? 'Нет популярных воплей за последние 7 дней' : 'Пока нет воплей. Будь первым'}
+                  {activeTab === 'popular' ? 'Нет популярных воплей за последние 7 дней' : 'Пока нет воплей. Будь первым'}
                 </div>
               )}
 
@@ -837,37 +767,15 @@ const ShoutFeed: React.FC = () => {
                 ))}
               </div>
 
-              {activeTab === 'gta' ? (
-                <div className="flex justify-center items-center gap-3 py-6">
-                  <button
-                    onClick={() => { const p = gtaPage - 1; setGtaPage(p); fetchGtaShouts(p); window.scrollTo(0, 0); }}
-                    disabled={gtaPage <= 1 || isLoading}
-                    className="px-3 py-1 text-sm font-medium rounded bg-th-card border border-th-border-2 text-th-text-3 hover:text-th-text disabled:opacity-30 transition-colors"
-                  >
-                    ←
-                  </button>
-                  <span className="text-sm text-th-text-3 tabular-nums">{gtaPage}</span>
-                  <button
-                    onClick={() => { const p = gtaPage + 1; setGtaPage(p); fetchGtaShouts(p); window.scrollTo(0, 0); }}
-                    disabled={!gtaHasMore || isLoading}
-                    className="px-3 py-1 text-sm font-medium rounded bg-th-card border border-th-border-2 text-th-text-3 hover:text-th-text disabled:opacity-30 transition-colors"
-                  >
-                    →
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Sentinel: IntersectionObserver watches this to trigger loading more */}
-                  <div ref={loaderRef} className="flex justify-center py-8 min-h-[1px]">
-                    {isLoadingMore && (
-                      <span className="w-5 h-5 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
-                    )}
-                    {!hasMore && shouts.length > 0 && !isLoading && (
-                      <span className="text-xs text-th-text-4">Всё загружено</span>
-                    )}
-                  </div>
-                </>
-              )}
+              {/* Sentinel: IntersectionObserver watches this to trigger loading more */}
+              <div ref={loaderRef} className="flex justify-center py-8 min-h-[1px]">
+                {isLoadingMore && (
+                  <span className="w-5 h-5 border-2 border-th-border border-t-th-text-3 rounded-full animate-spin" />
+                )}
+                {!hasMore && shouts.length > 0 && !isLoading && (
+                  <span className="text-xs text-th-text-4">Всё загружено</span>
+                )}
+              </div>
             </>
           )}
     </div>
