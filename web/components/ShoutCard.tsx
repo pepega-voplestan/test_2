@@ -11,15 +11,6 @@ import { useMediaAttachments, SUBMIT_FAILED_MESSAGE } from '../hooks/useMediaAtt
 import PendingMediaStrip from './PendingMediaStrip';
 import MentionInput, { MentionInputHandle, effectiveLength, isIOS } from './MentionInput';
 import PollBlock from './PollBlock';
-import { useGta6 } from '../hooks/useGta6';
-
-const NeonHeart: React.FC<{ liked: boolean }> = ({ liked }) => (
-  <span className={`neon-heart text-base leading-none${liked ? ' liked' : ''}`} style={{ color: liked ? '#ff2d95' : undefined }}>
-    <svg width="16" height="16" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-    </svg>
-  </span>
-);
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -723,7 +714,6 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
   const { user, openModal } = useAuth();
   const { isIgnored } = useIgnoredUsers();
   const reducedMotion = useReducedMotion();
-  const gta6 = useGta6();
   const [likes, setLikes] = useState(comment.likes);
   const [isLiked, setIsLiked] = useState(
     user && comment.likedBy ? comment.likedBy.includes(user.id) : false
@@ -1040,12 +1030,12 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, showMedia = true, on
             {isCommentAuthorIgnored ? (
               <span className="flex items-center gap-1 opacity-30 cursor-default" title="Вы игнорируете этого пользователя">
                 <span className="text-xs font-bold">{likes}</span>
-                {gta6 ? <NeonHeart liked={isLiked} /> : <span className="text-base leading-none">{'\uD83E\uDD18'}</span>}
+                <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
               </span>
             ) : (
-              <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? (gta6 ? 'text-[#ff2d95]' : 'text-[#e6a700]') : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+              <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
                 <span className="text-xs font-bold">{likes}</span>
-                {gta6 ? <NeonHeart liked={isLiked} /> : <span className="text-base leading-none">{'\uD83E\uDD18'}</span>}
+                <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
               </button>
             )}
           </div>
@@ -1095,7 +1085,6 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
   const { prefs } = useContentPreferences();
   const { isIgnored } = useIgnoredUsers();
   const reducedMotion = useReducedMotion();
-  const gta6 = useGta6();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -1801,12 +1790,12 @@ const ShoutCard: React.FC<ShoutCardProps> = ({
                 {isShoutAuthorIgnored ? (
                   <span className="flex items-center gap-1 opacity-30 cursor-default" title="Вы игнорируете этого пользователя">
                       <span className="text-xs font-bold">{likes}</span>
-                      {gta6 ? <NeonHeart liked={isLiked} /> : <span className="text-base leading-none">{'\uD83E\uDD18'}</span>}
+                      <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
                   </span>
                 ) : (
-                  <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? (gta6 ? 'text-[#ff2d95]' : 'text-[#e6a700]') : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
+                  <button onClick={handleLike} className={`flex items-center gap-1 transition-transform active:scale-95 ${isLiked ? 'text-[#e6a700]' : 'text-th-text-4 hover:text-th-text-2'}`} title={isLiked ? "Убрать лайк" : "Нравится"}>
                       <span className="text-xs font-bold">{likes}</span>
-                      {gta6 ? <NeonHeart liked={isLiked} /> : <span className="text-base leading-none">{'\uD83E\uDD18'}</span>}
+                      <span className="text-base leading-none">{'\uD83E\uDD18'}</span>
                   </button>
                 )}
               </div>

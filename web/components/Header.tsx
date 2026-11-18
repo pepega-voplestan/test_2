@@ -5,35 +5,10 @@ import { navigateTo } from '../hooks/useRoute';
 import { useScrollLock } from '../hooks/useScrollLock';
 import NotificationDropdown from './NotificationDropdown';
 import SearchDropdown from './SearchDropdown';
-import { useGta6, toggleGta6 } from '../hooks/useGta6';
-
-const randomFps = () => 1 + Math.floor(Math.random() * 30);
-const nextDelay = () => 3000 + Math.random() * 2000;
-
-const FpsCounter: React.FC = () => {
-  const [fps, setFps] = useState(randomFps);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      setFps(randomFps());
-      timer = setTimeout(tick, nextDelay());
-    };
-    timer = setTimeout(tick, nextDelay());
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <div className="text-th-text font-bold text-2xl tracking-tighter tabular-nums">
-      FPS: <span className="inline-block min-w-[2ch] text-right">{fps}</span>
-    </div>
-  );
-};
 
 const Header: React.FC = () => {
   const { user, openModal, logout } = useAuth();
   const { theme, toggle } = useTheme();
-  const gta6 = useGta6();
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -57,26 +32,15 @@ const Header: React.FC = () => {
       <div className="w-full max-w-[1100px] px-4 flex items-center">
         {/* Logo — removed from layout on narrow screens while search is open */}
         <a href="/" onClick={handleLogoClick} className={`shrink-0 items-center ${searchOpen ? 'hidden sm:flex' : 'flex'}`}>
-          {gta6 ? <FpsCounter /> : (
-            <div className="text-th-text font-bold text-2xl tracking-tighter">
-              ВОПЛИ
-            </div>
-          )}
+          <div className="text-th-text font-bold text-2xl tracking-tighter">
+            ВОПЛИ
+          </div>
         </a>
 
         <div className={`flex items-center gap-4 sm:ml-auto sm:flex-none${searchOpen ? ' flex-1' : ' ml-auto'}`}>
           <div className="flex items-center gap-2 text-th-text-3">
             {/* Search */}
             {user && <SearchDropdown onFocusChange={setSearchOpen} />}
-
-            {/* GTA6 toggle */}
-            <button
-              onClick={toggleGta6}
-              className={`neon-toggle${gta6 ? ' active' : ''}`}
-              title={gta6 ? 'Выключить GTA VI режим' : 'Включить GTA VI режим'}
-            >
-              ?
-            </button>
 
             {/* Notifications */}
             {user && <NotificationDropdown />}
